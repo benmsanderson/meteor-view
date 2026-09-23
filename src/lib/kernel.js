@@ -62,18 +62,33 @@ export function designMatrix(tGlob) {
 /**
  * The deterministic seasonal cycle at one location.
  *
+ * Two forms, and the difference is easy to miss. The schema's documented
+ * reconstruction is the **absolute** one: every feature plus the intercept.
+ * METEOR's own timeseries path instead asks the noise generator for noise
+ * only, which subtracts the intercept *and* the `t_glob` term, leaving the
+ * pure harmonics — because the trend and the absolute level are supplied by
+ * the forced response, and including them here would double-count both.
+ *
+ * Getting this wrong is silent: for NorESM2-MM `tas` the intercept is ~287 K,
+ * so an absolute series looks like a temperature rather than an anomaly, and
+ * the `t_glob` coefficient is ~0.99, which roughly doubles the warming trend.
+ *
  * @param {Float64Array} design row-major `(n, 9)` from {@link designMatrix}
  * @param {ArrayLike<number>} coef nine seasonal coefficients
  * @param {number} intercept
+ * @param {object} [options]
+ * @param {boolean} [options.anomaly] drop the intercept and the `t_glob` term,
+ *   matching what METEOR's timeseries path generates
  * @returns {Float64Array} length `n`
  */
-export function seasonalCycle(design, coef, intercept) {
+export function seasonalCycle(design, coef, intercept, { anomaly = false } = {}) {
   const n = design.length / 9;
   const out = new Float64Array(n);
+  const first = anomaly ? 1 : 0;
   for (let t = 0; t < n; t += 1) {
-    let acc = intercept;
+    let acc = anomaly ? 0 : intercept;
     const o = t * 9;
-    for (let k = 0; k < 9; k += 1) acc += design[o + k] * coef[k];
+    for (let k = first; k < 9; k += 1) acc += design[o + k] * coef[k];
     out[t] = acc;
   }
   return out;
@@ -376,6 +391,13 @@ export function applyTransform(bundle, location, realizations) {
  * @param {Float64Array} options.forcedMonthly monthly forced response
  * @param {number} options.nRealizations
  * @param {() => number} options.normal standard-normal generator
+ * @param {boolean} [options.transform] apply steps 5 and 6 when the bundle
+ *   carries a transform. Pass `false` to get the untransformed anomaly — a
+ *   caller that generates over a longer trajectory than it wants to keep must
+ *   slice first, because the transform is fitted to the window and to the
+ *   ensemble being transformed.
+ * @param {boolean} [options.anomaly] use the anomaly form of the seasonal
+ *   cycle; see {@link seasonalCycle}
  * @returns {Float64Array[]} one series per realization
  */
 export function generateEnsemble({
@@ -385,6 +407,8 @@ export function generateEnsemble({
   forcedMonthly,
   nRealizations,
   normal,
+  transform = true,
+  anomaly = false,
 }) {
   const nModes = bundle.nModes;
   const nTimes = tGlob.length;
@@ -393,7 +417,8 @@ export function generateEnsemble({
   const seasonal = seasonalCycle(
     design,
     bundle.locationRow('seasonal_coef', location, 9),
-    bundle.get('seasonal_intercept')[bundle.locationIndex(location)]
+    bundle.get('seasonal_intercept')[bundle.locationIndex(location)],
+    { anomaly }
   );
   const projection = bundle.locationRow('eof_projection', location, nModes);
 
@@ -420,14 +445,28 @@ export function generateEnsemble({
     series.push(out);
   }
 
-  if (bundle.hasTransform) {
-    // `pr` is generated as an anomaly; the baseline goes back on before the
-    // transform, which expects absolute values.
-    const baseline = bundle.get('transform_baseline')[bundle.locationIndex(location)];
-    for (const s of series) {
-      for (let t = 0; t < nTimes; t += 1) s[t] += baseline;
-    }
+  if (transform && bundle.hasTransform) {
+    series = addBaseline(bundle, location, series);
     series = applyTransform(bundle, location, series);
   }
   return series;
+}
+
+/**
+ * Step 5: put the baseline back before transforming.
+ *
+ * `pr` is generated as an anomaly of order 1e-6 kg m-2 s-1; the transform
+ * expects the absolute values its gamma was fitted to, of order 1e-5.
+ *
+ * @param {import('./bundle.js').Bundle} bundle
+ * @param {string} location
+ * @param {Float64Array[]} realizations modified in place
+ * @returns {Float64Array[]} the same arrays
+ */
+export function addBaseline(bundle, location, realizations) {
+  const baseline = bundle.get('transform_baseline')[bundle.locationIndex(location)];
+  for (const series of realizations) {
+    for (let t = 0; t < series.length; t += 1) series[t] += baseline;
+  }
+  return realizations;
 }
