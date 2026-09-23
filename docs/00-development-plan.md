@@ -3,9 +3,18 @@
 A browser-based tool for running [METEOR](https://github.com/benmsanderson/METEOR),
 served as a static github.io site from this repository.
 
-**Status:** design agreed, nothing built. The next action is the METEOR-side
-work in [`01-unblock-meteor-export.md`](01-unblock-meteor-export.md), which is
-a prompt written to be handed to a session working in the METEOR repo.
+**Status:** built. The METEOR-side work in
+[`01-unblock-meteor-export.md`](01-unblock-meteor-export.md) is done
+(benmsanderson/METEOR#101, plus #102 and #104, merged on the integration branch
+`integration/meteor-view`). The client is done: a validated JavaScript kernel,
+the fixtures wired into CI, and a Pages deploy. See
+[`02-client-findings.md`](02-client-findings.md) for what the port had to infer
+that the schema did not state — the most useful feedback METEOR can get from
+this exercise, because it is what the next port would also get stuck on.
+
+Remaining: the three METEOR PRs are unmerged, so the bundles here were exported
+from an integration branch that will drift as they take review. Re-export from
+`base` once they land. The Zenodo deposit is still pending, deliberately.
 
 This document exists so the reasoning does not have to be re-derived. Facts
 below were verified against `benmsanderson/METEOR` at commit `f6dc3d1` on
@@ -142,19 +151,22 @@ until the bundle schema exists:
 
 ## 4. Open decisions
 
-These need Ben's input and change the work:
-
-- **Audience.** Climate scientists (who would mostly rather have Colab) or
-  impact/policy users (who need point-and-click)? Track 1 covers the former
-  cheaply, which is part of why it is first.
-- **Gridded maps in the browser?** This is the one output that forces a
-  server. Reconstructing 100 realizations × 3012 months × ~55k gridpoints is
-  not a client-side operation. If maps are essential, architecture C moves up
-  the list.
-- **Bundle format.** The METEOR prompt currently says netCDF via xarray
-  "unless you find a concrete reason to prefer `.npz`". netCDF means the
-  browser needs a reader. If the client should get JSON or raw typed-array
-  binary instead, decide before the stage-2 branch starts, not mid-way.
+- **Bundle format — settled.** Classic netCDF-3 (`NETCDF3_64BIT`), not
+  NETCDF4. Classic parses with `netcdfjs`, a few kilobytes; NETCDF4 is HDF5
+  underneath and needs a one-to-two megabyte WebAssembly build of libhdf5
+  before a single byte can be read. Nothing was lost: every numeric array is
+  bit-identical between the two and the classic file is *smaller*.
+- **Audience — still open.** Climate scientists (who would mostly rather have
+  Colab) or impact/policy users (who need point-and-click)? Track 1 covers the
+  former cheaply, which is part of why it was first. The built explorer leans
+  towards the latter.
+- **Gridded maps in the browser — still open, still the one output that forces
+  a server.** Reconstructing 100 realizations × 3012 months × ~55k gridpoints
+  is not a client-side operation. If maps are essential, architecture C moves
+  up the list.
+- **Track 1, the Colab badge — not done.** There is still no Colab link in
+  METEOR's README or examples notebook on `base`. It remains the cheapest
+  thing on this list.
 
 ## 5. Facts worth not re-deriving
 

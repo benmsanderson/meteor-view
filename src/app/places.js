@@ -25,7 +25,7 @@ export const AR6_NAMES = {
   "SES": "S.E.South America",
   "SSA": "S.South America",
   "NEU": "N.Europe",
-  "WCE": "West&Central Europe",
+  "WCE": "West & Central Europe",
   "EEU": "E.Europe",
   "MED": "Mediterranean",
   "SAH": "Sahara",
@@ -56,14 +56,14 @@ export const AR6_NAMES = {
   "WAN": "W.Antarctica",
   "ARO": "Arctic Ocean",
   "NPO": "N.Pacific Ocean",
-  "EPO": "Equatorial. Pacific Ocean",
+  "EPO": "Equatorial Pacific Ocean",
   "SPO": "S.Pacific Ocean",
   "NAO": "N.Atlantic Ocean",
-  "EAO": "Equatorial. Atlantic Ocean",
+  "EAO": "Equatorial Atlantic Ocean",
   "SAO": "S.Atlantic Ocean",
   "ARS": "Arabian Sea",
   "BOB": "Bay of Bengal",
-  "EIO": "Equatorial. Indic Ocean",
+  "EIO": "Equatorial Indic Ocean",
   "SIO": "S.Indic Ocean",
   "SOO": "Southern Ocean"
 };
@@ -71,10 +71,10 @@ export const AR6_NAMES = {
 /** The point locations this bundle was exported with. */
 export const CITY_NAMES = {
   "point:51.5,-0.1": "London",
-  "point:40.7,-74": "New York",
+  "point:40.7,-74.0": "New York",
   "point:-23.5,-46.6": "São Paulo",
   "point:6.5,3.4": "Lagos",
-  "point:30,31.2": "Cairo",
+  "point:30.0,31.2": "Cairo",
   "point:19.1,72.9": "Mumbai",
   "point:39.9,116.4": "Beijing",
   "point:-33.9,151.2": "Sydney"

@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>METEOR explorer</title>
+    <meta
+      name="description"
+      content="Run the METEOR climate emulator in your browser: pick a scenario or draw a warming pathway, pick a region, see the ensemble."
+    />
+    <link rel="stylesheet" href="./src/app/style.css" />
+  </head>
+  <body>
+    <header class="masthead">
+      <h1>METEOR explorer</h1>
+      <p class="tagline">
+        A climate emulator running entirely in your browser. Pick a scenario or draw
+        your own warming pathway, pick a place, and see the spread of monthly
+        outcomes.
+      </p>
+    </header>
+
+    <main>
+      <form class="controls" id="controls">
+        <div class="control">
+          <label for="variable">Variable</label>
+          <select id="variable">
+            <option value="tas">Temperature</option>
+            <option value="pr">Precipitation</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <label for="location">Place</label>
+          <select id="location"></select>
+        </div>
+
+        <div class="control">
+          <label for="scenario">Scenario</label>
+          <select id="scenario"></select>
+        </div>
+
+        <div class="control">
+          <label for="realizations">Realizations</label>
+          <select id="realizations">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </div>
+
+        <div class="control control--check">
+          <label for="pathway-toggle">
+            <input type="checkbox" id="pathway-toggle" />
+            Draw my own pathway
+          </label>
+        </div>
+      </form>
+
+      <section class="pathway" id="pathway" hidden>
+        <div class="pathway__header">
+          <h2>Global warming pathway</h2>
+          <p>
+            Drag across the box to draw global mean warming through 2100. The
+            emulator rescales the forced response to follow it, so a place warms
+            more or less than the global mean in the way the model says it should.
+            <button type="button" id="pathway-reset" class="link">Reset to scenario</button>
+          </p>
+        </div>
+        <canvas id="pathway-canvas" height="150"></canvas>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2 id="chart-title">Annual means</h2>
+          <p class="legend">
+            <span class="swatch swatch--median"></span> median
+            <span class="swatch swatch--band"></span> 25–75%
+            <span class="swatch swatch--wide"></span> 5–95%
+          </p>
+        </div>
+        <canvas id="chart" height="360"></canvas>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
+          <h2>Seasonal cycle</h2>
+          <p class="legend">
+            <span class="swatch swatch--median"></span> 2015–2034
+            <span class="swatch swatch--warm"></span> 2081–2100
+          </p>
+        </div>
+        <canvas id="seasonal" height="220"></canvas>
+      </section>
+
+      <p class="status" id="status">Loading the emulator…</p>
+
+      <footer class="notes">
+        <p>
+          <strong>What this is.</strong> A JavaScript port of
+          <a href="https://github.com/benmsanderson/METEOR">METEOR</a>'s generation
+          kernel, driven by a compact bundle exported from a model trained offline on
+          CMIP6 output. The whole payload is about 300 KB and there is no server: the
+          emulator runs on your machine.
+        </p>
+        <p>
+          <strong>What it is not.</strong> The bundle carries no gridded output, so
+          there are no maps here. Custom <em>emissions</em> scenarios need a simple
+          climate model, which is also not in the bundle — the drawn pathway rescales
+          a bundled scenario rather than running new emissions. Precipitation is
+          shown for 2015–2100 only, the window its distribution transform was fitted
+          for.
+        </p>
+        <p class="provenance" id="provenance"></p>
+      </footer>
+    </main>
+
+    <script type="module" src="./src/app/main.js"></script>
+  </body>
+</html>
