@@ -124,6 +124,14 @@ paste into a document.
 **Draw a new sample** re-rolls the seed. Nothing else changes, which is the
 quickest way to see that no single realization means anything on its own.
 
+## Where this is going
+
+[`docs/03-roadmap.md`](docs/03-roadmap.md) lays out what is next and what
+blocks it. The short version: the tool draws the spread from a **single
+model**, which is internal variability rather than projection uncertainty, and
+closing that gap — by adding CMIP6 models, and by saying so plainly in the
+interface until then — is the most important thing left.
+
 ## Limits worth knowing
 
 - **No maps.** Bundles carry no gridded output; reconstructing fields needs the

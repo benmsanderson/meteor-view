@@ -25,9 +25,13 @@ what the port had to infer that the schema did not state — the most useful
 feedback METEOR can get from this exercise, because it is what the next port
 would also get stuck on.
 
-Remaining: the three METEOR PRs are unmerged, so the bundles here were exported
-from the integration branch and will need re-exporting from `base` once they
-land. The Zenodo deposit is still pending, deliberately.
+What is left is in [`03-roadmap.md`](03-roadmap.md), which supersedes the work
+breakdown in §3 below — that section is kept as the original plan, not as a
+current to-do list.
+
+Immediately outstanding: the three METEOR PRs are unmerged, so the bundles here
+were exported from the integration branch and will need re-exporting from
+`base` once they land. The Zenodo deposit is still pending, deliberately.
 
 This document exists so the reasoning does not have to be re-derived. Facts
 below were verified against `benmsanderson/METEOR` at commit `f6dc3d1` on
