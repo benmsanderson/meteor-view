@@ -14,7 +14,10 @@ exactly `base` plus those three PRs, refreshed as they move, so work here can
 proceed before they land. Its tree is verified identical to merging the three
 into `base`. Recommended merge sequence, for reviewability rather than
 correctness (the orders produce byte-identical trees): **#104, then #102, then
-#101**. #100 is fully superseded by #104 and can be closed.
+#101**. #100 was fully superseded by #104 and is closed.
+
+`scripts/refresh-integration.sh` rebuilds that branch and verifies the property
+it depends on, so it can be re-run as the PRs change under review.
 
 The client is done: a validated JavaScript kernel, the fixtures wired into CI,
 and a Pages deploy. See [`02-client-findings.md`](02-client-findings.md) for

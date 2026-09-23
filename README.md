@@ -34,7 +34,7 @@ for precipitation; the whole deployed site, code and data together, is 432 KB.
 | `src/app/` | The explorer: orchestration, canvas charts, UI. |
 | `data/` | Emulator bundles and golden fixtures, exported from METEOR. |
 | `test/` | The quality gate. See below. |
-| `scripts/` | Regenerating the reference fixtures. Needs METEOR installed; the client does not. |
+| `scripts/` | Regenerating the data files and keeping METEOR's integration branch honest. Needs METEOR installed; the client does not. |
 
 ## The quality gate
 
@@ -82,6 +82,18 @@ exactly `base` plus the three PRs in flight (#104, #102, #101), refreshed as
 they move. It is not a merge candidate — the PRs merge into `base`
 individually. It exists so work here can proceed before they land; point this
 at `base` once they have.
+
+Those PRs will change under review, so keep the branch honest with:
+
+```bash
+scripts/refresh-integration.sh --test --push
+```
+
+It rebuilds the branch from `base`, then *separately* performs the merge
+sequence into a throwaway worktree and asserts the two trees are identical. A
+drifted or hand-edited integration branch fails there rather than silently, so
+"develop against the integration branch" cannot quietly become "develop against
+a fiction".
 
 The exporter depends on `series_transformed` and `locations=`, both added by
 [METEOR#101](https://github.com/benmsanderson/METEOR/pull/101).
