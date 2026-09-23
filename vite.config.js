@@ -9,9 +9,10 @@ import { defineConfig } from 'vite';
  * there. Vite only copies `public/`, so this moves them across at build time —
  * a few lines rather than another dependency.
  *
- * Only the bundles: the golden fixtures are twice their size and exist for the
- * test suite, so shipping them would double the payload for no benefit to a
- * visitor.
+ * Bundles and pattern artifacts, not golden fixtures: the fixtures exist for
+ * the test suite and would be dead weight in a deployment. The pattern
+ * artifacts are 2 MB each and are fetched only when a visitor asks for a map or
+ * a custom region, so they cost nothing on first load.
  */
 function copyBundles() {
   return {
@@ -21,7 +22,9 @@ function copyBundles() {
       await cp('data', 'dist/data', {
         recursive: true,
         filter: (source) =>
-          !source.endsWith('.nc') || source.includes('_bundle_v1.nc'),
+          !source.endsWith('.nc') ||
+          source.includes('_bundle_v1.nc') ||
+          source.includes('_pattern_v1.nc'),
       });
     },
   };

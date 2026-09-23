@@ -28,8 +28,10 @@ import tempfile
 
 import numpy as np
 import regionmask
+import xarray as xr
 
 from meteor.meteor_interface import MeteorInterface
+from meteor.portable_artifact import export_pattern_scaling
 from meteor.timeseries_bundle import (
     export_golden_fixture,
     export_timeseries_bundle,
@@ -106,7 +108,6 @@ def main():
                 pattern,
                 sub,
                 fix_locs,
-                variable=var,
                 cmip6_model=MODEL,
                 training_scenario="ssp245",
                 transform_reference=ref,
@@ -139,6 +140,31 @@ def main():
                 year_0=int(sub_bundle.attrs["forcing_year_start"]),
             )
         print(f"wrote {fix}  {os.path.getsize(fix)/1024:.1f} KB")
+
+        # The map tier: the pattern-scaling artifact carries the spatial
+        # patterns the bundle deliberately leaves out, so a client can
+        # reconstruct the forced response anywhere on the grid rather than only
+        # at the locations the bundle was built for.
+        #
+        # Rewritten as classic netCDF-3. export_pattern_scaling writes NETCDF4,
+        # which is HDF5 and needs a megabyte-scale WebAssembly reader; classic
+        # is the same numbers in the same space and the client already parses
+        # it. Worth adding netcdf_format= upstream, as the bundle exporters
+        # have, rather than converting here forever.
+        pattern_path = os.path.join(OUT, f"meteor_{MODEL}_{var}_pattern_v1.nc")
+        with tempfile.TemporaryDirectory() as tmp:
+            hdf5 = os.path.join(tmp, "pattern.nc")
+            export_pattern_scaling(
+                pattern,
+                hdf5,
+                cmip6_model=MODEL,
+                dtype=np.float32,
+                source_url="https://github.com/benmsanderson/meteor-view",
+            )
+            xr.open_dataset(hdf5).load().to_netcdf(
+                pattern_path, format="NETCDF3_64BIT"
+            )
+        print(f"wrote {pattern_path}  {os.path.getsize(pattern_path)/1e6:.2f} MB")
 
 
 if __name__ == "__main__":

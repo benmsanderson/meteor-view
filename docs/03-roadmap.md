@@ -81,69 +81,59 @@ Then decide whether the 11.3 MB noise tier is worth an opt-in button for
 variability at a custom location. My guess is yes, for this audience, and that
 it should be an explicit click rather than something the page does on load.
 
-### 2. CMIP7 scenarios — technically easy, blocked on an embargo
+### 2. CMIP7 scenarios — embargo lifted, redistribution is the constraint
 
 Source: **ScenarioMIP-CMIP7 IAM quantification**, `10.5281/zenodo.19825038`,
-v0.2, 15 April 2026. Examined 2026-09-23.
+v0.2. Examined 2026-09-23; the early-access embargo has since lifted.
 
-> ⚠️ **This is a pre-release under embargo.** Its README states the data
-> *"should not be shared or used for submission or publication before the end of
-> the early access period"*, and the Zenodo record carries no licence.
-> **Publishing a GitHub Pages site driven by it would be sharing it.** Nothing
-> derived from this file can ship publicly until the early access period ends —
-> or until whoever holds the rights says otherwise. Being a participant with
-> access is not the same as holding redistribution rights.
->
-> The file is therefore deliberately **not committed to this repository**, and
-> no CMIP7 feature should be deployed before this is resolved.
+**We may use it; we may not openly re-serve it.** That is a different
+constraint from the embargo and it does not expire. The precedent is
+[`benmsanderson/FLEX/data/README.md`](https://github.com/benmsanderson/FLEX/tree/main/data):
+the scenario files are not stored in the repository, a documented script
+converts them from the user's own download, and anything that *is* retained is
+attributed separately from the repository's own licence.
 
 What it contains — 7 marker scenarios (High–SSP3, High-to-Low–SSP5,
 Medium–SSP2, Medium-to-Low–SSP2, Low–SSP2, Low-to-Negative–SSP2, Very Low–SSP1),
-from 7 IAMs, assessed with MAGICCv7.6.0a3, annual 2000–2100:
+7 IAMs, MAGICCv7.6.0a3, annual 2000–2100:
 
-- **GSAT** — median, 33rd and 67th percentile. 2100 medians span **1.37 °C
-  (Very Low) to 3.42 °C (High)**.
+- **GSAT** — median, 33rd, 67th percentile. 2100 medians span **1.37 °C
+  (Very Low)** to **3.42 °C (High)**.
 - **Effective radiative forcing**, decomposed: total, anthropogenic, CO2, CH4,
   N2O, F-gases, greenhouse gases, ozone, aerosols (direct BC/OC/SOx, indirect),
   Montreal gases, solar, volcanic.
 
-Despite the title, it carries **no emissions** — only the climate assessment.
-So the RCMIP route into METEOR's CICERO-SCM would need the emissions separately
-from the IIASA ScenarioMIP Explorer. It turns out not to be the route we want
-anyway.
+No emissions, despite the title — only the climate assessment. That rules out
+the RCMIP-into-CICERO route, and it does not matter: METEOR's experiments are a
+greenhouse-gas axis and an aerosol axis (`co2x4`, `sulxanom`), which is exactly
+the split this file already provides, assessed by MAGICC. Per-experiment forcing
+can be built from the ERF columns directly, skipping our own SCM run.
 
-**Route A — GSAT as pathway presets. Hours, no code change anywhere.** The tool
-already drives from a prescribed warming trajectory. Seven scenarios × 101
-years is ~3 KB. They become presets beside the SSPs, and the 33rd/67th
-percentiles give a forcing-and-sensitivity uncertainty range for free.
+#### The wrinkle a browser tool has and FLEX does not
 
-The catch is real: `scale_to_warming_pathway` rescales *the base scenario's*
-forced response, so the spatial pattern is the base scenario's, stretched to
-match the new global mean. The CMIP7 markers differ sharply in aerosols —
-by 2100, −0.90 W/m² (High–SSP3) against −0.10 (Very Low–SSP1) — and aerosol
-forcing has a very different regional fingerprint from CO2. Over South and East
-Asia that is not a detail. Fine for a global or large-region first look;
-misleading where aerosols dominate.
+FLEX is a pipeline: the person running it downloads the data themselves, so
+"don't redistribute" is satisfied by a README and a converter. A hosted site
+*serves* whatever it needs to its visitors. Baking CMIP7 forcing or GSAT into a
+public bundle is redistribution, even though it is only a few kilobytes.
 
-**Route B — ERF components straight into METEOR's experiments. The right
-answer, and tractable.** METEOR's forced response convolves per-experiment
-forcing with per-experiment step responses, and its experiments are `base`,
-`co2x4` and `sulxanom` — a greenhouse-gas axis and an aerosol axis. This file
-provides exactly that split, already assessed by MAGICC.
+Three ways to live with that, in preference order:
 
-So per-experiment forcing can be built directly from the ERF columns, skipping
-CICERO-SCM entirely — arguably better than the current route, since it uses the
-official ScenarioMIP assessment rather than our own SCM run.
+1. **Load-your-own, client side.** A file input: the visitor downloads the
+   release from IIASA/Zenodo themselves — as they must anyway — and drops it
+   into the page. The browser parses it locally and nothing is ever served by
+   us. This keeps the rapid-assessment use case intact, redistributes nothing,
+   and generalises to any pathway or forcing set a user wants to try. It is
+   also a feature in its own right.
+2. **Local bundle generation.** `scripts/export_bundles.py` grows a
+   `--scenario-file` argument, so anyone can build a CMIP7-enabled bundle from
+   their own copy for their own use. Not served by us.
+3. **Ask.** Whether a *derived* product — regional timeseries, or forcing
+   already convolved into a step response — counts as re-serving the input is a
+   rights question rather than a technical one, and the portal can answer it. If
+   the answer is that derived products are fine, the hosted site can ship CMIP7
+   scenarios directly and options 1 and 2 become conveniences.
 
-Needs, in order: a stated mapping from ERF components to the two experiment
-axes; validation that reconstructing a *CMIP6* SSP's forcing this way
-reproduces what `compute_scenario_forcing` produces today (MAGICC CMIP6 SSP ERF
-from RCMIP would serve); then an exporter that accepts forcing directly instead
-of a scenario name. A bundle carries ~4 KB per scenario, so shipping all seven
-costs nothing.
-
-Do Route A first to see the shape of it, but do not publish either until the
-embargo question is settled.
+Until that is settled, build option 1 and do not commit any ScenarioMIP file.
 
 ### 3. Multi-model
 
