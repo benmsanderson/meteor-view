@@ -1,0 +1,9 @@
+# Temporary, until METEOR #104, #102 and #101 land and the bundles are
+# re-exported from `base`. The site is deployed so it can be looked at and
+# linked to directly; it is not meant to be found by search yet.
+#
+# Remove this file, and the noindex meta tag in index.html, when the tool is
+# ready to be announced. A GitHub Pages site is public either way — this asks
+# crawlers to stay away, it does not stop anyone who has the URL.
+User-agent: *
+Disallow: /

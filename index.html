@@ -8,6 +8,13 @@
       name="description"
       content="Run the METEOR climate emulator in your browser: pick a scenario or draw a warming pathway, pick a region, see the ensemble."
     />
+    <!--
+      Temporary, alongside public/robots.txt: the site is deployed so it can be
+      looked at and linked to, but it should not turn up in search until the
+      METEOR PRs land and the bundles are re-exported from `base`. Remove both
+      when the tool is ready to be announced.
+    -->
+    <meta name="robots" content="noindex, nofollow" />
     <link rel="stylesheet" href="./src/app/style.css" />
   </head>
   <body>
@@ -135,12 +142,14 @@
           emulator runs on your machine.
         </p>
         <p>
-          <strong>What it is not.</strong> The bundle carries no gridded output, so
-          there are no maps here. Custom <em>emissions</em> scenarios need a simple
-          climate model, which is also not in the bundle — the drawn pathway rescales
-          a bundled scenario rather than running new emissions. Precipitation is
-          shown for 2015–2100 only, the window its distribution transform was fitted
-          for.
+          <strong>What it is not.</strong> One model, NorESM2-MM, so the spread you
+          see is internal variability — not model uncertainty, and not the full
+          uncertainty in a projection. Maps show the forced response only;
+          variability at a region you draw yourself would need a further 11 MB of
+          EOF maps that this page does not load. Custom <em>emissions</em> need a
+          simple climate model, which is not here either — a drawn pathway rescales
+          a bundled scenario rather than running new emissions. Precipitation covers
+          2015–2100 only, the window its distribution transform was fitted for.
         </p>
         <p class="provenance" id="provenance"></p>
       </footer>
