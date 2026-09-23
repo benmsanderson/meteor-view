@@ -7,8 +7,10 @@
  */
 
 import { annualMeans, drawFanChart, drawSeasonal } from './chart.js';
+import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
 import { Explorer, WINDOW } from './explorer.js';
 import { placeLabel } from './places.js';
+import { DEFAULT_SEED, fromQuery, toQuery, toUrl } from './state.js';
 
 /** Seconds per year, for the precipitation unit conversion. */
 const SECONDS_PER_DAY = 86400;
@@ -41,6 +43,10 @@ const elements = {
   pathwayCanvas: document.getElementById('pathway-canvas'),
   pathwayReset: document.getElementById('pathway-reset'),
   chart: document.getElementById('chart'),
+  copyLink: document.getElementById('copy-link'),
+  downloadCsv: document.getElementById('download-csv'),
+  downloadPng: document.getElementById('download-png'),
+  resample: document.getElementById('resample'),
   chartTitle: document.getElementById('chart-title'),
   seasonal: document.getElementById('seasonal'),
   status: document.getElementById('status'),
@@ -52,6 +58,8 @@ let explorer;
 /** Drawn warming pathway over the window years, or null while following the scenario. */
 let drawnPathway = null;
 let lastRun = null;
+/** Part of the shareable state: the same seed redraws the same realizations. */
+let seed = DEFAULT_SEED;
 
 function setStatus(message, state = '') {
   elements.status.textContent = message;
@@ -205,15 +213,20 @@ function paintPathway(event) {
     bounds.high
   );
 
+  // Quantise to the precision the URL stores, so a shared link reproduces the
+  // view exactly rather than to within a rounding step. 0.01 °C is far below
+  // what anyone can aim at with a pointer, so nothing is lost by it.
+  const quantise = (v) => Math.round(v * 100) / 100;
+
   const from = strokeFrom ?? { index, value };
   const span = index - from.index;
   if (span === 0) {
-    drawnPathway[index] = value;
+    drawnPathway[index] = quantise(value);
   } else {
     const step = span > 0 ? 1 : -1;
     for (let i = from.index; i !== index + step; i += step) {
       const t = (i - from.index) / span;
-      drawnPathway[i] = from.value + t * (value - from.value);
+      drawnPathway[i] = quantise(from.value + t * (value - from.value));
     }
   }
 
@@ -281,7 +294,7 @@ function run() {
       location,
       scenario: elements.scenario.value,
       nRealizations,
-      seed: 20260921,
+      seed,
       pathway: fullPathway(),
     });
   } catch (error) {
@@ -293,7 +306,8 @@ function run() {
   const converted = result.series.map((series) =>
     Float64Array.from(series, spec.convert)
   );
-  lastRun = { ...result, converted, variable, location };
+  lastRun = { ...result, converted, variable, location, scenario: elements.scenario.value };
+  syncUrl();
 
   elements.chartTitle.textContent = `${spec.label} at ${placeLabel(location)}`;
   drawFanChart(elements.chart, {
@@ -342,6 +356,124 @@ function drawSeasonalPanel() {
     early: climatology(2015, 2034),
     late: climatology(2081, 2100),
     format: spec.format,
+  });
+}
+
+/** The current control state, as the URL records it. */
+function currentState() {
+  return {
+    variable: elements.variable.value,
+    location: elements.location.value,
+    scenario: elements.scenario.value,
+    nRealizations: Number(elements.realizations.value),
+    seed,
+    pathway: drawnPathway,
+  };
+}
+
+/**
+ * Keep the address bar in step with what is shown.
+ *
+ * `replaceState`, not `pushState`: every control change would otherwise add a
+ * history entry, and the back button would walk through them one at a time
+ * instead of leaving the page.
+ */
+function syncUrl() {
+  const query = toQuery(currentState());
+  window.history.replaceState(null, '', `${window.location.pathname}${query}`);
+}
+
+/** Apply state parsed from the URL to the controls. */
+function applyState(state) {
+  elements.variable.value = state.variable;
+  if (explorer.locations.includes(state.location)) elements.location.value = state.location;
+  if (explorer.scenarios.includes(state.scenario)) elements.scenario.value = state.scenario;
+  elements.realizations.value = String(state.nRealizations);
+  seed = state.seed;
+
+  drawnPathway = state.pathway ? Float64Array.from(state.pathway) : null;
+  elements.pathwayToggle.checked = Boolean(drawnPathway);
+  elements.pathway.hidden = !drawnPathway;
+
+  // A shared link may ask for a realization count the menu does not list.
+  if (elements.realizations.value !== String(state.nRealizations)) {
+    const option = document.createElement('option');
+    option.value = String(state.nRealizations);
+    option.textContent = String(state.nRealizations);
+    elements.realizations.append(option);
+    elements.realizations.value = String(state.nRealizations);
+  }
+}
+
+/** Briefly mark a button as having done its job. */
+function flash(button, message) {
+  const original = button.textContent;
+  button.textContent = message;
+  button.dataset.done = 'true';
+  setTimeout(() => {
+    button.textContent = original;
+    delete button.dataset.done;
+  }, 1600);
+}
+
+function attachActions() {
+  elements.copyLink.addEventListener('click', async () => {
+    const url = toUrl(currentState());
+    try {
+      await navigator.clipboard.writeText(url);
+      flash(elements.copyLink, 'Link copied');
+    } catch {
+      // Clipboard access can be refused; the URL bar already holds the link.
+      flash(elements.copyLink, 'Copy from the address bar');
+    }
+  });
+
+  elements.downloadCsv.addEventListener('click', () => {
+    if (!lastRun) return;
+    const spec = VARIABLES[lastRun.variable];
+    const csv = toCsv({
+      years: lastRun.years,
+      series: lastRun.converted,
+      bundle: explorer.bundles[lastRun.variable],
+      variable: lastRun.variable,
+      location: lastRun.location,
+      scenario: drawnPathway ? `${lastRun.scenario} (rescaled to a drawn pathway)` : lastRun.scenario,
+      units: spec.yLabel,
+      seed,
+      url: toUrl(currentState()),
+    });
+    downloadText(`${stem()}.csv`, csv);
+    flash(elements.downloadCsv, 'CSV saved');
+  });
+
+  elements.downloadPng.addEventListener('click', async () => {
+    if (!lastRun) return;
+    const spec = VARIABLES[lastRun.variable];
+    const blob = await chartToPng(elements.chart, {
+      title: `${spec.label} at ${placeLabel(lastRun.location)}`,
+      subtitle:
+        `${explorer.bundles[lastRun.variable].attrs.cmip6_model} · ` +
+        `${drawnPathway ? 'drawn warming pathway' : lastRun.scenario.toUpperCase()} · ` +
+        `${lastRun.converted.length} realizations · ${WINDOW.start}–${WINDOW.end}`,
+    });
+    download(`${stem()}.png`, blob);
+    flash(elements.downloadPng, 'Chart saved');
+  });
+
+  elements.resample.addEventListener('click', () => {
+    // A different seed is a different draw from the same distribution, which
+    // is the honest way to show that no single realization means anything.
+    seed = Math.floor(Math.random() * 0xffffffff);
+    run();
+  });
+}
+
+function stem() {
+  return filenameStem({
+    cmip6Model: explorer.bundles[lastRun.variable].attrs.cmip6_model,
+    variable: lastRun.variable,
+    location: lastRun.location,
+    scenario: drawnPathway ? 'pathway' : lastRun.scenario,
   });
 }
 
@@ -396,8 +528,21 @@ async function start() {
   }
 
   populateControls();
+
+  // Apply the shared link before the first run, so a link opens on what it
+  // describes rather than flashing the default view first.
+  applyState(
+    fromQuery(window.location.search, {
+      locations: explorer.locations,
+      scenarios: explorer.scenarios,
+      pathwayLength: explorer.windowYears().length,
+    })
+  );
+
   attachControls();
   attachPathwayEditor();
+  attachActions();
+  if (drawnPathway) renderPathway();
 
   const bundle = explorer.bundles.tas;
   elements.provenance.textContent =

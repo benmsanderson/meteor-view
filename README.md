@@ -98,6 +98,32 @@ a fiction".
 The exporter depends on `series_transformed` and `locations=`, both added by
 [METEOR#101](https://github.com/benmsanderson/METEOR/pull/101).
 
+## Sharing and taking the numbers away
+
+Every control — including the drawn pathway and the RNG seed — lives in the
+URL, so a view is a link:
+
+```
+?v=pr&loc=regional%3ASAS&scn=ssp370&n=50
+```
+
+**Copy link to this view** puts that on the clipboard. Opening it reproduces
+the chart *exactly*, down to the individual realizations: the seed travels with
+it, and a drawn pathway is quantised to 0.01 °C as you draw so that what you
+see is precisely what the link encodes. A drawn pathway costs about 230
+characters, against the ~500 the same 86 numbers would take as text.
+
+**Download CSV** gives one row per month and one column per realization, with
+the provenance — model, scenario, METEOR version, and the link that regenerates
+it — as `#` comment lines that `pandas.read_csv(..., comment='#')` will skip.
+
+**Download chart** writes a PNG with an opaque background, a title and that
+same provenance, because a transparent unlabelled chart is a poor thing to
+paste into a document.
+
+**Draw a new sample** re-rolls the seed. Nothing else changes, which is the
+quickest way to see that no single realization means anything on its own.
+
 ## Limits worth knowing
 
 - **No maps.** Bundles carry no gridded output; reconstructing fields needs the

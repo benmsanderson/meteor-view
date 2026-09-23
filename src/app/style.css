@@ -206,6 +206,46 @@ canvas {
   color: var(--muted);
 }
 
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0 10px;
+}
+
+.actions button {
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.actions button[data-done='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Pushes the re-sample control away from the export group: it changes what is
+   shown, where the others only take a copy of it. */
+.actions__spacer {
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .actions__spacer {
+    margin-left: 0;
+  }
+}
+
 .swatch {
   display: inline-block;
   width: 14px;
