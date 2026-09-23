@@ -81,19 +81,69 @@ Then decide whether the 11.3 MB noise tier is worth an opt-in button for
 variability at a custom location. My guess is yes, for this audience, and that
 it should be an explicit click rather than something the page does on load.
 
-### 2. CMIP7 scenarios
+### 2. CMIP7 scenarios — technically easy, blocked on an embargo
 
-**Unknown until one question is answered.** METEOR loads scenarios from
-`src/meteor/default_scm_data/{name}_em_RCMIP.txt` and `{name}_conc_RCMIP.txt`,
-so adding a scenario is adding two input files and re-exporting a bundle with
-`scenarios=[...]`. No code change in either repository.
+Source: **ScenarioMIP-CMIP7 IAM quantification**, `10.5281/zenodo.19825038`,
+v0.2, 15 April 2026. Examined 2026-09-23.
 
-**The open question is whether CMIP7 emissions and concentrations are published
-in a form that converts to RCMIP format.** If they are, this is a day's work and
-it is the most distinctive thing the tool could offer. If they are not, it waits.
-Worth answering before planning around it.
+> ⚠️ **This is a pre-release under embargo.** Its README states the data
+> *"should not be shared or used for submission or publication before the end of
+> the early access period"*, and the Zenodo record carries no licence.
+> **Publishing a GitHub Pages site driven by it would be sharing it.** Nothing
+> derived from this file can ship publicly until the early access period ends —
+> or until whoever holds the rights says otherwise. Being a participant with
+> access is not the same as holding redistribution rights.
+>
+> The file is therefore deliberately **not committed to this repository**, and
+> no CMIP7 feature should be deployed before this is resolved.
 
-A bundle carries ~4 KB per scenario, so there is no cost to shipping many.
+What it contains — 7 marker scenarios (High–SSP3, High-to-Low–SSP5,
+Medium–SSP2, Medium-to-Low–SSP2, Low–SSP2, Low-to-Negative–SSP2, Very Low–SSP1),
+from 7 IAMs, assessed with MAGICCv7.6.0a3, annual 2000–2100:
+
+- **GSAT** — median, 33rd and 67th percentile. 2100 medians span **1.37 °C
+  (Very Low) to 3.42 °C (High)**.
+- **Effective radiative forcing**, decomposed: total, anthropogenic, CO2, CH4,
+  N2O, F-gases, greenhouse gases, ozone, aerosols (direct BC/OC/SOx, indirect),
+  Montreal gases, solar, volcanic.
+
+Despite the title, it carries **no emissions** — only the climate assessment.
+So the RCMIP route into METEOR's CICERO-SCM would need the emissions separately
+from the IIASA ScenarioMIP Explorer. It turns out not to be the route we want
+anyway.
+
+**Route A — GSAT as pathway presets. Hours, no code change anywhere.** The tool
+already drives from a prescribed warming trajectory. Seven scenarios × 101
+years is ~3 KB. They become presets beside the SSPs, and the 33rd/67th
+percentiles give a forcing-and-sensitivity uncertainty range for free.
+
+The catch is real: `scale_to_warming_pathway` rescales *the base scenario's*
+forced response, so the spatial pattern is the base scenario's, stretched to
+match the new global mean. The CMIP7 markers differ sharply in aerosols —
+by 2100, −0.90 W/m² (High–SSP3) against −0.10 (Very Low–SSP1) — and aerosol
+forcing has a very different regional fingerprint from CO2. Over South and East
+Asia that is not a detail. Fine for a global or large-region first look;
+misleading where aerosols dominate.
+
+**Route B — ERF components straight into METEOR's experiments. The right
+answer, and tractable.** METEOR's forced response convolves per-experiment
+forcing with per-experiment step responses, and its experiments are `base`,
+`co2x4` and `sulxanom` — a greenhouse-gas axis and an aerosol axis. This file
+provides exactly that split, already assessed by MAGICC.
+
+So per-experiment forcing can be built directly from the ERF columns, skipping
+CICERO-SCM entirely — arguably better than the current route, since it uses the
+official ScenarioMIP assessment rather than our own SCM run.
+
+Needs, in order: a stated mapping from ERF components to the two experiment
+axes; validation that reconstructing a *CMIP6* SSP's forcing this way
+reproduces what `compute_scenario_forcing` produces today (MAGICC CMIP6 SSP ERF
+from RCMIP would serve); then an exporter that accepts forcing directly instead
+of a scenario name. A bundle carries ~4 KB per scenario, so shipping all seven
+costs nothing.
+
+Do Route A first to see the shape of it, but do not publish either until the
+embargo question is settled.
 
 ### 3. Multi-model
 
@@ -178,10 +228,20 @@ case this is not a browser feature.
 
 ## Suggested order
 
-1 → 3 (start training early) → 2 if the CMIP7 inputs exist → 4 → 5, with the
-merge chores slotted in whenever the PRs land.
+1 → 3 (start training early) → 2 → 4 → 5, with the merge chores slotted in
+whenever the PRs land.
 
 The argument: custom regions and maps are the thing you asked for and are far
 cheaper than anyone thought; multi-model is the long pole and the credibility
-fix; CMIP7 is potentially the most distinctive feature but gated on a question
-nobody has answered yet.
+fix; CMIP7 is the most distinctive feature and is cheap to build, but cannot be
+*published* until its embargo lifts — so it is worth building behind that, not
+waiting on it.
+
+Three uncertainties would then be separable, which for an assessment tool is a
+better story than any one of them alone:
+
+| Source | Where it comes from |
+|---|---|
+| Internal variability | METEOR's ensemble, today |
+| Model and pattern uncertainty | Multi-model bundles (item 3) |
+| Forcing and climate sensitivity | MAGICC 33rd/67th percentiles (item 2) |

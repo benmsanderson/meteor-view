@@ -178,7 +178,9 @@ until the bundle schema exists:
 - **Audience — settled.** Scientists from adjacent fields wanting a rapid
   climate assessment, particularly for scenarios most ESMs have not run yet
   (CMIP7). Not climate modellers, who will clone the repo; not the general
-  public. See [`03-roadmap.md`](03-roadmap.md).
+  public. See [`03-roadmap.md`](03-roadmap.md). The CMIP7 source is
+  `10.5281/zenodo.19825038`, which is **embargoed pre-release data**: nothing
+  derived from it may be published until the early access period ends.
 - **Gridded maps — the claim below was wrong.** "Reconstructing 100
   realizations × 3012 months × 55k gridpoints is not a client-side operation"
   is true and irrelevant: a map view never asks for that. Measured, a
