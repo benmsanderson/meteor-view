@@ -14,11 +14,13 @@ exactly `base` plus those three PRs, refreshed as they move, so work here can
 proceed before they land. Its tree is verified identical to merging the three
 into `base`. Recommended merge sequence, for reviewability rather than
 correctness (the orders produce byte-identical trees): **#104, then #102, then
-#101**. #100 is fully superseded by #104 and can be closed. The client is done: a validated JavaScript kernel,
-the fixtures wired into CI, and a Pages deploy. See
-[`02-client-findings.md`](02-client-findings.md) for what the port had to infer
-that the schema did not state — the most useful feedback METEOR can get from
-this exercise, because it is what the next port would also get stuck on.
+#101**. #100 is fully superseded by #104 and can be closed.
+
+The client is done: a validated JavaScript kernel, the fixtures wired into CI,
+and a Pages deploy. See [`02-client-findings.md`](02-client-findings.md) for
+what the port had to infer that the schema did not state — the most useful
+feedback METEOR can get from this exercise, because it is what the next port
+would also get stuck on.
 
 Remaining: the three METEOR PRs are unmerged, so the bundles here were exported
 from the integration branch and will need re-exporting from `base` once they
