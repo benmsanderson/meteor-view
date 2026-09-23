@@ -53,10 +53,10 @@ in CI on every push:
    mapping included. Agreement is **2e-7 relative**, again float32 wire
    precision.
 3. **The whole pipeline** (`test/explorer.test.js`). The layers above validate
-   arithmetic; this validates bookkeeping, by comparing a 200-member ensemble
-   against `MeteorInterface.generate_ensemble_outputs` — its mean, its spread
-   and its seasonal cycle. This is the layer that caught the errors that
-   mattered.
+   arithmetic; this validates bookkeeping, by comparing a 100-member ensemble
+   against a 200-member reference from
+   `MeteorInterface.generate_ensemble_outputs` — its mean, its spread and its
+   seasonal cycle. This is the layer that caught the errors that mattered.
 
 ```bash
 npm test
@@ -74,13 +74,17 @@ npm run dev
 Regenerating the data files needs METEOR itself:
 
 ```bash
-pip install 'git+https://github.com/benmsanderson/METEOR.git@docs/schema-client-findings'
+pip install 'git+https://github.com/benmsanderson/METEOR.git@integration/meteor-view'
 ```
 
-That branch is [METEOR#105](https://github.com/benmsanderson/METEOR/pull/105),
-which adds the `series_transformed` fixture array and the `locations=` argument
-this repository's exporter uses. It targets `integration/meteor-view`, itself a
-merge of three PRs still in review; point both at `base` once they land.
+`integration/meteor-view` is METEOR's development branch for this repository:
+exactly `base` plus the three PRs in flight (#104, #102, #101), refreshed as
+they move. It is not a merge candidate — the PRs merge into `base`
+individually. It exists so work here can proceed before they land; point this
+at `base` once they have.
+
+The exporter depends on `series_transformed` and `locations=`, both added by
+[METEOR#101](https://github.com/benmsanderson/METEOR/pull/101).
 
 ## Limits worth knowing
 

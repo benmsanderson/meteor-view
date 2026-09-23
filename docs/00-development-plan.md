@@ -4,17 +4,25 @@ A browser-based tool for running [METEOR](https://github.com/benmsanderson/METEO
 served as a static github.io site from this repository.
 
 **Status:** built. The METEOR-side work in
-[`01-unblock-meteor-export.md`](01-unblock-meteor-export.md) is done
-(benmsanderson/METEOR#101, plus #102 and #104, merged on the integration branch
-`integration/meteor-view`). The client is done: a validated JavaScript kernel,
+[`01-unblock-meteor-export.md`](01-unblock-meteor-export.md) is done as
+benmsanderson/METEOR#101, alongside #102 and #104. All three target METEOR's
+trunk, `base` — note that METEOR's `main` is an unrelated 2023 lineage with no
+common ancestor, and is not where anything should be merged.
+
+`integration/meteor-view` is a **development branch, not a merge candidate**:
+exactly `base` plus those three PRs, refreshed as they move, so work here can
+proceed before they land. Its tree is verified identical to merging the three
+into `base`. Recommended merge sequence, for reviewability rather than
+correctness (the orders produce byte-identical trees): **#104, then #102, then
+#101**. #100 is fully superseded by #104 and can be closed. The client is done: a validated JavaScript kernel,
 the fixtures wired into CI, and a Pages deploy. See
 [`02-client-findings.md`](02-client-findings.md) for what the port had to infer
 that the schema did not state — the most useful feedback METEOR can get from
 this exercise, because it is what the next port would also get stuck on.
 
 Remaining: the three METEOR PRs are unmerged, so the bundles here were exported
-from an integration branch that will drift as they take review. Re-export from
-`base` once they land. The Zenodo deposit is still pending, deliberately.
+from the integration branch and will need re-exporting from `base` once they
+land. The Zenodo deposit is still pending, deliberately.
 
 This document exists so the reasoning does not have to be re-derived. Facts
 below were verified against `benmsanderson/METEOR` at commit `f6dc3d1` on

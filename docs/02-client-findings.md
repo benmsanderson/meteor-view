@@ -7,18 +7,21 @@ more than it sounds: each one produces *plausible numbers* rather than an
 error, so a port can look finished and be wrong.
 
 Verified against `benmsanderson/METEOR` at `integration/meteor-view`
-(`3b32ce2`) on 2026-09-23. Ordered by how badly each one bites.
+(`3b32ce2`) on 2026-09-23, which is `base` plus the three PRs in flight.
+Ordered by how badly each one bites.
 
-**Status:** all six are filed upstream as
-[benmsanderson/METEOR#105](https://github.com/benmsanderson/METEOR/pull/105),
-against `integration/meteor-view` rather than `base`. That PR documents
-findings 1–3 and 6 in the schema, and fixes 4 and 5 in code: golden fixtures
-gained a `series_transformed` array and a `locations=` argument. This client
+**Status:** all six are filed upstream in
+[benmsanderson/METEOR#101](https://github.com/benmsanderson/METEOR/pull/101),
+which targets `base`. They were briefly a separate PR (#105) and were folded
+into #101 instead, since they document and fix what that PR itself introduces.
+It documents findings 1–3 and 6 in the schema, and fixes 4 and 5 in code:
+golden fixtures gained a `series_transformed` array and a `locations=`
+argument. This client
 already depends on both — `test/transform.test.js` validates the precipitation
 path against the shipped fixture rather than against a reference it has to
 generate with METEOR installed, which is what finding 4 was about.
 
-A seventh turned up while writing that PR, and is fixed there too: **`year_0`
+A seventh turned up while writing those commits, and is fixed there too: **`year_0`
 is load-bearing**. It is the first calendar year of `forced_response`, and
 forcing read from a bundle starts at `forcing_year_start` — 1750 for the
 shipped scenarios, not the 1850 default. Our own first export left the default
@@ -121,7 +124,7 @@ This client originally had to generate its own reference by running
 `apply_transform_from_bundle` over the fixture's PCs, which requires METEOR
 installed and so is exactly what the fixtures exist to avoid.
 
-**Fixed** in METEOR#105: fixtures for a transformed variable now carry
+**Fixed** in METEOR#101: fixtures for a transformed variable now carry
 `series_transformed`, the complete recipe with the baseline and the quantile
 mapping applied. The workaround script is gone and `test/transform.test.js`
 validates against the shipped fixture instead, to 2e-7 — float32 wire
@@ -138,7 +141,7 @@ This was easy to work around — build the fixture from a small sub-bundle —
 but it is surprising, and the obvious call produces a file several times bigger
 than it needs to be.
 
-**Fixed** in METEOR#105: `export_golden_fixture` takes `locations=`.
+**Fixed** in METEOR#101: `export_golden_fixture` takes `locations=`.
 
 ## 6. Two notes for the schema's netCDF section
 

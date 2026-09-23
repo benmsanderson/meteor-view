@@ -2,7 +2,7 @@
  * The precipitation path, steps 5 and 6.
  *
  * A fixture's `series` stops at step 4 — the seasonal cycle plus the EOF
- * projection — so it exercises none of the steps unique to `pr`. METEOR#105
+ * projection — so it exercises none of the steps unique to `pr`. METEOR#101
  * adds `series_transformed` for exactly this: the complete recipe, with the
  * baseline and the gamma quantile mapping applied, so a port can validate its
  * precipitation path without installing METEOR to generate a reference.

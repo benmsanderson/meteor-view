@@ -16,9 +16,10 @@ Usage::
 
     PYTHONPATH=<meteor>/src python scripts/export_bundles.py data/
 
-Re-export from METEOR's ``base`` branch once #101, #102, #104 and #105 have
-merged; these were built from the docs/schema-client-findings branch, which
-adds the ``series_transformed`` and ``locations=`` support used below.
+Re-export from METEOR's ``base`` branch once #104, #102 and #101 have merged.
+These were built from ``integration/meteor-view``, METEOR's development branch
+for this repository -- exactly ``base`` plus those three PRs. It supplies the
+``series_transformed`` and ``locations=`` support used below, both from #101.
 """
 
 import os
