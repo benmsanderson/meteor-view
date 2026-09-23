@@ -93,6 +93,28 @@
 
       <section class="panel">
         <div class="panel__header">
+          <h2 id="map-title">Map of the forced response</h2>
+          <p class="legend">
+            <label for="map-year">Year</label>
+            <input type="range" id="map-year" min="2015" max="2100" value="2100" step="1" />
+            <output id="map-year-value">2100</output>
+          </p>
+        </div>
+        <p class="hint" id="map-hint">
+          Click a region to select it, or drag to define your own. The map shows
+          the forced response — the signal the scenario drives — without internal
+          variability, which is why it looks smooth where the timeseries does not.
+        </p>
+        <canvas id="map"></canvas>
+        <canvas id="colourbar" height="30"></canvas>
+        <div class="actions">
+          <button type="button" id="load-map">Load map (2 MB)</button>
+          <button type="button" id="clear-box" hidden>Clear custom region</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
           <h2>Seasonal cycle</h2>
           <p class="legend">
             <span class="swatch swatch--median"></span> 2015–2034

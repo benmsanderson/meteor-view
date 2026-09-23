@@ -185,3 +185,48 @@ describe('arbitrary regions', () => {
     expect(arctic).toBeGreaterThan(globe);
   });
 });
+
+describe('a drawn region against a bundled one', () => {
+  /** Forced response over an arbitrary mask, the way the app computes it. */
+  function forcedOverMask(mask) {
+    const artifact2 = artifact;
+    const kernel = patternKernel(artifact2);
+    const { pcs, nTimes } = stepResponsePcs(kernel, bundle.forcing('ssp245'));
+    const projection = artifact2.project(artifact2.areaWeights(mask));
+    const nExp = artifact2.dims.exp;
+    const nModes = artifact2.nModes;
+
+    const out = new Float64Array(nTimes);
+    for (let t = 0; t < nTimes; t += 1) {
+      let acc = 0;
+      for (let e = 0; e < nExp; e += 1) {
+        for (let m = 0; m < nModes; m += 1) {
+          acc += pcs[(t * nExp + e) * nModes + m] * projection[e * nModes + m];
+        }
+      }
+      out[t] = acc;
+    }
+    return out;
+  }
+
+  it('gives a similar answer for a box drawn over the Sahara', () => {
+    // A hand-drawn box is not the AR6 polygon, so these cannot agree exactly.
+    // What matters is that a user drawing roughly the right rectangle gets
+    // roughly the right number — if the projection were wrong, this would be
+    // out by a factor rather than a few percent.
+    const box = forcedOverMask(boxRegion({ south: 15, north: 30, west: -10, east: 30 }));
+    const bundled = forcedResponse(bundle, 'regional:SAH', bundle.forcing('ssp245'));
+
+    const last = box.length - 1;
+    const ratio = box[last] / bundled[last];
+    expect(ratio, `box/SAH = ${ratio.toFixed(3)}`).toBeGreaterThan(0.9);
+    expect(ratio, `box/SAH = ${ratio.toFixed(3)}`).toBeLessThan(1.1);
+  });
+
+  it('warms a subtropical land box more than the globe', () => {
+    const sahara = forcedOverMask(boxRegion({ south: 15, north: 30, west: -10, east: 30 }));
+    const globe = forcedOverMask();
+    const last = sahara.length - 1;
+    expect(sahara[last]).toBeGreaterThan(globe[last]);
+  });
+});

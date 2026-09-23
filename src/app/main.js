@@ -8,6 +8,7 @@
 
 import { annualMeans, drawFanChart, drawSeasonal } from './chart.js';
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
+import { drawColourBar, drawMap, regionAt, toLatLon } from './map.js';
 import { Explorer, WINDOW } from './explorer.js';
 import { placeLabel } from './places.js';
 import { DEFAULT_SEED, fromQuery, toQuery, toUrl } from './state.js';
@@ -49,6 +50,15 @@ const elements = {
   resample: document.getElementById('resample'),
   chartTitle: document.getElementById('chart-title'),
   seasonal: document.getElementById('seasonal'),
+  map: document.getElementById('map'),
+  mapPanel: document.getElementById('map').closest('.panel'),
+  mapTitle: document.getElementById('map-title'),
+  mapYear: document.getElementById('map-year'),
+  mapYearValue: document.getElementById('map-year-value'),
+  mapHint: document.getElementById('map-hint'),
+  colourbar: document.getElementById('colourbar'),
+  loadMap: document.getElementById('load-map'),
+  clearBox: document.getElementById('clear-box'),
   status: document.getElementById('status'),
   provenance: document.getElementById('provenance'),
 };
@@ -60,6 +70,12 @@ let drawnPathway = null;
 let lastRun = null;
 /** Part of the shareable state: the same seed redraws the same realizations. */
 let seed = DEFAULT_SEED;
+/** AR6 outlines, once loaded. */
+let outlines = [];
+/** The last map drawn, kept so a resize can redraw without recomputing. */
+let lastMap = null;
+/** A user-drawn region, or null while a bundled location is selected. */
+let customBox = null;
 
 function setStatus(message, state = '') {
   elements.status.textContent = message;
@@ -241,7 +257,7 @@ function attachPathwayEditor() {
   canvas.addEventListener('pointerdown', (event) => {
     drawing = true;
     strokeFrom = null;
-    canvas.setPointerCapture(event.pointerId);
+    capture(canvas, event);
     paintPathway(event);
   });
   canvas.addEventListener('pointermove', (event) => {
@@ -277,9 +293,20 @@ function fullPathway() {
   return full;
 }
 
-/** Run the emulator and redraw. */
+/**
+ * Run the emulator and redraw.
+ *
+ * A custom region takes a different path: the 2 MB pattern artifact gives its
+ * forced response, but internal variability would need the EOF maps from the
+ * 11 MB noise artifact, which is not loaded. So a drawn region shows the signal
+ * without the spread, and says so rather than implying the spread is zero.
+ */
 function run() {
   if (!explorer) return;
+  if (customBox) {
+    runCustomRegion();
+    return;
+  }
 
   const variable = elements.variable.value;
   const spec = VARIABLES[variable];
@@ -328,9 +355,73 @@ function run() {
   );
 }
 
+/** The forced response for a drawn region, with no ensemble behind it. */
+async function runCustomRegion() {
+  const variable = elements.variable.value;
+  const spec = VARIABLES[variable];
+  const { boxRegion } = await import('../lib/pattern.js');
+
+  let result;
+  try {
+    result = await explorer.customForcedResponse({
+      variable,
+      scenario: elements.scenario.value,
+      mask: boxRegion(customBox),
+      pathway: fullPathway(),
+    });
+  } catch (error) {
+    setStatus(error.message, 'error');
+    return;
+  }
+
+  const forced = Float64Array.from(result.forced, spec.convert);
+  lastRun = {
+    years: result.years,
+    series: [forced],
+    converted: [forced],
+    variable,
+    location: describeBox(customBox),
+    scenario: elements.scenario.value,
+    forcedOnly: true,
+  };
+  syncUrl();
+
+  elements.chartTitle.textContent = `${spec.label} over ${describeBox(customBox)}`;
+  drawFanChart(elements.chart, {
+    x: result.years,
+    series: [forced],
+    yLabel: spec.yLabel,
+    format: spec.format,
+  });
+  drawSeasonalPanel();
+
+  setStatus(
+    `Forced response only over ${describeBox(customBox)}. A drawn region has no ` +
+      `ensemble behind it: internal variability needs the EOF maps from the ` +
+      `11 MB noise artifact, which this page does not load. Pick a listed ` +
+      `place for the full spread.`
+  );
+}
+
+/** A human-readable description of a box. */
+function describeBox(box) {
+  const ns = (v) => `${Math.abs(v).toFixed(0)}°${v >= 0 ? 'N' : 'S'}`;
+  const ew = (v) => {
+    const wrapped = ((((v + 180) % 360) + 360) % 360) - 180;
+    return `${Math.abs(wrapped).toFixed(0)}°${wrapped >= 0 ? 'E' : 'W'}`;
+  };
+  return `${ns(box.south)}–${ns(box.north)}, ${ew(box.west)}–${ew(box.east)}`;
+}
+
 /** Climatology for the first and last twenty years of the window. */
 function drawSeasonalPanel() {
   if (!lastRun) return;
+  // A forced-response run is annual, so there is no seasonal cycle in it.
+  if (lastRun.forcedOnly) {
+    elements.seasonal.closest('.panel').hidden = true;
+    return;
+  }
+  elements.seasonal.closest('.panel').hidden = false;
   const spec = VARIABLES[lastRun.variable];
   const months = lastRun.converted[0].length;
 
@@ -477,8 +568,184 @@ function stem() {
   });
 }
 
+/**
+ * Load the pattern artifact and outlines, then draw the map.
+ *
+ * Deferred behind a button because it is 2 MB against the bundle's 81 KB, and
+ * most visits never need it.
+ */
+async function loadMap() {
+  elements.loadMap.disabled = true;
+  elements.loadMap.textContent = 'Loading…';
+  try {
+    outlines = await explorer.regions();
+    await explorer.patterns(elements.variable.value);
+    elements.mapPanel.dataset.map = 'ready';
+    elements.loadMap.hidden = true;
+    await renderMap();
+  } catch (error) {
+    setStatus(`Could not load the map: ${error.message}`, 'error');
+    elements.loadMap.disabled = false;
+    elements.loadMap.textContent = 'Load map (2 MB)';
+  }
+}
+
+/** Compute and draw the forced-response map for the selected year. */
+async function renderMap() {
+  if (elements.mapPanel.dataset.map !== 'ready') return;
+
+  const variable = elements.variable.value;
+  const spec = VARIABLES[variable];
+  const year = Number(elements.mapYear.value);
+
+  const { field, lat, lon } = await explorer.forcedMap({
+    variable,
+    scenario: elements.scenario.value,
+    year,
+    pathway: fullPathway(),
+  });
+
+  const converted = Float64Array.from(field, spec.convert);
+  lastMap = { field: converted, lat, lon, variable, year };
+
+  const scale = drawMap(elements.map, {
+    field: converted,
+    lat,
+    lon,
+    regions: outlines,
+    highlight: elements.location.value.startsWith('regional:')
+      ? elements.location.value.slice('regional:'.length)
+      : null,
+    box: customBox,
+    // Temperature is an anomaly about zero and wants a diverging scale;
+    // precipitation here is a change too, so it does as well.
+    diverging: true,
+  });
+
+  drawColourBar(elements.colourbar, {
+    ...scale,
+    label: `${spec.label} change in ${year} (${variable === 'tas' ? '°C' : 'mm/day'})`,
+  });
+  elements.mapTitle.textContent = `Forced response, ${year}`;
+}
+
+/** Selecting a region, or drawing one, on the map. */
+function attachMap() {
+  elements.loadMap.addEventListener('click', loadMap);
+
+  elements.mapYear.addEventListener('input', () => {
+    elements.mapYearValue.textContent = elements.mapYear.value;
+  });
+  elements.mapYear.addEventListener('change', renderMap);
+
+  elements.clearBox.addEventListener('click', () => {
+    customBox = null;
+    elements.clearBox.hidden = true;
+    run();
+    renderMap();
+  });
+
+  let dragFrom = null;
+  let dragged = false;
+
+  elements.map.addEventListener('pointerdown', (event) => {
+    if (elements.mapPanel.dataset.map !== 'ready') return;
+    dragFrom = toLatLon(elements.map, event);
+    dragged = false;
+    capture(elements.map, event);
+  });
+
+  elements.map.addEventListener('pointermove', (event) => {
+    if (!dragFrom) return;
+    const to = toLatLon(elements.map, event);
+    // A click and a tiny drag are the same gesture to a human, so only treat
+    // it as a box once it is big enough to have been meant.
+    if (Math.abs(to.lat - dragFrom.lat) < 2 && Math.abs(to.lon - dragFrom.lon) < 2) return;
+    dragged = true;
+    customBox = boxFrom(dragFrom, to);
+    // Redraw from the field already in hand: the outline moves with the
+    // pointer, and recomputing the map for each move would not.
+    redrawMap();
+  });
+
+  const finish = (event) => {
+    if (!dragFrom) return;
+    const to = toLatLon(elements.map, event);
+    dragFrom = null;
+
+    if (dragged) {
+      elements.clearBox.hidden = false;
+      run();
+      return;
+    }
+
+    // A plain click selects the AR6 region under the pointer, if the bundle
+    // carries it — every AR6 region does.
+    const region = regionAt(outlines, to);
+    if (!region) return;
+    const spec = `regional:${region.code}`;
+    if (!explorer.locations.includes(spec)) return;
+    customBox = null;
+    elements.clearBox.hidden = true;
+    elements.location.value = spec;
+    run();
+    renderMap();
+  };
+  elements.map.addEventListener('pointerup', finish);
+  elements.map.addEventListener('pointercancel', () => {
+    dragFrom = null;
+  });
+}
+
+/**
+ * Keep receiving pointer events after the pointer leaves the element.
+ *
+ * An optimisation rather than a requirement — a drag still works without it,
+ * it just stops at the edge — so a browser that refuses should not take the
+ * handler down with it.
+ */
+function capture(element, event) {
+  try {
+    element.setPointerCapture(event.pointerId);
+  } catch {
+    // No active pointer with that id: synthetic events, or a stale id.
+  }
+}
+
+/** A normalised box from two corners. */
+function boxFrom(a, b) {
+  return {
+    south: Math.min(a.lat, b.lat),
+    north: Math.max(a.lat, b.lat),
+    west: Math.min(a.lon, b.lon),
+    east: Math.max(a.lon, b.lon),
+  };
+}
+
+/** Redraw the map from the last field, without recomputing it. */
+function redrawMap() {
+  if (!lastMap || elements.mapPanel.dataset.map !== 'ready') return;
+  const spec = VARIABLES[lastMap.variable];
+  const scale = drawMap(elements.map, {
+    field: lastMap.field,
+    lat: lastMap.lat,
+    lon: lastMap.lon,
+    regions: outlines,
+    highlight: elements.location.value.startsWith('regional:')
+      ? elements.location.value.slice('regional:'.length)
+      : null,
+    box: customBox,
+    diverging: true,
+  });
+  drawColourBar(elements.colourbar, {
+    ...scale,
+    label: `${spec.label} change in ${lastMap.year} (${lastMap.variable === 'tas' ? '°C' : 'mm/day'})`,
+  });
+}
+
 /** Redraw everything from the last run, without regenerating it. */
 function redraw() {
+  redrawMap();
   if (!lastRun) return;
   const spec = VARIABLES[lastRun.variable];
   drawFanChart(elements.chart, {
@@ -498,7 +765,13 @@ function attachControls() {
       if (elements.pathwayToggle.checked) renderPathway();
       else drawnPathway = null;
     }
+    // Choosing a listed place supersedes a region drawn on the map.
+    if (event.target === elements.location && customBox) {
+      customBox = null;
+      elements.clearBox.hidden = true;
+    }
     run();
+    renderMap();
   });
 
   // Redraw whenever a canvas changes size, which covers window resizes and,
@@ -514,6 +787,7 @@ function attachControls() {
   });
   observer.observe(elements.chart);
   observer.observe(elements.seasonal);
+  observer.observe(elements.map);
 }
 
 async function start() {
@@ -542,6 +816,8 @@ async function start() {
   attachControls();
   attachPathwayEditor();
   attachActions();
+  attachMap();
+  elements.mapPanel.dataset.map = 'idle';
   if (drawnPathway) renderPathway();
 
   const bundle = explorer.bundles.tas;

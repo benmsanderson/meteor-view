@@ -42,11 +42,18 @@ export const WINDOW = { start: 2015, end: 2100 };
  * bundle for the warming-pathway denominator.
  */
 export class Explorer {
-  /** @param {{tas: import('../lib/bundle.js').Bundle, pr: import('../lib/bundle.js').Bundle}} bundles */
-  constructor(bundles) {
+  /**
+   * @param {{tas: import('../lib/bundle.js').Bundle, pr: import('../lib/bundle.js').Bundle}} bundles
+   * @param {string} [base] where the on-demand artifacts are served from
+   */
+  constructor(bundles, base = 'data/') {
     this.bundles = bundles;
+    this.base = base;
     this.locations = bundles.tas.locations;
     this.scenarios = bundles.tas.scenarios;
+    /** Lazily loaded 2 MB pattern artifacts, by variable. */
+    this.patternArtifacts = new Map();
+    this.regionOutlines = null;
   }
 
   /**
@@ -64,7 +71,7 @@ export class Explorer {
       return new Bundle(await response.arrayBuffer());
     };
     const [tas, pr] = await Promise.all([fetchBundle('tas'), fetchBundle('pr')]);
-    return new Explorer({ tas, pr });
+    return new Explorer({ tas, pr }, base);
   }
 
   /** Years of the full forcing axis a bundle carries. */
@@ -74,6 +81,113 @@ export class Explorer {
       { length: bundle.dims.year },
       (_, i) => bundle.forcingYearStart + i
     );
+  }
+
+  /**
+   * Load the pattern artifact for a variable, once, on demand.
+   *
+   * 2 MB against the bundle's 81 KB, so it is fetched only when a visitor asks
+   * for a map or a region the bundle was not built for — never on first load.
+   */
+  async patterns(variable) {
+    if (!this.patternArtifacts.has(variable)) {
+      const { PatternArtifact } = await import('../lib/pattern.js');
+      const url = `${this.base}meteor_NorESM2-MM_${variable}_pattern_v1.nc`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`could not load ${url}: ${response.status}`);
+      this.patternArtifacts.set(variable, new PatternArtifact(await response.arrayBuffer()));
+    }
+    return this.patternArtifacts.get(variable);
+  }
+
+  /** AR6 outlines, once, on demand. */
+  async regions() {
+    if (!this.regionOutlines) {
+      const response = await fetch(`${this.base}ar6_regions_v1.json`);
+      if (!response.ok) throw new Error('could not load region outlines');
+      this.regionOutlines = (await response.json()).regions;
+    }
+    return this.regionOutlines;
+  }
+
+  /**
+   * The forced response on the grid, for one scenario and year.
+   *
+   * @returns {Promise<{field: Float64Array, lat: Float64Array, lon: Float64Array}>}
+   */
+  async forcedMap({ variable, scenario, year, pathway = null }) {
+    const artifact = await this.patterns(variable);
+    const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
+    const bundle = this.bundles[variable];
+
+    const { pcs, nTimes } = stepResponsePcs(
+      patternKernel(artifact),
+      bundle.forcing(scenario)
+    );
+    const index = year - bundle.forcingYearStart;
+    if (index < 0 || index >= nTimes) throw new Error(`year ${year} is outside the forcing`);
+
+    const stride = artifact.dims.exp * artifact.nModes;
+    let field = artifact.map(pcs.subarray(index * stride, (index + 1) * stride));
+
+    // A drawn pathway rescales the whole field by the same factor the global
+    // response is rescaled by, which is what METEOR's own scaling does: the
+    // pattern is fixed and only its amplitude moves.
+    if (pathway) {
+      // The same ratio scale_to_warming_pathway applies: the pattern is fixed
+      // and only its amplitude moves, so the whole field scales together.
+      const globalTas = this.globalWarming(scenario);
+      const denominator = globalTas[index] - globalTas[0];
+      const factor = denominator !== 0 ? (pathway[index] - pathway[0]) / denominator : 1;
+      field = Float64Array.from(field, (v) => v * factor);
+    }
+
+    return { field, lat: artifact.lat, lon: artifact.lon };
+  }
+
+  /**
+   * Make a location the bundle never carried, by projecting the artifacts onto
+   * an arbitrary mask.
+   *
+   * The forced term needs only the 2 MB pattern artifact. Internal variability
+   * needs the EOF maps from the 11 MB noise artifact, which is not loaded here
+   * — so this returns the forced response alone, and says so.
+   */
+  async customForcedResponse({ variable, scenario, mask, pathway = null }) {
+    const artifact = await this.patterns(variable);
+    const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
+    const bundle = this.bundles[variable];
+
+    const weights = artifact.areaWeights(mask);
+    const projection = artifact.project(weights);
+    const { pcs, nTimes } = stepResponsePcs(
+      patternKernel(artifact),
+      bundle.forcing(scenario)
+    );
+
+    const nExp = artifact.dims.exp;
+    const nModes = artifact.nModes;
+    let annual = new Float64Array(nTimes);
+    for (let t = 0; t < nTimes; t += 1) {
+      let acc = 0;
+      for (let e = 0; e < nExp; e += 1) {
+        for (let m = 0; m < nModes; m += 1) {
+          acc += pcs[(t * nExp + e) * nModes + m] * projection[e * nModes + m];
+        }
+      }
+      annual[t] = acc;
+    }
+
+    if (pathway) {
+      annual = scaleToWarmingPathway(annual, this.globalWarming(scenario), pathway);
+    }
+
+    const start = WINDOW.start - bundle.forcingYearStart;
+    const nYears = WINDOW.end - WINDOW.start + 1;
+    return {
+      years: this.windowYears(),
+      forced: annual.slice(start, start + nYears),
+    };
   }
 
   /** Years of the output window. */

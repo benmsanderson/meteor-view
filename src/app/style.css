@@ -332,3 +332,46 @@ button.link {
     padding: 14px 12px 6px;
   }
 }
+
+/* Map */
+
+#map {
+  cursor: crosshair;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+#colourbar {
+  height: 30px;
+  margin-top: 6px;
+}
+
+.hint {
+  margin: 0 0 10px;
+  max-width: 78ch;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.legend label {
+  margin-right: 6px;
+}
+
+.legend input[type='range'] {
+  width: 140px;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+.legend output {
+  display: inline-block;
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Until the artifact is loaded there is nothing to show, so the map and its
+   colour bar stay collapsed rather than reserving empty space. */
+.panel[data-map='idle'] #map,
+.panel[data-map='idle'] #colourbar {
+  display: none;
+}

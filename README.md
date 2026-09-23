@@ -98,6 +98,25 @@ a fiction".
 The exporter depends on `series_transformed` and `locations=`, both added by
 [METEOR#101](https://github.com/benmsanderson/METEOR/pull/101).
 
+## Maps and your own regions
+
+**Load map** fetches the 2 MB pattern artifact for the variable in view — never
+on first load, since most visits do not need it — and draws the forced response
+on the model's own 192×288 grid. The year slider moves through 2015–2100.
+
+The map is also the region picker. **Click** an AR6 region to select it.
+**Drag** to define a region of your own, anywhere, at any size.
+
+A drawn region shows the **forced response only**: the signal the scenario
+drives, with no ensemble around it. That is not a simplification but a limit of
+what has been downloaded — internal variability at an arbitrary location needs
+the EOF maps from the 11 MB noise artifact, which this page does not load. The
+listed places carry their spread precomputed, which is why they keep it.
+
+Validated against METEOR's own gridded prediction: maps agree to 1e-6 relative,
+and a box drawn over the Sahara lands within 10% of the AR6 region it
+approximates. Two complete maps reconstruct in about 27 ms.
+
 ## Sharing and taking the numbers away
 
 Every control — including the drawn pathway and the RNG seed — lives in the
