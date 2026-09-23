@@ -206,7 +206,26 @@ export class GoldenFixture extends Artifact {
     this.nRealizations = this.dims.realization;
     this.nMonths = this.dims.month;
     this.nModes = this.dims.mode;
+
+    /**
+     * First calendar year of `forced_response`.
+     *
+     * Load-bearing, not decorative: the forced response is annual and has to
+     * be aligned to the monthly terms before it can be added to them.
+     */
     this.year0 = Number(this.attrs.year_0);
+
+    /**
+     * Which form of the seasonal cycle `series` holds.
+     *
+     * `absolute` includes the intercept and the `t_glob` term; METEOR's own
+     * timeseries path produces the `anomaly` form instead. Older fixtures
+     * predate the attribute and are all absolute.
+     */
+    this.seasonalForm = this.attrs.seasonal_form ?? 'absolute';
+
+    /** Whether the fixture exercises the precipitation-only steps. */
+    this.hasTransformed = this.has('series_transformed');
   }
 
   /** `stochastic_pcs` for one realization, as `(month, mode)` row-major. */
@@ -217,8 +236,23 @@ export class GoldenFixture extends Artifact {
 
   /** `series` for one location and realization. */
   series(locationIndex, realization) {
+    return this._realization('series', locationIndex, realization);
+  }
+
+  /**
+   * `series_transformed` for one location and realization.
+   *
+   * The complete recipe for a transformed variable — anomaly seasonal form,
+   * forced response, baseline and quantile mapping — which is what validates
+   * the two steps unique to precipitation.
+   */
+  transformed(locationIndex, realization) {
+    return this._realization('series_transformed', locationIndex, realization);
+  }
+
+  _realization(name, locationIndex, realization) {
     const n = this.nMonths;
     const offset = (locationIndex * this.nRealizations + realization) * n;
-    return this.array('series').subarray(offset, offset + n);
+    return this.array(name).subarray(offset, offset + n);
   }
 }

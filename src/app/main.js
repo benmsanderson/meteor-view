@@ -345,6 +345,20 @@ function drawSeasonalPanel() {
   });
 }
 
+/** Redraw everything from the last run, without regenerating it. */
+function redraw() {
+  if (!lastRun) return;
+  const spec = VARIABLES[lastRun.variable];
+  drawFanChart(elements.chart, {
+    x: lastRun.years,
+    series: lastRun.converted.map(annualMeans),
+    yLabel: spec.yLabel,
+    format: spec.format,
+  });
+  drawSeasonalPanel();
+  if (!elements.pathway.hidden) renderPathway();
+}
+
 function attachControls() {
   elements.controls.addEventListener('change', (event) => {
     if (event.target === elements.pathwayToggle) {
@@ -355,22 +369,19 @@ function attachControls() {
     run();
   });
 
-  let resizeTimer;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(() => {
-      if (!lastRun) return;
-      const spec = VARIABLES[lastRun.variable];
-      drawFanChart(elements.chart, {
-        x: lastRun.years,
-        series: lastRun.converted.map(annualMeans),
-        yLabel: spec.yLabel,
-        format: spec.format,
-      });
-      drawSeasonalPanel();
-      if (!elements.pathway.hidden) renderPathway();
-    }, 150);
+  // Redraw whenever a canvas changes size, which covers window resizes and,
+  // more importantly, the first paint: a canvas measured before its
+  // stylesheet applies has zero height, and the drawing code bails out on
+  // that. Without something to retrigger it the chart would stay blank for
+  // the life of the page, which is an intermittent bug that depends on
+  // whether the CSS beat the module.
+  let timer;
+  const observer = new ResizeObserver(() => {
+    clearTimeout(timer);
+    timer = setTimeout(redraw, 50);
   });
+  observer.observe(elements.chart);
+  observer.observe(elements.seasonal);
 }
 
 async function start() {

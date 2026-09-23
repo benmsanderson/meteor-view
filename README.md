@@ -47,9 +47,11 @@ in CI on every push:
    stream and does not need to. Feeding those PCs in isolates the deterministic
    parts — seasonal cycle, EOF projection, forced response. Agreement is
    **5e-8 relative**, which is float32 wire precision.
-2. **The precipitation transform** (`test/transform.test.js`). The fixtures stop
-   short of the two steps unique to `pr`, so this compares against METEOR's own
-   `apply_transform_from_bundle`. Agreement is **1e-12 relative**.
+2. **The precipitation transform** (`test/transform.test.js`). A fixture's
+   `series` stops short of the two steps unique to `pr`, so fixtures now also
+   carry `series_transformed` — the complete recipe, baseline and quantile
+   mapping included. Agreement is **2e-7 relative**, again float32 wire
+   precision.
 3. **The whole pipeline** (`test/explorer.test.js`). The layers above validate
    arithmetic; this validates bookkeeping, by comparing a 200-member ensemble
    against `MeteorInterface.generate_ensemble_outputs` — its mean, its spread
@@ -72,8 +74,13 @@ npm run dev
 Regenerating the data files needs METEOR itself:
 
 ```bash
-pip install 'git+https://github.com/benmsanderson/METEOR.git@integration/meteor-view'
+pip install 'git+https://github.com/benmsanderson/METEOR.git@docs/schema-client-findings'
 ```
+
+That branch is [METEOR#105](https://github.com/benmsanderson/METEOR/pull/105),
+which adds the `series_transformed` fixture array and the `locations=` argument
+this repository's exporter uses. It targets `integration/meteor-view`, itself a
+merge of three PRs still in review; point both at `base` once they land.
 
 ## Limits worth knowing
 

@@ -16,8 +16,9 @@ Usage::
 
     PYTHONPATH=<meteor>/src python scripts/export_bundles.py data/
 
-Re-export from METEOR's ``base`` branch once #101, #102 and #104 have merged;
-these were built from the integration branch that merges them.
+Re-export from METEOR's ``base`` branch once #101, #102, #104 and #105 have
+merged; these were built from the docs/schema-client-findings branch, which
+adds the ``series_transformed`` and ``locations=`` support used below.
 """
 
 import os
@@ -112,7 +113,8 @@ def main():
                 scenarios=["ssp245"],
                 source_url="https://github.com/benmsanderson/meteor-view",
             )
-            forcing = forcing_from_bundle(load_timeseries_bundle(sub), "ssp245")
+            sub_bundle = load_timeseries_bundle(sub)
+            forcing = forcing_from_bundle(sub_bundle, "ssp245")
             t_glob = np.linspace(0.0, 3.0, 480)
             fix = os.path.join(OUT, f"meteor_{MODEL}_{var}_golden_ssp245_v1.nc")
             export_golden_fixture(
@@ -123,6 +125,17 @@ def main():
                 seed=0,
                 n_realizations=2,
                 forcing_by_exp=forcing,
+                # The window the transform is fitted for, so a pr fixture
+                # carries series_transformed and a client can validate the two
+                # steps unique to precipitation without installing METEOR.
+                window_start=WINDOW[0],
+                # Must match the forcing's own first year, not the 1850
+                # default: forcing read out of a bundle starts at the bundle's
+                # forcing_year_start, which is 1750 for the shipped scenarios.
+                # Leaving the default would mislabel the year axis by a
+                # century. It does not change any stored value -- year_0 only
+                # labels the axis -- but a reader would be misled.
+                year_0=int(sub_bundle.attrs["forcing_year_start"]),
             )
         print(f"wrote {fix}  {os.path.getsize(fix)/1024:.1f} KB")
 

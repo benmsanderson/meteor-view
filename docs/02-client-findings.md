@@ -9,6 +9,22 @@ error, so a port can look finished and be wrong.
 Verified against `benmsanderson/METEOR` at `integration/meteor-view`
 (`3b32ce2`) on 2026-09-23. Ordered by how badly each one bites.
 
+**Status:** all six are filed upstream as
+[benmsanderson/METEOR#105](https://github.com/benmsanderson/METEOR/pull/105),
+against `integration/meteor-view` rather than `base`. That PR documents
+findings 1–3 and 6 in the schema, and fixes 4 and 5 in code: golden fixtures
+gained a `series_transformed` array and a `locations=` argument. This client
+already depends on both — `test/transform.test.js` validates the precipitation
+path against the shipped fixture rather than against a reference it has to
+generate with METEOR installed, which is what finding 4 was about.
+
+A seventh turned up while writing that PR, and is fixed there too: **`year_0`
+is load-bearing**. It is the first calendar year of `forced_response`, and
+forcing read from a bundle starts at `forcing_year_start` — 1750 for the
+shipped scenarios, not the 1850 default. Our own first export left the default
+alone and so mislabelled the year axis by a century. It changed no stored
+value, since `year_0` only labels the axis, but a reader would have been misled.
+
 ---
 
 ## 1. The documented reconstruction is not what METEOR's timeseries path produces
@@ -101,14 +117,15 @@ steps the schema itself warns are "not optional" — **the shipped fixtures
 validate none of the steps unique to it**. A port can pass every fixture with
 its precipitation path entirely unimplemented.
 
-This client had to generate its own reference by running
-`apply_transform_from_bundle` over the fixture's PCs
-(`scripts/make_transform_reference.py`), which requires METEOR installed and so
-is exactly what the fixtures exist to avoid.
+This client originally had to generate its own reference by running
+`apply_transform_from_bundle` over the fixture's PCs, which requires METEOR
+installed and so is exactly what the fixtures exist to avoid.
 
-**Suggested fix.** Add the transformed series to the fixture, for transformed
-variables. Two extra arrays, and it closes the gap. Adding the monthly forced
-response would also let a port check the annual-to-monthly rule directly.
+**Fixed** in METEOR#105: fixtures for a transformed variable now carry
+`series_transformed`, the complete recipe with the baseline and the quantile
+mapping applied. The workaround script is gone and `test/transform.test.js`
+validates against the shipped fixture instead, to 2e-7 — float32 wire
+precision, since both sides now read the same stored arrays.
 
 ## 5. A fixture inherits every location of the bundle it was built from
 
@@ -117,11 +134,11 @@ fixture built from a 67-location bundle carries 67 locations and is large. A
 fixture is a validation artifact, and four locations validate the maths as well
 as sixty-seven do.
 
-This is easy to work around — build the fixture from a small sub-bundle, which
-is what `scripts/export_bundles.py` does here — but it is surprising, and the
-obvious call produces a file several times bigger than it needs to be.
+This was easy to work around — build the fixture from a small sub-bundle —
+but it is surprising, and the obvious call produces a file several times bigger
+than it needs to be.
 
-**Suggested fix.** A `locations=` argument on `export_golden_fixture`.
+**Fixed** in METEOR#105: `export_golden_fixture` takes `locations=`.
 
 ## 6. Two notes for the schema's netCDF section
 
