@@ -25,8 +25,15 @@ const reference = JSON.parse(
   readFileSync(new URL('./fixtures/ensemble_reference.json', import.meta.url))
 );
 
-/** Enough realizations that the mean is a fair comparison, few enough to be quick. */
-const N_REALIZATIONS = 200;
+/**
+ * Ensemble size for this side of the comparison.
+ *
+ * Need not match the reference's, since the tolerance below is derived from
+ * both counts. Half of it keeps the suite quick without weakening the test:
+ * the standard error of the difference grows only from 0.100 to 0.122 standard
+ * deviations, while the runtime halves.
+ */
+const N_REALIZATIONS = 100;
 
 let explorer;
 
@@ -79,16 +86,20 @@ describe.each(['tas', 'pr'])('%s against METEOR', (variable) => {
       const { mean, std } = ensembleStatistics(series);
       expect(mean.length).toBe(expected.ensemble_mean.length);
 
-      // Two independent ensembles of the same process, each of N members, so
-      // the difference of their means has standard error std * sqrt(2/N) per
-      // year. Taking the worst of 86 years samples the tail, so the gate is
-      // six of those rather than the ~3 a single year would need.
+      // Two independent ensembles of the same process, of possibly different
+      // sizes, so the difference of their means has standard error
+      // std * sqrt(1/n + 1/m) per year. Taking the worst of 86 years samples
+      // the tail, so the gate is six of those rather than the ~3 a single year
+      // would need.
       //
       // This is loose in absolute terms and still very tight against the
       // failures that matter: the undocumented anomaly convention showed up
       // here at 6600x, a cold-started VAR or a mis-sliced window at hundreds.
       const referenceStd = expected.ensemble_std;
-      const combined = (y) => referenceStd[y] * Math.sqrt(2 / N_REALIZATIONS);
+      const standardError = Math.sqrt(
+        1 / N_REALIZATIONS + 1 / reference.n_realizations
+      );
+      const combined = (y) => referenceStd[y] * standardError;
 
       let worst = 0;
       for (let y = 0; y < mean.length; y += 1) {
@@ -107,8 +118,7 @@ describe.each(['tas', 'pr'])('%s against METEOR', (variable) => {
         [...values].reduce((s, v) => s + v, 0) / values.length;
       const bias = Math.abs(windowMean(mean) - windowMean(expected.ensemble_mean));
       const biasTolerance =
-        (6 * windowMean(referenceStd) * Math.sqrt(2 / N_REALIZATIONS)) /
-        Math.sqrt(mean.length);
+        (6 * windowMean(referenceStd) * standardError) / Math.sqrt(mean.length);
       expect(bias, `${variable} ${location} window-mean bias`).toBeLessThan(
         biasTolerance
       );
