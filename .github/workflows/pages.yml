@@ -1,8 +1,15 @@
 name: pages
 
+# Deploys from the repository's default branch, which is currently
+# `claude/youthful-brahmagupta-la5z3o` rather than `main`; both are listed so
+# this keeps working if the default is renamed.
+#
+# This workflow cannot deploy until Pages is enabled for the repository with
+# its source set to GitHub Actions (Settings -> Pages). That is a repository
+# setting, not something a commit can turn on.
 on:
   push:
-    branches: [main]
+    branches: [main, claude/youthful-brahmagupta-la5z3o]
   workflow_dispatch:
 
 permissions:
