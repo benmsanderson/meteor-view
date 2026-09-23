@@ -2,25 +2,17 @@
  * URL state and export.
  *
  * A shared link is only useful if it reproduces the view exactly, so the
- * round-trip is the thing under test — including the drawn pathway, which is
- * the one piece of state too large to put in the URL verbatim.
+ * round-trip is the thing under test.
  */
 
 import { describe, expect, it } from 'vitest';
 
-import {
-  DEFAULTS,
-  decodePathway,
-  encodePathway,
-  fromQuery,
-  toQuery,
-} from '../src/app/state.js';
+import { DEFAULTS, fromQuery, toQuery } from '../src/app/state.js';
 import { filenameStem, toCsv } from '../src/app/export.js';
 
 const CONTEXT = {
   locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
   scenarios: ['ssp126', 'ssp245', 'ssp585'],
-  pathwayLength: 86,
 };
 
 describe('URL state', () => {
@@ -35,7 +27,6 @@ describe('URL state', () => {
       scenario: 'ssp585',
       nRealizations: 50,
       seed: 12345,
-      pathway: null,
     };
     expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
   });
@@ -58,41 +49,6 @@ describe('URL state', () => {
     expect(fromQuery('?n=1000000', CONTEXT).nRealizations).toBe(DEFAULTS.nRealizations);
     expect(fromQuery('?n=0', CONTEXT).nRealizations).toBe(DEFAULTS.nRealizations);
     expect(fromQuery('?n=200', CONTEXT).nRealizations).toBe(200);
-  });
-});
-
-describe('pathway encoding', () => {
-  const pathway = Float64Array.from({ length: 86 }, (_, i) => 0.8 + i * 0.03);
-
-  it('round-trips to a hundredth of a degree', () => {
-    const decoded = decodePathway(encodePathway(pathway), 86);
-    expect(decoded).not.toBeNull();
-    for (let i = 0; i < pathway.length; i += 1) {
-      expect(Math.abs(decoded[i] - pathway[i])).toBeLessThanOrEqual(0.005);
-    }
-  });
-
-  it('stays short enough to paste', () => {
-    // 86 years as decimal text would run to ~500 characters.
-    expect(encodePathway(pathway).length).toBeLessThan(250);
-  });
-
-  it('is URL-safe', () => {
-    const negative = Float64Array.from({ length: 86 }, (_, i) => -2 + i * 0.5);
-    expect(encodePathway(negative)).toMatch(/^[A-Za-z0-9_-]+$/);
-  });
-
-  it('survives a full state round-trip', () => {
-    const state = { ...DEFAULTS, pathway };
-    const parsed = fromQuery(toQuery(state), CONTEXT);
-    expect(parsed.pathway).not.toBeNull();
-    expect(parsed.pathway.length).toBe(86);
-  });
-
-  it('rejects a corrupted or truncated pathway rather than throwing', () => {
-    expect(decodePathway('not base64 at all!!', 86)).toBeNull();
-    expect(decodePathway(encodePathway(pathway), 12)).toBeNull();
-    expect(fromQuery('?path=%%%', CONTEXT).pathway).toBeNull();
   });
 });
 

@@ -107,8 +107,10 @@ multi-megabyte EOF map.
 The usual objection is that custom scenarios would need CICERO-SCM
 client-side. But `generate_ensemble_outputs` already accepts a
 `temp_scaling_ts` argument: an arbitrary GMST trajectory to scale the pattern
-to. So the browser knob becomes *pick or draw a warming pathway*, and no SCM
-is needed client-side at all. Full custom-emissions runs stay a
+to. So the browser knob becomes *pick a warming pathway*, and no SCM is needed
+client-side at all. (A freehand drawing interface for this was built and then
+removed: the demand is for published pathways, not arbitrary curves. The
+capability remains in the kernel.) Full custom-emissions runs stay a
 server/Colab feature.
 
 Cost: a second implementation of the generation maths, which must be

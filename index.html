@@ -6,7 +6,7 @@
     <title>METEOR explorer</title>
     <meta
       name="description"
-      content="Run the METEOR climate emulator in your browser: pick a scenario or draw a warming pathway, pick a region, see the ensemble."
+      content="Run the METEOR climate emulator in your browser: pick a scenario, pick a region, see the ensemble."
     />
     <!--
       Temporary, alongside public/robots.txt: the site is deployed so it can be
@@ -21,9 +21,8 @@
     <header class="masthead">
       <h1>METEOR explorer</h1>
       <p class="tagline">
-        A climate emulator running entirely in your browser. Pick a scenario or draw
-        your own warming pathway, pick a place, and see the spread of monthly
-        outcomes.
+        A climate emulator running entirely in your browser. Pick a scenario and a
+        place, and see the spread of monthly outcomes.
       </p>
     </header>
 
@@ -56,27 +55,7 @@
             <option value="100">100</option>
           </select>
         </div>
-
-        <div class="control control--check">
-          <label for="pathway-toggle">
-            <input type="checkbox" id="pathway-toggle" />
-            Draw my own pathway
-          </label>
-        </div>
       </form>
-
-      <section class="pathway" id="pathway" hidden>
-        <div class="pathway__header">
-          <h2>Global warming pathway</h2>
-          <p>
-            Drag across the box to draw global mean warming through 2100. The
-            emulator rescales the forced response to follow it, so a place warms
-            more or less than the global mean in the way the model says it should.
-            <button type="button" id="pathway-reset" class="link">Reset to scenario</button>
-          </p>
-        </div>
-        <canvas id="pathway-canvas" height="150"></canvas>
-      </section>
 
       <section class="panel">
         <div class="panel__header">
@@ -147,9 +126,9 @@
           uncertainty in a projection. Maps show the forced response only;
           variability at a region you draw yourself would need a further 11 MB of
           EOF maps that this page does not load. Custom <em>emissions</em> need a
-          simple climate model, which is not here either — a drawn pathway rescales
-          a bundled scenario rather than running new emissions. Precipitation covers
-          2015–2100 only, the window its distribution transform was fitted for.
+          simple climate model, which is not here either, so the scenarios on offer
+          are the ones the bundle was built with. Precipitation covers 2015–2100
+          only, the window its distribution transform was fitted for.
         </p>
         <p class="provenance" id="provenance"></p>
       </footer>

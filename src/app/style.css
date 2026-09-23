@@ -133,8 +133,7 @@ button:focus-visible {
 
 /* Panels */
 
-.panel,
-.pathway {
+.panel {
   margin-top: 22px;
   padding: 16px 18px 8px;
   background: var(--surface);
@@ -142,25 +141,13 @@ button:focus-visible {
   border-radius: 12px;
 }
 
-.panel__header,
-.pathway__header {
+.panel__header {
   display: flex;
   flex-wrap: wrap;
   gap: 4px 16px;
   align-items: baseline;
   justify-content: space-between;
   margin-bottom: 8px;
-}
-
-.pathway__header {
-  display: block;
-}
-
-.pathway__header p {
-  margin: 6px 0 12px;
-  max-width: 70ch;
-  font-size: 0.9rem;
-  color: var(--muted);
 }
 
 /*
@@ -181,13 +168,6 @@ canvas {
 
 #seasonal {
   height: 220px;
-}
-
-#pathway-canvas {
-  height: 150px;
-  cursor: crosshair;
-  border: 1px dashed var(--border);
-  border-radius: 8px;
 }
 
 @media (max-width: 560px) {
@@ -327,8 +307,7 @@ button.link {
     padding-top: 32px;
   }
 
-  .panel,
-  .pathway {
+  .panel {
     padding: 14px 12px 6px;
   }
 }

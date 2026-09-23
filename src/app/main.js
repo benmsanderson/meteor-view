@@ -39,10 +39,6 @@ const elements = {
   location: document.getElementById('location'),
   scenario: document.getElementById('scenario'),
   realizations: document.getElementById('realizations'),
-  pathwayToggle: document.getElementById('pathway-toggle'),
-  pathway: document.getElementById('pathway'),
-  pathwayCanvas: document.getElementById('pathway-canvas'),
-  pathwayReset: document.getElementById('pathway-reset'),
   chart: document.getElementById('chart'),
   copyLink: document.getElementById('copy-link'),
   downloadCsv: document.getElementById('download-csv'),
@@ -65,8 +61,6 @@ const elements = {
 
 /** @type {Explorer} */
 let explorer;
-/** Drawn warming pathway over the window years, or null while following the scenario. */
-let drawnPathway = null;
 let lastRun = null;
 /** Part of the shareable state: the same seed redraws the same realizations. */
 let seed = DEFAULT_SEED;
@@ -121,178 +115,6 @@ function populateControls() {
     : explorer.scenarios[0];
 }
 
-/** The scenario's own predicted warming over the window, for the pathway editor. */
-function scenarioWarming() {
-  const years = explorer.years('tas');
-  const full = explorer.globalWarming(elements.scenario.value);
-  const start = years.indexOf(WINDOW.start);
-  return Float64Array.from(full.subarray(start, start + explorer.windowYears().length));
-}
-
-/**
- * Draw the pathway editor: the scenario's warming as a guide, the drawn
- * pathway over it.
- */
-function renderPathway() {
-  const canvas = elements.pathwayCanvas;
-  const ratio = window.devicePixelRatio || 1;
-  const width = canvas.clientWidth;
-  const height = canvas.clientHeight;
-  canvas.width = Math.round(width * ratio);
-  canvas.height = Math.round(height * ratio);
-
-  const context = canvas.getContext('2d');
-  context.setTransform(ratio, 0, 0, ratio, 0, 0);
-  context.clearRect(0, 0, width, height);
-
-  const style = getComputedStyle(document.documentElement);
-  const accent = style.getPropertyValue('--accent').trim() || '#2563eb';
-  const muted = style.getPropertyValue('--muted').trim() || '#64748b';
-
-  const guide = scenarioWarming();
-  const values = drawnPathway || guide;
-  const bounds = pathwayBounds(guide);
-  const grid = style.getPropertyValue('--grid').trim() || '#e2e8f0';
-
-  const sx = (i) => (i / (values.length - 1)) * width;
-  const sy = (v) => height - ((v - bounds.low) / (bounds.high - bounds.low)) * height;
-
-  // Whole-degree gridlines, so a drawn pathway can be aimed at a number.
-  context.font = '11px ui-sans-serif, system-ui, sans-serif';
-  context.textAlign = 'left';
-  context.textBaseline = 'middle';
-  context.lineWidth = 1;
-  for (let degrees = 0; degrees <= bounds.high; degrees += 1) {
-    const y = Math.round(sy(degrees)) + 0.5;
-    context.strokeStyle = grid;
-    context.beginPath();
-    context.moveTo(0, y);
-    context.lineTo(width, y);
-    context.stroke();
-    context.fillStyle = muted;
-    context.fillText(`${degrees}°C`, 6, y - 7);
-  }
-
-  const line = (data, color, dashed) => {
-    context.strokeStyle = color;
-    context.lineWidth = dashed ? 1.5 : 2.5;
-    context.setLineDash(dashed ? [4, 4] : []);
-    context.beginPath();
-    for (let i = 0; i < data.length; i += 1) context.lineTo(sx(i), sy(data[i]));
-    context.stroke();
-    context.setLineDash([]);
-  };
-
-  line(guide, muted, true);
-  if (drawnPathway) line(drawnPathway, accent, false);
-}
-
-/**
- * Warming range the editor spans.
- *
- * Adapts to the scenario, so its own trajectory sits comfortably inside the
- * box with room above and below to draw something different. A fixed range
- * wide enough for SSP585 would squash SSP119 onto the floor.
- */
-function pathwayBounds(guide) {
-  const peak = Math.max(...guide);
-  return { low: -0.5, high: Math.max(3, Math.ceil(peak + 2)) };
-}
-
-/** Where the pointer was last painted, so a stroke can be joined up. */
-let strokeFrom = null;
-
-/**
- * Translate a pointer position into a warming value and write it into the
- * pathway, joining it to wherever the stroke was last painted.
- *
- * A pointer moving quickly emits samples several years apart, so painting only
- * at the sample would leave the curve stepped. Interpolating between the last
- * sample and this one makes a fast drag draw the same curve as a slow one.
- */
-function paintPathway(event) {
-  const canvas = elements.pathwayCanvas;
-  const rect = canvas.getBoundingClientRect();
-  const guide = scenarioWarming();
-  if (!drawnPathway) drawnPathway = Float64Array.from(guide);
-
-  const bounds = pathwayBounds(guide);
-  const last = drawnPathway.length - 1;
-  const fraction = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
-  const index = Math.round(fraction * last);
-  const value = Math.min(
-    Math.max(
-      bounds.high -
-        ((event.clientY - rect.top) / rect.height) * (bounds.high - bounds.low),
-      bounds.low
-    ),
-    bounds.high
-  );
-
-  // Quantise to the precision the URL stores, so a shared link reproduces the
-  // view exactly rather than to within a rounding step. 0.01 °C is far below
-  // what anyone can aim at with a pointer, so nothing is lost by it.
-  const quantise = (v) => Math.round(v * 100) / 100;
-
-  const from = strokeFrom ?? { index, value };
-  const span = index - from.index;
-  if (span === 0) {
-    drawnPathway[index] = quantise(value);
-  } else {
-    const step = span > 0 ? 1 : -1;
-    for (let i = from.index; i !== index + step; i += step) {
-      const t = (i - from.index) / span;
-      drawnPathway[i] = quantise(from.value + t * (value - from.value));
-    }
-  }
-
-  strokeFrom = { index, value };
-  renderPathway();
-}
-
-function attachPathwayEditor() {
-  const canvas = elements.pathwayCanvas;
-  let drawing = false;
-
-  canvas.addEventListener('pointerdown', (event) => {
-    drawing = true;
-    strokeFrom = null;
-    capture(canvas, event);
-    paintPathway(event);
-  });
-  canvas.addEventListener('pointermove', (event) => {
-    if (drawing) paintPathway(event);
-  });
-  const stop = () => {
-    if (!drawing) return;
-    drawing = false;
-    strokeFrom = null;
-    run();
-  };
-  canvas.addEventListener('pointerup', stop);
-  canvas.addEventListener('pointercancel', stop);
-
-  elements.pathwayReset.addEventListener('click', () => {
-    drawnPathway = null;
-    renderPathway();
-    run();
-  });
-}
-
-/**
- * A drawn pathway covers the output window; the kernel wants the full year
- * axis. Before the window the scenario's own warming is used, which makes the
- * scaling exactly one there — the pathway only takes over from 2015.
- */
-function fullPathway() {
-  if (!drawnPathway) return null;
-  const years = explorer.years('tas');
-  const full = Float64Array.from(explorer.globalWarming(elements.scenario.value));
-  const start = years.indexOf(WINDOW.start);
-  for (let i = 0; i < drawnPathway.length; i += 1) full[start + i] = drawnPathway[i];
-  return full;
-}
-
 /**
  * Run the emulator and redraw.
  *
@@ -322,7 +144,6 @@ function run() {
       scenario: elements.scenario.value,
       nRealizations,
       seed,
-      pathway: fullPathway(),
     });
   } catch (error) {
     setStatus(error.message, 'error');
@@ -345,12 +166,9 @@ function run() {
   });
   drawSeasonalPanel();
 
-  const scenarioLabel = drawnPathway
-    ? 'a drawn warming pathway'
-    : elements.scenario.value.toUpperCase();
   setStatus(
     `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
-      `${placeLabel(location)} under ${scenarioLabel}, ` +
+      `${placeLabel(location)} under ${elements.scenario.value.toUpperCase()}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
 }
@@ -367,7 +185,6 @@ async function runCustomRegion() {
       variable,
       scenario: elements.scenario.value,
       mask: boxRegion(customBox),
-      pathway: fullPathway(),
     });
   } catch (error) {
     setStatus(error.message, 'error');
@@ -458,7 +275,6 @@ function currentState() {
     scenario: elements.scenario.value,
     nRealizations: Number(elements.realizations.value),
     seed,
-    pathway: drawnPathway,
   };
 }
 
@@ -482,9 +298,6 @@ function applyState(state) {
   elements.realizations.value = String(state.nRealizations);
   seed = state.seed;
 
-  drawnPathway = state.pathway ? Float64Array.from(state.pathway) : null;
-  elements.pathwayToggle.checked = Boolean(drawnPathway);
-  elements.pathway.hidden = !drawnPathway;
 
   // A shared link may ask for a realization count the menu does not list.
   if (elements.realizations.value !== String(state.nRealizations)) {
@@ -528,7 +341,7 @@ function attachActions() {
       bundle: explorer.bundles[lastRun.variable],
       variable: lastRun.variable,
       location: lastRun.location,
-      scenario: drawnPathway ? `${lastRun.scenario} (rescaled to a drawn pathway)` : lastRun.scenario,
+      scenario: lastRun.scenario,
       units: spec.yLabel,
       seed,
       url: toUrl(currentState()),
@@ -544,7 +357,7 @@ function attachActions() {
       title: `${spec.label} at ${placeLabel(lastRun.location)}`,
       subtitle:
         `${explorer.bundles[lastRun.variable].attrs.cmip6_model} · ` +
-        `${drawnPathway ? 'drawn warming pathway' : lastRun.scenario.toUpperCase()} · ` +
+        `${lastRun.scenario.toUpperCase()} · ` +
         `${lastRun.converted.length} realizations · ${WINDOW.start}–${WINDOW.end}`,
     });
     download(`${stem()}.png`, blob);
@@ -564,7 +377,7 @@ function stem() {
     cmip6Model: explorer.bundles[lastRun.variable].attrs.cmip6_model,
     variable: lastRun.variable,
     location: lastRun.location,
-    scenario: drawnPathway ? 'pathway' : lastRun.scenario,
+    scenario: lastRun.scenario,
   });
 }
 
@@ -602,7 +415,6 @@ async function renderMap() {
     variable,
     scenario: elements.scenario.value,
     year,
-    pathway: fullPathway(),
   });
 
   const converted = Float64Array.from(field, spec.convert);
@@ -755,16 +567,10 @@ function redraw() {
     format: spec.format,
   });
   drawSeasonalPanel();
-  if (!elements.pathway.hidden) renderPathway();
 }
 
 function attachControls() {
   elements.controls.addEventListener('change', (event) => {
-    if (event.target === elements.pathwayToggle) {
-      elements.pathway.hidden = !elements.pathwayToggle.checked;
-      if (elements.pathwayToggle.checked) renderPathway();
-      else drawnPathway = null;
-    }
     // Choosing a listed place supersedes a region drawn on the map.
     if (event.target === elements.location && customBox) {
       customBox = null;
@@ -809,16 +615,13 @@ async function start() {
     fromQuery(window.location.search, {
       locations: explorer.locations,
       scenarios: explorer.scenarios,
-      pathwayLength: explorer.windowYears().length,
     })
   );
 
   attachControls();
-  attachPathwayEditor();
   attachActions();
   attachMap();
   elements.mapPanel.dataset.map = 'idle';
-  if (drawnPathway) renderPathway();
 
   const bundle = explorer.bundles.tas;
   elements.provenance.textContent =
