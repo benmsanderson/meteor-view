@@ -1,9 +1,9 @@
 # meteor-view
 
 A browser-based explorer for [METEOR](https://github.com/benmsanderson/METEOR),
-served as a static site from GitHub Pages. Pick a scenario or draw a global
-warming pathway, pick a region or a city, and see an ensemble of monthly
-climate projections. There is no server: the emulator runs on your machine.
+served as a static site from GitHub Pages. Pick a scenario and a region, and
+see an ensemble of monthly climate projections. There is no server: the
+emulator runs on your machine.
 
 ## How it works
 
@@ -119,18 +119,16 @@ approximates. Two complete maps reconstruct in about 27 ms.
 
 ## Sharing and taking the numbers away
 
-Every control — including the drawn pathway and the RNG seed — lives in the
-URL, so a view is a link:
+Every control — including the RNG seed — lives in the URL, so a view is a
+link:
 
 ```
 ?v=pr&loc=regional%3ASAS&scn=ssp370&n=50
 ```
 
 **Copy link to this view** puts that on the clipboard. Opening it reproduces
-the chart *exactly*, down to the individual realizations: the seed travels with
-it, and a drawn pathway is quantised to 0.01 °C as you draw so that what you
-see is precisely what the link encodes. A drawn pathway costs about 230
-characters, against the ~500 the same 86 numbers would take as text.
+the chart *exactly*, down to the individual realizations, because the seed
+travels with it.
 
 **Download CSV** gives one row per month and one column per realization, with
 the provenance — model, scenario, METEOR version, and the link that regenerates
@@ -156,8 +154,11 @@ interface until then — is the most important thing left.
 - **No maps.** Bundles carry no gridded output; reconstructing fields needs the
   full artifacts, which are a different and much larger format.
 - **No custom emissions.** Turning emissions into forcing needs CICERO-SCM,
-  which is not in the bundle. A drawn pathway rescales a bundled scenario's
-  forced response rather than running new emissions.
+  which is not in the bundle, so the scenarios on offer are the ones it was
+  built with. `scaleToWarmingPathway` in the kernel can drive the emulator from
+  a prescribed global warming trajectory instead — validated against METEOR,
+  and the hook a CMIP7 scenario preset would use — but nothing in the interface
+  exposes it.
 - **Precipitation is 2015–2100 only**, the window its distribution transform was
   fitted for. Another window needs a re-export on the METEOR side.
 - **One model.** NorESM2-MM, trained on ssp245.

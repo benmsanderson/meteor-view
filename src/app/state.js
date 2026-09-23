@@ -3,9 +3,9 @@
  *
  * A view of this tool is an argument about the climate, and an argument you
  * cannot link to is one nobody can check. So everything that changes what is
- * drawn — including the drawn pathway and the RNG seed — round-trips through
- * the query string, and the same link always reproduces the same chart down to
- * the individual realizations.
+ * drawn — including the RNG seed — round-trips through the query string, and
+ * the same link always reproduces the same chart down to the individual
+ * realizations.
  *
  * Defaults are omitted, so the common case stays short and readable:
  *
@@ -21,58 +21,7 @@ export const DEFAULTS = {
   scenario: 'ssp245',
   nRealizations: 20,
   seed: DEFAULT_SEED,
-  pathway: null,
 };
-
-/** Centidegrees: 0.01 °C is far finer than anyone can draw with a pointer. */
-const PATHWAY_SCALE = 100;
-
-/**
- * Encode a drawn pathway as base64url.
- *
- * Int16 centidegrees rather than text: 86 years of `-1.23,4.56,...` runs to
- * ~500 characters, where this is 172 bytes and ~230 of base64. Signed 16-bit
- * covers ±327 °C, which is not a constraint anyone will meet.
- *
- * @param {ArrayLike<number>} values warming in °C, one per year
- * @returns {string}
- */
-export function encodePathway(values) {
-  const quantised = new Int16Array(values.length);
-  for (let i = 0; i < values.length; i += 1) {
-    quantised[i] = Math.max(-32768, Math.min(32767, Math.round(values[i] * PATHWAY_SCALE)));
-  }
-  const bytes = new Uint8Array(quantised.buffer);
-  let binary = '';
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-}
-
-/**
- * Decode a pathway, or return null if it is not readable.
- *
- * A malformed pathway in a hand-edited link should drop the user back to the
- * scenario, not break the page.
- *
- * @param {string} encoded
- * @param {number} expectedLength
- * @returns {Float64Array|null}
- */
-export function decodePathway(encoded, expectedLength) {
-  try {
-    const padded = encoded.replace(/-/g, '+').replace(/_/g, '/');
-    const binary = atob(padded);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-    if (bytes.length % 2 !== 0) return null;
-
-    const quantised = new Int16Array(bytes.buffer);
-    if (expectedLength && quantised.length !== expectedLength) return null;
-    return Float64Array.from(quantised, (v) => v / PATHWAY_SCALE);
-  } catch {
-    return null;
-  }
-}
 
 /**
  * Serialise state to a query string, omitting anything left at its default.
@@ -89,7 +38,6 @@ export function toQuery(state) {
     params.set('n', String(state.nRealizations));
   }
   if (state.seed !== DEFAULTS.seed) params.set('seed', String(state.seed));
-  if (state.pathway) params.set('path', encodePathway(state.pathway));
 
   const query = params.toString();
   return query ? `?${query}` : '';
@@ -106,10 +54,9 @@ export function toQuery(state) {
  * @param {object} options
  * @param {string[]} options.locations valid location specifiers
  * @param {string[]} options.scenarios valid scenario names
- * @param {number} options.pathwayLength expected pathway length
  * @returns {object} state
  */
-export function fromQuery(search, { locations = [], scenarios = [], pathwayLength = 0 } = {}) {
+export function fromQuery(search, { locations = [], scenarios = [] } = {}) {
   const params = new URLSearchParams(search);
   const state = { ...DEFAULTS };
 
@@ -137,9 +84,6 @@ export function fromQuery(search, { locations = [], scenarios = [], pathwayLengt
   if (seed !== null && Number.isInteger(seed) && seed >= 0 && seed <= 0xffffffff) {
     state.seed = seed;
   }
-
-  const pathway = params.get('path');
-  if (pathway) state.pathway = decodePathway(pathway, pathwayLength);
 
   return state;
 }

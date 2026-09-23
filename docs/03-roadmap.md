@@ -21,8 +21,12 @@ can do that almost nothing else can, and it reframes several items below.
 
 Consequences:
 
-- The **drawn pathway** is core, not a novelty. It is the mechanism by which a
-  user asks about a future nobody has simulated.
+- **Driving from a prescribed warming trajectory** is core, not a novelty: it
+  is the mechanism by which a user asks about a future nobody has simulated.
+  The freehand *drawing* interface for it has been removed — it invited
+  arbitrary curves where the real demand is for published pathways — but
+  `scaleToWarmingPathway` remains in the kernel, validated, as the hook a CMIP7
+  scenario preset plugs into.
 - **Custom regions and points** matter more than a curated list of 67. An
   ecologist's study area is not an AR6 region.
 - **Model uncertainty** is not optional for anything called an assessment.
