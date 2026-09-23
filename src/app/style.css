@@ -1,0 +1,377 @@
+:root {
+  color-scheme: light dark;
+
+  --bg: #ffffff;
+  --surface: #f8fafc;
+  --border: #e2e8f0;
+  --grid: #e8edf3;
+  --fg: #0f172a;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --warm: #dc2626;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0b1120;
+    --surface: #111a2e;
+    --border: #1e293b;
+    --grid: #1c2740;
+    --fg: #e2e8f0;
+    --muted: #94a3b8;
+    --accent: #60a5fa;
+    --warm: #f87171;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0 16px 64px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.6 ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+main,
+.masthead {
+  max-width: 940px;
+  margin: 0 auto;
+}
+
+.masthead {
+  padding: 48px 0 24px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  letter-spacing: -0.02em;
+}
+
+.tagline {
+  margin: 0;
+  max-width: 62ch;
+  color: var(--muted);
+}
+
+h2 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Controls */
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+  padding: 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.control {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.control label {
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.control select {
+  width: 100%;
+  padding: 9px 10px;
+  font: inherit;
+  font-size: 0.95rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.control select:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.control--check {
+  justify-content: flex-end;
+}
+
+.control--check label {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  text-transform: none;
+  letter-spacing: normal;
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: var(--fg);
+  cursor: pointer;
+}
+
+.control--check input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+}
+
+/* Panels */
+
+.panel,
+.pathway {
+  margin-top: 22px;
+  padding: 16px 18px 8px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
+
+.panel__header,
+.pathway__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.pathway__header {
+  display: block;
+}
+
+.pathway__header p {
+  margin: 6px 0 12px;
+  max-width: 70ch;
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+/*
+ * Canvas height has to come from CSS, not the height attribute: the drawing
+ * code sets canvas.width/height from clientWidth/clientHeight to handle the
+ * device pixel ratio, so leaving the layout height to the attribute makes the
+ * two define each other and collapses the box.
+ */
+canvas {
+  display: block;
+  width: 100%;
+  touch-action: none;
+}
+
+#chart {
+  height: 360px;
+}
+
+#seasonal {
+  height: 220px;
+}
+
+#pathway-canvas {
+  height: 150px;
+  cursor: crosshair;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+}
+
+@media (max-width: 560px) {
+  #chart {
+    height: 280px;
+  }
+
+  #seasonal {
+    height: 180px;
+  }
+}
+
+.legend {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 0 10px;
+}
+
+.actions button {
+  padding: 7px 12px;
+  font: inherit;
+  font-size: 0.86rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.actions button:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.actions button[data-done='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* Pushes the re-sample control away from the export group: it changes what is
+   shown, where the others only take a copy of it. */
+.actions__spacer {
+  margin-left: auto;
+}
+
+@media (max-width: 560px) {
+  .actions__spacer {
+    margin-left: 0;
+  }
+}
+
+.swatch {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  margin: 0 4px 0 10px;
+  vertical-align: baseline;
+  border-radius: 2px;
+  background: var(--accent);
+}
+
+.swatch--median {
+  height: 3px;
+  margin-bottom: 3px;
+}
+
+.swatch--band {
+  opacity: 0.42;
+}
+
+.swatch--wide {
+  opacity: 0.2;
+}
+
+.swatch--warm {
+  height: 3px;
+  margin-bottom: 3px;
+  background: var(--warm);
+}
+
+button.link {
+  padding: 0;
+  font: inherit;
+  font-size: 0.9rem;
+  color: var(--accent);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.status {
+  margin: 16px 2px 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+  min-height: 1.6em;
+}
+
+.status[data-state='error'] {
+  color: var(--warm);
+}
+
+.notes {
+  margin-top: 40px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border);
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.notes p {
+  max-width: 74ch;
+}
+
+.notes strong {
+  color: var(--fg);
+}
+
+.notes a {
+  color: var(--accent);
+}
+
+.provenance {
+  font-size: 0.8rem;
+  opacity: 0.85;
+}
+
+@media (max-width: 560px) {
+  .masthead {
+    padding-top: 32px;
+  }
+
+  .panel,
+  .pathway {
+    padding: 14px 12px 6px;
+  }
+}
+
+/* Map */
+
+#map {
+  cursor: crosshair;
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+#colourbar {
+  height: 30px;
+  margin-top: 6px;
+}
+
+.hint {
+  margin: 0 0 10px;
+  max-width: 78ch;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.legend label {
+  margin-right: 6px;
+}
+
+.legend input[type='range'] {
+  width: 140px;
+  vertical-align: middle;
+  accent-color: var(--accent);
+}
+
+.legend output {
+  display: inline-block;
+  min-width: 3.2em;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Until the artifact is loaded there is nothing to show, so the map and its
+   colour bar stay collapsed rather than reserving empty space. */
+.panel[data-map='idle'] #map,
+.panel[data-map='idle'] #colourbar {
+  display: none;
+}

@@ -3,9 +3,35 @@
 A browser-based tool for running [METEOR](https://github.com/benmsanderson/METEOR),
 served as a static github.io site from this repository.
 
-**Status:** design agreed, nothing built. The next action is the METEOR-side
-work in [`01-unblock-meteor-export.md`](01-unblock-meteor-export.md), which is
-a prompt written to be handed to a session working in the METEOR repo.
+**Status:** built. The METEOR-side work in
+[`01-unblock-meteor-export.md`](01-unblock-meteor-export.md) is done as
+benmsanderson/METEOR#101, alongside #102 and #104. All three target METEOR's
+trunk, `base` — note that METEOR's `main` is an unrelated 2023 lineage with no
+common ancestor, and is not where anything should be merged.
+
+`integration/meteor-view` is a **development branch, not a merge candidate**:
+exactly `base` plus those three PRs, refreshed as they move, so work here can
+proceed before they land. Its tree is verified identical to merging the three
+into `base`. Recommended merge sequence, for reviewability rather than
+correctness (the orders produce byte-identical trees): **#104, then #102, then
+#101**. #100 was fully superseded by #104 and is closed.
+
+`scripts/refresh-integration.sh` rebuilds that branch and verifies the property
+it depends on, so it can be re-run as the PRs change under review.
+
+The client is done: a validated JavaScript kernel, the fixtures wired into CI,
+and a Pages deploy. See [`02-client-findings.md`](02-client-findings.md) for
+what the port had to infer that the schema did not state — the most useful
+feedback METEOR can get from this exercise, because it is what the next port
+would also get stuck on.
+
+What is left is in [`03-roadmap.md`](03-roadmap.md), which supersedes the work
+breakdown in §3 below — that section is kept as the original plan, not as a
+current to-do list.
+
+Immediately outstanding: the three METEOR PRs are unmerged, so the bundles here
+were exported from the integration branch and will need re-exporting from
+`base` once they land. The Zenodo deposit is still pending, deliberately.
 
 This document exists so the reasoning does not have to be re-derived. Facts
 below were verified against `benmsanderson/METEOR` at commit `f6dc3d1` on
@@ -91,6 +117,8 @@ are a required deliverable, not a nice-to-have.
 
 ### C. Server
 
+*Superseded in part: see §4 — gridded output turned out not to need this.*
+
 FastAPI or Gradio around the real package. Full fidelity — gridded output,
 live CMIP6, custom emissions, no reimplementation risk. Cloud Run or Fly.io
 (scale-to-zero, cold starts), or HuggingFace Spaces for near-zero ops.
@@ -142,19 +170,27 @@ until the bundle schema exists:
 
 ## 4. Open decisions
 
-These need Ben's input and change the work:
-
-- **Audience.** Climate scientists (who would mostly rather have Colab) or
-  impact/policy users (who need point-and-click)? Track 1 covers the former
-  cheaply, which is part of why it is first.
-- **Gridded maps in the browser?** This is the one output that forces a
-  server. Reconstructing 100 realizations × 3012 months × ~55k gridpoints is
-  not a client-side operation. If maps are essential, architecture C moves up
-  the list.
-- **Bundle format.** The METEOR prompt currently says netCDF via xarray
-  "unless you find a concrete reason to prefer `.npz`". netCDF means the
-  browser needs a reader. If the client should get JSON or raw typed-array
-  binary instead, decide before the stage-2 branch starts, not mid-way.
+- **Bundle format — settled.** Classic netCDF-3 (`NETCDF3_64BIT`), not
+  NETCDF4. Classic parses with `netcdfjs`, a few kilobytes; NETCDF4 is HDF5
+  underneath and needs a one-to-two megabyte WebAssembly build of libhdf5
+  before a single byte can be read. Nothing was lost: every numeric array is
+  bit-identical between the two and the classic file is *smaller*.
+- **Audience — settled.** Scientists from adjacent fields wanting a rapid
+  climate assessment, particularly for scenarios most ESMs have not run yet
+  (CMIP7). Not climate modellers, who will clone the repo; not the general
+  public. See [`03-roadmap.md`](03-roadmap.md). The CMIP7 source is
+  `10.5281/zenodo.19825038`, which is **embargoed pre-release data**: nothing
+  derived from it may be published until the early access period ends.
+- **Gridded maps — the claim below was wrong.** "Reconstructing 100
+  realizations × 3012 months × 55k gridpoints is not a client-side operation"
+  is true and irrelevant: a map view never asks for that. Measured, a
+  forced-response map needs only the 2.0 MB pattern artifact and ~166k
+  multiply-adds per timestep, and a single realization's map ~2.2M. Maps and
+  custom locations are a download away, not a server away. Only custom
+  *emissions* still needs one, for CICERO-SCM.
+- **Track 1, the Colab badge — not done.** There is still no Colab link in
+  METEOR's README or examples notebook on `base`. It remains the cheapest
+  thing on this list.
 
 ## 5. Facts worth not re-deriving
 
