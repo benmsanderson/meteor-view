@@ -1,175 +1,187 @@
 # Roadmap
 
-Where meteor-view goes next, grouped by what has to be true before each item
-can start. [`00-development-plan.md`](00-development-plan.md) records *why* the
-architecture is what it is; this records what is left.
+Where meteor-view goes next. [`00-development-plan.md`](00-development-plan.md)
+records *why* the architecture is what it is; this records what is left.
 
-Effort figures are rough and are mine, not measured.
+Effort figures are rough and are mine, not measured. Sizes are measured.
 
-## Where it stands
+## Who this is for — decided
 
-The client works and is validated: temperature and precipitation, 67 locations,
-8 SSPs, drawn warming pathways, an ensemble fan chart and a seasonal-cycle
-panel, shareable links and CSV/PNG export. 70 tests across three layers, green
-in CI. 440 KB deployed, no server.
+**Scientists from adjacent fields who want a rapid climate assessment.** Not
+climate modellers: they will clone the repo and run METEOR properly. Not the
+general public either. The people in between — impacts, hydrology, ecology,
+health, energy, economics — who need credible regional climate information now
+and cannot wait for an ESM ensemble.
 
-What it is *not* is finished as a scientific instrument. The single largest gap
-is below under "Needs offline compute", and it is a credibility issue rather
-than a feature gap.
+The sharpest version of that need, and the one worth designing towards:
+**scenarios that most ESMs have not run yet.** CMIP7 scenarios exist as
+emissions pathways long before the model output does. An emulator trained on
+CMIP6 can answer questions about them immediately. That is something this tool
+can do that almost nothing else can, and it reframes several items below.
+
+Consequences:
+
+- The **drawn pathway** is core, not a novelty. It is the mechanism by which a
+  user asks about a future nobody has simulated.
+- **Custom regions and points** matter more than a curated list of 67. An
+  ecologist's study area is not an AR6 region.
+- **Model uncertainty** is not optional for anything called an assessment.
+- The audience reads error bars for a living, so the interface can be honest
+  and technical rather than protective.
 
 ---
 
-## Now — nothing blocks these
+## Maps do not need a server
 
-### 1. Context, before the numbers travel further — *recommended next*
+The plan claimed gridded output forces a server. That claim was about
+reconstructing every realization × every month × every gridpoint, which is what
+METEOR's gridded path does. **It is not what a map view needs**, and the
+distinction is worth several megabytes and an entire architecture.
 
-**Half a day.** An about/methods panel: what METEOR is, what the ensemble
-spread does and does not represent, the single-model caveat, the 2015–2100
-precipitation window, and what "drawn pathway" actually does to the forced
-response.
+Measured, NorESM2-MM `tas`, float32 (gzip saves under 10% — float32 is
+high-entropy, so compression is not a lever here):
 
-This moved to the top *because* sharing shipped. Links and captioned PNGs mean
-output now travels without a person attached to explain it, and the most likely
-misreading is the one the tool currently does nothing to prevent: **the spread
-shown is internal variability from one model.** It is not model uncertainty,
-and it is not "the" uncertainty in a projection. Someone pasting a fan chart
-into a report will assume otherwise unless told.
+| Tier | Extra download | Unlocks |
+|---|---:|---|
+| Timeseries (today) | — (297 KB total) | 67 fixed locations |
+| **Pattern artifact** | **2.0 MB** | Forced-response maps; custom regions and points, forced response |
+| Noise artifact | 11.3 MB | Internal variability anywhere: custom regions/points with spread, single-realization maps |
 
-Cheap, and it is the difference between a tool that informs and one that
-misleads confidently.
+The arithmetic for the 2 MB tier is the convolution the client already does —
+the only change is projecting onto `pattern_v (exp, fld, 3, 192, 288)` instead
+of the precomputed `pattern_projection`. Three pattern modes over 55,296
+gridpoints is ~166k multiply-adds per experiment per timestep: nothing.
 
-### 2. Comparison mode
+A single realization's map costs `pcs(40) @ eof_components(40, 55296)`, about
+2.2M operations per map — also nothing per map. What is genuinely infeasible is
+*all* realizations × *all* months at once, and no map view asks for that.
 
-**2–3 days.** Overlay two or more scenarios, or two or more places, on one
-chart. The thing a scientist actually wants, and the thing that makes the
-scenario spread legible rather than something you hold in your head across
-clicks.
+So the honest position is: **forced-response maps and custom locations are a
+2 MB download away**, and full internal variability anywhere is 13 MB. A server
+is still the answer for custom *emissions* (needs CICERO-SCM), and nothing else.
 
-Design questions to settle first: how many series stay readable (probably
-3–4 with bands, more if bands collapse to lines); whether comparison is a
-separate mode or the picker becomes multi-select; how the URL encodes a set
-rather than a single value. The last one is why this is days rather than hours
-— the state codec currently assumes one of each.
+---
 
-### 3. Polish
+## Now
 
-**1–2 days, separable.** Keyboard and screen-reader passes over the pathway
-editor, which is currently pointer-only and therefore unusable without a mouse.
-`prefers-reduced-motion`. Moving generation into a worker so a 100-member run
-cannot jank the page — not needed at present speeds (~600 ms), but it becomes
-one as ensembles or models multiply.
+### 1. Custom regions and points, and forced-response maps
+
+**A week, in two halves.** The 2 MB tier above. First half: load the pattern
+artifact, reconstruct the forced response on the grid, draw a map. Second half:
+let the user define a location — a lat/lon point, a box, or a drawn rectangle —
+and project onto it.
+
+Validate against METEOR the way everything else here was: compare a
+reconstructed map and a custom-region timeseries against
+`generate_ensemble_outputs` with `gridded=` and a matching `regional:` request.
+The reconstruction identity is in the schema, so this should agree to float32
+precision; if it does not, that is a finding, not a tolerance to loosen.
+
+Then decide whether the 11.3 MB noise tier is worth an opt-in button for
+variability at a custom location. My guess is yes, for this audience, and that
+it should be an explicit click rather than something the page does on load.
+
+### 2. CMIP7 scenarios
+
+**Unknown until one question is answered.** METEOR loads scenarios from
+`src/meteor/default_scm_data/{name}_em_RCMIP.txt` and `{name}_conc_RCMIP.txt`,
+so adding a scenario is adding two input files and re-exporting a bundle with
+`scenarios=[...]`. No code change in either repository.
+
+**The open question is whether CMIP7 emissions and concentrations are published
+in a form that converts to RCMIP format.** If they are, this is a day's work and
+it is the most distinctive thing the tool could offer. If they are not, it waits.
+Worth answering before planning around it.
+
+A bundle carries ~4 KB per scenario, so there is no cost to shipping many.
+
+### 3. Multi-model
+
+**A day of client work, plus hours of training per model per variable.**
+Today's spread is internal variability from one model, which for an assessment
+tool understates uncertainty in a way that looks authoritative. For this
+audience that is the difference between useful and misleading.
+
+Two stages: several models selectable individually, then an across-model view.
+The bundle format already supports it — each bundle records its own
+`cmip6_model` and the client keys off that.
+
+The long pole is training, on your machine. Worth starting before it is needed.
+
+### 4. Say what is emulated and what is not
+
+**Half a day.** A methods panel, pitched at someone who reads error bars: what
+METEOR emulates, what the spread currently represents, how the drawn pathway
+rescales the forced response, the 2015–2100 precipitation window, and a link to
+the validation evidence. Shorter and more technical than it would be for a
+public audience, but no less necessary once output travels as links and PNGs.
+
+### 5. Comparison mode and polish
+
+**2–3 days, plus 1–2.** Overlay scenarios or places; keyboard access to the
+pathway editor, which is pointer-only today; a worker if ensembles or models
+multiply enough to make generation janky.
 
 ---
 
 ## When the METEOR PRs merge
 
-### 4. Re-export from `base`
+**An hour, plus half a day.** Re-export from `base`, then delete the
+integration-branch machinery — `scripts/refresh-integration.sh`, the branch, and
+the paragraphs explaining it. Then the Zenodo deposit via
+`scripts/deposit_bundles.py`, which already implements DOI pre-reservation.
 
-**An hour.** One command, then delete the integration-branch machinery:
-`scripts/refresh-integration.sh`, the branch itself, and the paragraphs in the
-README and plan that explain it. The dependency is deliberate and temporary,
-and should not outlive its reason.
+## Still needs a server
 
-### 5. Zenodo deposit and a DOI
+**Custom emissions only.** Turning an invented emissions trajectory into forcing
+needs CICERO-SCM. Rescaling and combining bundled forcings covers most of what
+the UI wants, and a drawn warming pathway covers most of the rest. If this
+becomes essential, a small service behind a "full run" button is the answer —
+not rebuilding the client around one.
 
-**Half a day.** METEOR#101 ships `scripts/deposit_bundles.py` with a DOI
-pre-reservation flow. Deposit the bundles, record the DOI in the artifacts
-themselves, and cite it from the site.
+## Elsewhere
 
-Then decide — see open decisions — whether the data files keep living in git.
-Committing them was right while the schema was still moving; it is less obviously
-right once there is a citable copy with a permanent identifier.
+**Track 1, the Colab badge, is still not done** — no Colab link in METEOR's
+README or `notebooks/METEOR_Interface_Examples.ipynb` on `base` (verified
+2026-09-23). Given the audience decision it matters slightly less than it did,
+since the experts it serves are the ones who would clone the repo anyway. Still
+a README edit for real value.
 
----
-
-## Needs offline compute (hours per model, on a real machine)
-
-### 6. More CMIP6 models — the biggest scientific gap
-
-**A day of work, plus training time.** Today there is one model, so the spread
-the tool draws is internal variability alone. Real projection uncertainty is
-dominated by model spread, so the tool currently understates uncertainty in a
-way that looks authoritative.
-
-The client work is modest: a model picker, one bundle per model, and the loader
-already keys everything off the bundle. The cost is training — gigabytes of
-CMIP6 and an hour or more per model per variable, on your machine.
-
-Worth doing in two stages: several models selectable individually first, then a
-multi-model view that shows across-model spread alongside within-model
-variability. The second is the one that changes what the tool *means*.
-
-Note that the bundle format already supports this without change: a bundle
-records its own `cmip6_model`, and the client reads it.
-
----
-
-## Needs METEOR-side schema work
-
-These are small individually, and all want the same thing: a re-export with
-different parameters, which means a METEOR change first.
-
-- **Precipitation outside 2015–2100.** The gamma parameters are fitted per
-  window. Either export several windows, or work out whether a window-independent
-  parameterisation is defensible. The schema is explicit that the fit depends on
-  the window, so this is a real constraint, not an oversight.
-- **Arbitrary locations.** A bundle covers the locations it was exported with,
-  so "my town" is not available unless it was chosen in advance. Options: export
-  a denser point set, or ship the EOF maps for a coarse grid and interpolate —
-  which starts to give back the size advantage the bundle exists for.
-- **Impacts.** METEOR has `src/meteor/impacts/`, including a degree-days
-  calculator. Heating and cooling degree days are exactly what an impacts or
-  policy user wants and are cheap to compute client-side from monthly output —
-  but check first whether the real calculators need daily data, in which case
-  this is not a browser feature at all.
-
-## Needs a server (architecture C)
-
-Still deliberately unbuilt, for the reason in the plan: a server costs money and
-attention indefinitely, which is what kills academic tools.
-
-- **Gridded maps.** The one output that genuinely forces a server.
-  Reconstructing 100 realizations × 1032 months × 55k gridpoints is not a
-  client-side operation.
-- **Custom emissions.** Needs CICERO-SCM to turn emissions into forcing.
-  Rescaling and combining the bundled forcings covers most of what the UI wants;
-  starting from an invented emissions trajectory does not.
-
-If either becomes essential, the honest move is a small service behind a "full
-run" button rather than rebuilding the client around it.
-
-## Elsewhere, but on the critical path for adoption
-
-**Track 1, the Colab badge, is still not done.** METEOR's README and
-`notebooks/METEOR_Interface_Examples.ipynb` carry no Colab link on `base`
-(verified 2026-09-23). It remains the cheapest thing on any of these lists: it
-serves every expert user who would rather have real METEOR than a web tool, and
-it costs a README edit. It takes pressure off this repository to be everything.
+**Impacts.** METEOR has `src/meteor/impacts/`, including a degree-days
+calculator — plainly relevant to an impacts audience. Check first whether the
+real calculators need daily data; monthly output may not support them, in which
+case this is not a browser feature.
 
 ---
 
 ## Open decisions
 
-These change the ordering above, and none of them are mine to make.
+1. **Where the data lives.** Deferred, deliberately, and the options are worth
+   having on record:
 
-1. **Audience.** Climate scientists or impact/policy users? The tool currently
-   leans policy — point and click, named places, mm/day — while the people most
-   able to check it are scientists. Comparison mode serves the former; Colab and
-   multi-model serve the latter.
-2. **Are maps essential?** If yes, architecture C moves up and the roadmap
-   changes shape. If no, say so explicitly so it stops being an open question.
-3. **Where the data lives after the DOI.** Keep committing bundles to git, or
-   fetch from Zenodo at runtime? Committed means same-origin, no CORS, versioned
-   with the client, and works offline. Fetched means the repository stays small
-   and the citable copy is the one people actually load. Multi-model makes this
-   decision for us eventually — a dozen models will not sit comfortably in git.
+   - **Keep committing to git** (today). Same-origin, no CORS, versioned with
+     the client, works offline, one thing to deploy. Fine at 297 KB. Awkward at
+     13 MB per variable per model, and git keeps every version forever.
+   - **Zenodo at runtime.** The citable copy is the one people load, and the
+     repository stays small. Costs a CORS dependency and an external point of
+     failure on page load — and Zenodo is not a CDN.
+   - **Both, tiered.** Commit the small timeseries bundles so the default view
+     always works offline and instantly; fetch the multi-megabyte artifacts from
+     Zenodo only when the user asks for maps or a custom location. This matches
+     how the tiers are used and is what I would suggest when the time comes.
+
+   Multi-model forces the question: a dozen models will not sit in git.
+
+2. **Precipitation outside 2015–2100.** The gamma parameters are fitted per
+   window. Either export several windows or establish that a window-independent
+   fit is defensible — a METEOR-side question.
 
 ## Suggested order
 
-1 → 6 (start training early, it is the long pole) → 2 → 4 and 5 when the PRs
-land → decide on 3 and the METEOR-side items from what users actually ask for.
+1 → 3 (start training early) → 2 if the CMIP7 inputs exist → 4 → 5, with the
+merge chores slotted in whenever the PRs land.
 
-The argument for that order: sharing shipped, so context is now urgent; the
-single-model caveat that context has to explain is the same problem multi-model
-solves properly; and everything else is either blocked or better decided with
-real usage in hand.
+The argument: custom regions and maps are the thing you asked for and are far
+cheaper than anyone thought; multi-model is the long pole and the credibility
+fix; CMIP7 is potentially the most distinctive feature but gated on a question
+nobody has answered yet.

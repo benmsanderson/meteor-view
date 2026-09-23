@@ -117,6 +117,8 @@ are a required deliverable, not a nice-to-have.
 
 ### C. Server
 
+*Superseded in part: see §4 — gridded output turned out not to need this.*
+
 FastAPI or Gradio around the real package. Full fidelity — gridded output,
 live CMIP6, custom emissions, no reimplementation risk. Cloud Run or Fly.io
 (scale-to-zero, cold starts), or HuggingFace Spaces for near-zero ops.
@@ -173,14 +175,17 @@ until the bundle schema exists:
   underneath and needs a one-to-two megabyte WebAssembly build of libhdf5
   before a single byte can be read. Nothing was lost: every numeric array is
   bit-identical between the two and the classic file is *smaller*.
-- **Audience — still open.** Climate scientists (who would mostly rather have
-  Colab) or impact/policy users (who need point-and-click)? Track 1 covers the
-  former cheaply, which is part of why it was first. The built explorer leans
-  towards the latter.
-- **Gridded maps in the browser — still open, still the one output that forces
-  a server.** Reconstructing 100 realizations × 3012 months × ~55k gridpoints
-  is not a client-side operation. If maps are essential, architecture C moves
-  up the list.
+- **Audience — settled.** Scientists from adjacent fields wanting a rapid
+  climate assessment, particularly for scenarios most ESMs have not run yet
+  (CMIP7). Not climate modellers, who will clone the repo; not the general
+  public. See [`03-roadmap.md`](03-roadmap.md).
+- **Gridded maps — the claim below was wrong.** "Reconstructing 100
+  realizations × 3012 months × 55k gridpoints is not a client-side operation"
+  is true and irrelevant: a map view never asks for that. Measured, a
+  forced-response map needs only the 2.0 MB pattern artifact and ~166k
+  multiply-adds per timestep, and a single realization's map ~2.2M. Maps and
+  custom locations are a download away, not a server away. Only custom
+  *emissions* still needs one, for CICERO-SCM.
 - **Track 1, the Colab badge — not done.** There is still no Colab link in
   METEOR's README or examples notebook on `base`. It remains the cheapest
   thing on this list.
