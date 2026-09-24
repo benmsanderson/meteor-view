@@ -34,9 +34,52 @@ const LABELS = {
   'cmip7-high': 'High (SSP3)',
 };
 
+/**
+ * Official ScenarioMIP colours for the CMIP7 markers.
+ *
+ * Supplied by the ScenarioMIP team; use these rather than inventing a palette,
+ * so a chart from this tool sits beside the published figures without
+ * clashing.
+ */
+export const CMIP7_COLOURS = {
+  'cmip7-high': '#a41212',
+  'cmip7-high-to-low': '#E744F6',
+  'cmip7-medium': '#fc7b03',
+  'cmip7-medium-to-low': '#dec820',
+  'cmip7-low': '#20A359',
+  'cmip7-low-to-negative': '#22e5db',
+  'cmip7-very-low': '#16188F',
+};
+
+/**
+ * The colour to draw a scenario in.
+ *
+ * The CMIP6 SSPs deliberately have no colour of their own here: they are drawn
+ * in a neutral grey so the CMIP7 set reads as the subject and the SSPs as the
+ * reference behind it. AR6 has a standard SSP palette and this could use it
+ * instead — that is a presentation choice, not a constraint.
+ *
+ * @param {string} name
+ * @param {string} neutral colour for anything without one of its own
+ */
+export function scenarioColour(name, neutral) {
+  return CMIP7_COLOURS[name] ?? neutral;
+}
+
 /** Which generation a scenario belongs to. */
 export function scenarioFamily(name) {
   return name.startsWith('cmip7-') ? 'CMIP7 ScenarioMIP' : 'CMIP6 SSPs';
+}
+
+/**
+ * A shorter display name, for chart labels.
+ *
+ * Drops the parenthetical SSP the marker derives from: in a chart the colour
+ * and the menu already carry it, and "Medium to Low (SSP2)" needs half again
+ * as much margin as "Medium to Low".
+ */
+export function scenarioShortLabel(name) {
+  return scenarioLabel(name).replace(/\s*\(.*\)$/, '');
 }
 
 /** A display name, falling back to the raw identifier. */

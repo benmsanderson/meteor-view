@@ -54,6 +54,7 @@ export class Explorer {
     /** Lazily loaded 2 MB pattern artifacts, by variable. */
     this.patternArtifacts = new Map();
     this.regionOutlines = null;
+    this.scenarioEmissions = null;
   }
 
   /**
@@ -98,6 +99,22 @@ export class Explorer {
       this.patternArtifacts.set(variable, new PatternArtifact(await response.arrayBuffer()));
     }
     return this.patternArtifacts.get(variable);
+  }
+
+  /**
+   * Annual emissions for the scenario-context figure.
+   *
+   * Three species, global, for every scenario the bundles carry. A figure's
+   * worth of data rather than an inventory — see `data/README.md` for why the
+   * CMIP7 emissions behind it are not offered as a file.
+   */
+  async emissions() {
+    if (!this.scenarioEmissions) {
+      const response = await fetch(`${this.base}scenario_emissions_v1.json`);
+      if (!response.ok) throw new Error('could not load scenario emissions');
+      this.scenarioEmissions = await response.json();
+    }
+    return this.scenarioEmissions;
   }
 
   /** AR6 outlines, once, on demand. */
@@ -188,6 +205,31 @@ export class Explorer {
       years: this.windowYears(),
       forced: annual.slice(start, start + nYears),
     };
+  }
+
+  /**
+   * Total effective radiative forcing for a scenario, over the full year axis.
+   *
+   * The sum over experiments of what the bundle carries — which is what
+   * CICERO-SCM produced from that scenario's emissions, and what the emulator
+   * is actually driven by. Absent experiments are stored as NaN and skipped.
+   *
+   * @param {string} scenario
+   * @param {'tas'|'pr'} [variable] either bundle carries the same forcing
+   * @returns {{years: number[], forcing: Float64Array}}
+   */
+  totalForcing(scenario, variable = 'tas') {
+    const bundle = this.bundles[variable];
+    const byExperiment = bundle.forcing(scenario);
+    const years = this.years(variable);
+
+    const total = new Float64Array(years.length);
+    for (const series of byExperiment.values()) {
+      for (let i = 0; i < total.length; i += 1) {
+        if (Number.isFinite(series[i])) total[i] += series[i];
+      }
+    }
+    return { years, forcing: total };
   }
 
   /** Years of the output window. */

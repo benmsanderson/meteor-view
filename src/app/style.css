@@ -314,6 +314,26 @@ button.link {
 
 /* Map */
 
+#context {
+  height: 300px;
+}
+
+@media (max-width: 560px) {
+  #context {
+    height: 240px;
+  }
+}
+
+.legend select {
+  padding: 3px 6px;
+  font: inherit;
+  font-size: 0.82rem;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 #map {
   cursor: crosshair;
   border-radius: 8px;

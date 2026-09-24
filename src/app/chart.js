@@ -272,3 +272,160 @@ export function drawSeasonal(canvas, { early, late, format }) {
   line(early, accent);
   line(late, warm);
 }
+
+/**
+ * Every scenario's forcing at once, with one of them picked out.
+ *
+ * Context for the view above it: which of the fifteen pathways is being shown,
+ * and where it sits among the rest. The CMIP7 markers carry the ScenarioMIP
+ * team's own colours so a figure from here sits beside the published ones; the
+ * CMIP6 SSPs stay neutral, as the reference set rather than the subject.
+ *
+ * @param {HTMLCanvasElement} canvas
+ * @param {object} options
+ * @param {Array<{name: string, label: string, colour: string, years: number[],
+ *   values: ArrayLike<number>}>} options.scenarios
+ * @param {string} options.selected the scenario to pick out
+ * @param {[number, number]} options.range first and last year to draw
+ * @param {string} options.yLabel
+ * @param {(v: number) => string} [options.format] y tick formatter
+ */
+export function drawScenarioContext(
+  canvas,
+  { scenarios, selected, range, yLabel, format = (v) => v.toFixed(0) }
+) {
+  const { context, width, height } = prepare(canvas);
+  const pad = { top: 12, right: 128, bottom: 30, left: 52 };
+  const plotWidth = width - pad.left - pad.right;
+  const plotHeight = height - pad.top - pad.bottom;
+  if (plotWidth <= 0 || plotHeight <= 0) return;
+
+  const [firstYear, lastYear] = range;
+  let low = Infinity;
+  let high = -Infinity;
+  for (const s of scenarios) {
+    for (let i = 0; i < s.years.length; i += 1) {
+      if (s.years[i] < firstYear || s.years[i] > lastYear) continue;
+      low = Math.min(low, s.values[i]);
+      high = Math.max(high, s.values[i]);
+    }
+  }
+  const span = high - low || 1;
+  low -= span * 0.06;
+  high += span * 0.06;
+
+  const sx = (year) => pad.left + ((year - firstYear) / (lastYear - firstYear)) * plotWidth;
+  const sy = (v) => pad.top + plotHeight - ((v - low) / (high - low)) * plotHeight;
+
+  const grid = themeColor('--grid', '#e2e8f0');
+  const muted = themeColor('--muted', '#64748b');
+
+  context.font = AXIS_FONT;
+  context.strokeStyle = grid;
+  context.fillStyle = muted;
+  context.lineWidth = 1;
+  context.textAlign = 'right';
+  context.textBaseline = 'middle';
+
+  const yStep = niceStep(high - low, 4);
+  for (let v = Math.ceil(low / yStep) * yStep; v <= high; v += yStep) {
+    const y = Math.round(sy(v)) + 0.5;
+    context.beginPath();
+    context.moveTo(pad.left, y);
+    context.lineTo(pad.left + plotWidth, y);
+    context.stroke();
+    context.fillText(format(v), pad.left - 8, y);
+  }
+
+  context.textAlign = 'center';
+  context.textBaseline = 'top';
+  const xStep = niceStep(lastYear - firstYear, 5);
+  for (let year = Math.ceil(firstYear / xStep) * xStep; year <= lastYear; year += xStep) {
+    context.fillText(String(year), sx(year), pad.top + plotHeight + 7);
+  }
+
+  // Emissions cross zero and the crossing is the point of several of these
+  // scenarios, so mark it when it is in range.
+  if (low < 0 && high > 0) {
+    context.strokeStyle = muted;
+    context.globalAlpha = 0.5;
+    context.beginPath();
+    const zero = Math.round(sy(0)) + 0.5;
+    context.moveTo(pad.left, zero);
+    context.lineTo(pad.left + plotWidth, zero);
+    context.stroke();
+    context.globalAlpha = 1;
+  }
+
+  const line = (scenario, emphasis) => {
+    context.strokeStyle = emphasis ? scenario.colour : scenario.colour;
+    context.globalAlpha = emphasis ? 1 : 0.42;
+    context.lineWidth = emphasis ? 2.6 : 1.1;
+    context.beginPath();
+    let started = false;
+    for (let i = 0; i < scenario.years.length; i += 1) {
+      const year = scenario.years[i];
+      if (year < firstYear || year > lastYear) continue;
+      const x = sx(year);
+      const y = sy(scenario.values[i]);
+      if (started) context.lineTo(x, y);
+      else {
+        context.moveTo(x, y);
+        started = true;
+      }
+    }
+    context.stroke();
+    context.globalAlpha = 1;
+  };
+
+  // Unselected first, so the highlighted one is never drawn under another.
+  for (const s of scenarios) if (s.name !== selected) line(s, false);
+  const chosen = scenarios.find((s) => s.name === selected);
+  if (chosen) line(chosen, true);
+
+  // Labels at the right-hand end, for the scenarios that asked for one.
+  // Naming all fifteen is unreadable at this height, and the greyed reference
+  // set does not need naming — the selected one always does.
+  const ends = scenarios
+    .filter((s) => s.labelled || s.name === selected)
+    .map((s) => {
+      let last = null;
+      for (let i = 0; i < s.years.length; i += 1) {
+        if (s.years[i] <= lastYear) last = s.values[i];
+      }
+      return { ...s, y: sy(last) };
+    })
+    .sort((a, b) => a.y - b.y);
+
+  // Spread where they collide, then pull the whole run back inside the plot if
+  // it overflowed the bottom: otherwise the lowest labels land off the canvas.
+  const minimumGap = 13;
+  for (let i = 1; i < ends.length; i += 1) {
+    if (ends[i].y - ends[i - 1].y < minimumGap) ends[i].y = ends[i - 1].y + minimumGap;
+  }
+  const overflow = ends.length ? ends[ends.length - 1].y - (pad.top + plotHeight) : 0;
+  if (overflow > 0) for (const end of ends) end.y -= overflow;
+  for (const end of ends) {
+    end.y = Math.min(Math.max(end.y, pad.top + 6), pad.top + plotHeight);
+  }
+
+  context.textAlign = 'left';
+  context.textBaseline = 'middle';
+  for (const end of ends) {
+    const emphasis = end.name === selected;
+    context.font = emphasis ? `600 ${12}px ui-sans-serif, system-ui, sans-serif` : AXIS_FONT;
+    context.fillStyle = end.colour;
+    context.globalAlpha = emphasis ? 1 : 0.65;
+    context.fillText(end.label, pad.left + plotWidth + 8, end.y);
+    context.globalAlpha = 1;
+  }
+
+  context.save();
+  context.translate(12, pad.top + plotHeight / 2);
+  context.rotate(-Math.PI / 2);
+  context.textAlign = 'center';
+  context.fillStyle = muted;
+  context.font = AXIS_FONT;
+  context.fillText(yLabel, 0, 0);
+  context.restore();
+}

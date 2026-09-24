@@ -6,12 +6,18 @@
  * complexity than it saves in responsiveness.
  */
 
-import { annualMeans, drawFanChart, drawSeasonal } from './chart.js';
+import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
 import { drawColourBar, drawMap, regionAt, toLatLon } from './map.js';
 import { Explorer, WINDOW } from './explorer.js';
 import { placeLabel } from './places.js';
-import { groupScenarios, scenarioFamily, scenarioLabel } from './scenarios.js';
+import {
+  groupScenarios,
+  scenarioColour,
+  scenarioFamily,
+  scenarioLabel,
+  scenarioShortLabel,
+} from './scenarios.js';
 import { DEFAULT_SEED, fromQuery, toQuery, toUrl } from './state.js';
 
 /** Seconds per year, for the precipitation unit conversion. */
@@ -47,6 +53,9 @@ const elements = {
   resample: document.getElementById('resample'),
   chartTitle: document.getElementById('chart-title'),
   seasonal: document.getElementById('seasonal'),
+  context: document.getElementById('context'),
+  contextSeries: document.getElementById('context-series'),
+  contextTitle: document.getElementById('context-title'),
   map: document.getElementById('map'),
   mapPanel: document.getElementById('map').closest('.panel'),
   mapTitle: document.getElementById('map-title'),
@@ -71,6 +80,8 @@ let outlines = [];
 let lastMap = null;
 /** A user-drawn region, or null while a bundled location is selected. */
 let customBox = null;
+/** Scenario emissions for the context panel, once loaded. */
+let scenarioEmissions = null;
 
 function setStatus(message, state = '') {
   elements.status.textContent = message;
@@ -463,6 +474,7 @@ function attachMap() {
     elements.clearBox.hidden = true;
     run();
     renderMap();
+    renderContext();
   });
 
   let dragFrom = null;
@@ -542,6 +554,69 @@ function boxFrom(a, b) {
   };
 }
 
+/** Units and formatting for each series the context panel can show. */
+const CONTEXT_SERIES = {
+  CO2: { label: 'CO₂ emissions (Gt CO₂/yr)', format: (v) => v.toFixed(0) },
+  CH4: { label: 'CH₄ emissions (Mt CH₄/yr)', format: (v) => v.toFixed(0) },
+  SO2: { label: 'SO₂ emissions (Mt SO₂/yr)', format: (v) => v.toFixed(0) },
+  forcing: { label: 'Radiative forcing (W/m²)', format: (v) => v.toFixed(0) },
+};
+
+/**
+ * Draw every scenario, with the selected one picked out.
+ *
+ * Emissions come from a small companion file; forcing comes from the bundles,
+ * which already carry it per experiment.
+ */
+async function renderContext() {
+  const which = elements.contextSeries.value;
+  const spec = CONTEXT_SERIES[which];
+  const selected = elements.scenario.value;
+  const neutral = getComputedStyle(document.documentElement)
+    .getPropertyValue('--muted')
+    .trim() || '#64748b';
+
+  let series;
+  let range;
+  if (which === 'forcing') {
+    series = explorer.scenarios.map((name) => {
+      const { years, forcing } = explorer.totalForcing(name);
+      return { name, years, values: forcing };
+    });
+    range = [1990, WINDOW.end];
+  } else {
+    if (!scenarioEmissions) {
+      try {
+        scenarioEmissions = await explorer.emissions();
+      } catch (error) {
+        setStatus(`Could not load scenario emissions: ${error.message}`, 'error');
+        return;
+      }
+    }
+    const years = scenarioEmissions.years;
+    series = explorer.scenarios
+      .filter((name) => scenarioEmissions.scenarios[name])
+      .map((name) => ({ name, years, values: scenarioEmissions.scenarios[name][which] }));
+    range = [years[0], years[years.length - 1]];
+  }
+
+  drawScenarioContext(elements.context, {
+    scenarios: series.map((s) => ({
+      ...s,
+      label: scenarioShortLabel(s.name),
+      colour: scenarioColour(s.name, neutral),
+      // The CMIP7 markers are the subject and get named; the SSPs are the
+      // reference set behind them and would only crowd the margin.
+      labelled: scenarioFamily(s.name) === 'CMIP7 ScenarioMIP',
+    })),
+    selected,
+    range,
+    yLabel: spec.label,
+    format: spec.format,
+  });
+  elements.contextTitle.textContent = `Scenario context — ${scenarioLabel(selected)}`;
+}
+
 /** Redraw the map from the last field, without recomputing it. */
 function redrawMap() {
   if (!lastMap || elements.mapPanel.dataset.map !== 'ready') return;
@@ -566,6 +641,7 @@ function redrawMap() {
 /** Redraw everything from the last run, without regenerating it. */
 function redraw() {
   redrawMap();
+  renderContext();
   if (!lastRun) return;
   const spec = VARIABLES[lastRun.variable];
   drawFanChart(elements.chart, {
@@ -602,6 +678,7 @@ function attachControls() {
   observer.observe(elements.chart);
   observer.observe(elements.seasonal);
   observer.observe(elements.map);
+  observer.observe(elements.context);
 }
 
 async function start() {
@@ -629,6 +706,7 @@ async function start() {
   attachControls();
   attachActions();
   attachMap();
+  elements.contextSeries.addEventListener('change', renderContext);
   elements.mapPanel.dataset.map = 'idle';
 
   const bundle = explorer.bundles.tas;
@@ -638,6 +716,7 @@ async function start() {
     `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
 
   run();
+  renderContext();
 }
 
 start();

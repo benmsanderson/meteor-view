@@ -22,6 +22,7 @@ for this repository -- exactly ``base`` plus those three PRs. It supplies the
 ``series_transformed`` and ``locations=`` support used below, both from #101.
 """
 
+import json
 import os
 import sys
 import tempfile
@@ -108,6 +109,65 @@ def scenario_inputs():
             f"scripts/convert_scenariomip.py to include them"
         )
     return inputs
+
+
+#: Species plotted in the scenario-context panel, as
+#: METEOR column -> (display name, unit, factor from METEOR's unit).
+#:
+#: Three of the forty METEOR carries, annual, global. Enough to draw the figure
+#: that situates a scenario; not an emissions inventory, which is the thing
+#: this repository does not redistribute.
+PLOTTED_SPECIES = [
+    # (display name, unit, columns to sum, factor from METEOR's unit)
+    ("CO2", "Gt CO2/yr", ["CO2_FF", "CO2_AFOLU"], 44.009 / 12.011),  # from Pg C
+    ("CH4", "Mt CH4/yr", ["CH4"], 1.0),                              # already Tg
+    ("SO2", "Mt SO2/yr", ["SO2"], 64.06 / 32.06),                    # from Tg S
+]
+
+#: Years the panel spans. Enough recent history to place the present.
+PLOT_YEARS = (1990, 2100)
+
+
+def export_plot_emissions(scenario_inputs_by_name, path):
+    """
+    Write the emissions the scenario-context panel plots.
+
+    Deliberately a figure's worth of data rather than a dataset: three species
+    of forty, annual, global, rounded to four significant figures. The CMIP7
+    emissions are third-party and are not offered for download -- this is what
+    the chart needs to draw, and the CSV export does not include it.
+
+    CO2 is the sum of the two METEOR columns, fossil and land use, which is how
+    scenario figures normally present it.
+    """
+    first, last = PLOT_YEARS
+    out = {}
+    for name, (emissions, _) in scenario_inputs_by_name.items():
+        years = [int(y) for y in emissions.index if first <= int(y) <= last]
+        series = {}
+        for label, _unit, columns, factor in PLOTTED_SPECIES:
+            values = emissions[columns].sum(axis=1)
+            series[label] = [
+                float(f"{float(values.loc[y]) * factor:.4g}") for y in years
+            ]
+        out[name] = series
+
+    with open(path, "w", encoding="utf-8") as handle:
+        json.dump(
+            {
+                "note": (
+                    "Annual global emissions for the scenario-context figure. "
+                    "Three species of the forty METEOR carries. The CMIP7 "
+                    "values derive from the ScenarioMIP release, which this "
+                    "repository does not redistribute; see data/README.md."
+                ),
+                "units": {label: unit for label, unit, _, _f in PLOTTED_SPECIES},
+                "years": years,
+                "scenarios": out,
+            },
+            handle,
+        )
+    return path
 
 
 def locations():
@@ -222,6 +282,10 @@ def main():
                 pattern_path, format="NETCDF3_64BIT"
             )
         print(f"wrote {pattern_path}  {os.path.getsize(pattern_path)/1e6:.2f} MB")
+
+    emissions_path = os.path.join(OUT, "scenario_emissions_v1.json")
+    export_plot_emissions(scenarios, emissions_path)
+    print(f"wrote {emissions_path}  {os.path.getsize(emissions_path)/1024:.0f} KB")
 
 
 if __name__ == "__main__":

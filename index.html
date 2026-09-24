@@ -79,6 +79,27 @@
 
       <section class="panel">
         <div class="panel__header">
+          <h2 id="context-title">Scenario context</h2>
+          <p class="legend">
+            <label for="context-series">Show</label>
+            <select id="context-series">
+              <option value="CO2">CO₂ emissions</option>
+              <option value="CH4">CH₄ emissions</option>
+              <option value="SO2">SO₂ emissions</option>
+              <option value="forcing">Radiative forcing</option>
+            </select>
+          </p>
+        </div>
+        <p class="hint">
+          All fifteen scenarios, with the selected one picked out. The CMIP7
+          markers use the ScenarioMIP team's own colours; the CMIP6 SSPs are
+          drawn in grey as the reference set behind them.
+        </p>
+        <canvas id="context"></canvas>
+      </section>
+
+      <section class="panel">
+        <div class="panel__header">
           <h2 id="map-title">Map of the forced response</h2>
           <p class="legend">
             <label for="map-year">Year</label>

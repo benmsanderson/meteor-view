@@ -16,6 +16,15 @@ schema settles.
 [Earth Syst. Sci. Data 12, 2959–2970](https://doi.org/10.5194/essd-12-2959-2020),
 not this repository.
 
+`scenario_emissions_v1.json` — CO2, CH4 and SO2 for all fifteen scenarios,
+annual, global, 1990–2100, for the scenario-context figure. Three species of
+the forty METEOR carries, rounded to four significant figures: a figure's worth
+of data rather than an inventory. The CMIP7 values derive from the ScenarioMIP
+release; see below. It is deliberately not offered as a download in the
+interface and is not part of the CSV export — though anything a page plots is
+visible in a browser's network tab, so this is about not *providing* it as a
+product rather than a technical guarantee.
+
 ## Not committed: ScenarioMIP-CMIP7 emissions
 
 **This repository does not re-host the ScenarioMIP emissions.** Download them
