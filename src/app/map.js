@@ -19,81 +19,138 @@ export function wrapLon(lon) {
 }
 
 /**
- * A diverging blue-white-red scale for anomalies, and a sequential one for
- * quantities that are positive by nature.
+ * Discrete colour classes, sampled from the IPCC AR7 WGI diverging colormaps.
  *
- * Diverging scales must be symmetric about zero or they lie about the sign of
- * a change, so the domain is forced to ±max rather than [min, max].
+ * The same source as the published figures, so a map from here sits beside
+ * them. Eleven classes rather than a continuous ramp: a smooth field invites
+ * false precision about values between contours, and a reader can actually
+ * take a number off a classed bar.
  */
-export function colourScale(values, { diverging }) {
-  let low = Infinity;
-  let high = -Infinity;
-  for (const v of values) {
-    if (!Number.isFinite(v)) continue;
-    if (v < low) low = v;
-    if (v > high) high = v;
-  }
-  if (!Number.isFinite(low)) {
-    low = 0;
-    high = 1;
-  }
-  if (diverging) {
-    const extent = Math.max(Math.abs(low), Math.abs(high)) || 1;
-    low = -extent;
-    high = extent;
-  }
+export const CLASSES = {
+  // Sampled at each bin's midpoint on a symmetric domain, not evenly along the
+  // array. Warming is almost entirely positive, so even sampling would put the
+  // colormap's white centre at about 3.5 °C and render half the map's warming
+  // in blues. Reference range ±11 °C.
+  temperature: [
+    '#cfe2ed', '#ecf2f5', '#f6eeed', '#f1d6d2', '#ecc0b9', '#e6a89e',
+    '#e19083', '#dc7a6a', '#cb5748', '#992b34', '#67001f',
+  ],
+  // Symmetric bins, so these sit symmetrically too. Brown is drier, teal
+  // wetter, as in the AR6 maps. Reference range ±45 %.
+  precipitation: [
+    '#543005', '#8f5c1b', '#c48a3d', '#d9b688', '#e9d7c0', '#f8f8f8',
+    '#c2dddb', '#8cc3be', '#449f97', '#1d6e64', '#003c30',
+  ],
+};
 
-  const span = high - low || 1;
-  const stops = diverging
-    ? [
-        [0.0, [5, 48, 97]],
-        [0.25, [67, 147, 195]],
-        [0.5, [247, 247, 247]],
-        [0.75, [214, 96, 77]],
-        [1.0, [103, 0, 31]],
-      ]
-    : [
-        [0.0, [255, 247, 243]],
-        [0.35, [158, 202, 225]],
-        [0.7, [33, 113, 181]],
-        [1.0, [8, 48, 107]],
-      ];
+/**
+ * Fixed bin edges, per variable.
+ *
+ * Deliberately not derived from the data. An adaptive scale recomputes as the
+ * year slider moves, so 2030 renders as red as 2100 and the reader is misled
+ * by the one control most likely to be used. Fixed edges also make two maps —
+ * and their difference — comparable, which is what the next piece of work
+ * needs.
+ *
+ * Ten edges give eleven classes, the outermost of which are open-ended and
+ * marked with triangles on the bar.
+ */
+export const BIN_EDGES = {
+  // °C of warming. Runs to 8, which SSP5-8.5 exceeds over the Arctic.
+  temperature: [-1, 0, 1, 2, 3, 4, 5, 6, 8, 10],
+  // Percent change in precipitation, symmetric about zero.
+  precipitation: [-40, -30, -20, -10, -5, 5, 10, 20, 30, 40],
+};
 
+/**
+ * A classed colour scale.
+ *
+ * @param {'temperature'|'precipitation'} variable
+ * @returns {{edges: number[], colours: string[], colour: (v: number) => string}}
+ */
+export function classedScale(variable) {
+  const edges = BIN_EDGES[variable];
+  const colours = CLASSES[variable];
   const colour = (value) => {
-    const t = Math.min(Math.max((value - low) / span, 0), 1);
-    for (let i = 1; i < stops.length; i += 1) {
-      if (t <= stops[i][0]) {
-        const [t0, c0] = stops[i - 1];
-        const [t1, c1] = stops[i];
-        const f = (t - t0) / (t1 - t0 || 1);
-        return [
-          Math.round(c0[0] + f * (c1[0] - c0[0])),
-          Math.round(c0[1] + f * (c1[1] - c0[1])),
-          Math.round(c0[2] + f * (c1[2] - c0[2])),
-        ];
-      }
-    }
-    return stops[stops.length - 1][1];
+    if (!Number.isFinite(value)) return null;
+    let index = 0;
+    while (index < edges.length && value >= edges[index]) index += 1;
+    return colours[Math.min(index, colours.length - 1)];
   };
+  return { edges, colours, colour };
+}
 
-  return { low, high, colour };
+/** '#rrggbb' to [r, g, b]. */
+function toRgb(hex) {
+  return [
+    parseInt(hex.slice(1, 3), 16),
+    parseInt(hex.slice(3, 5), 16),
+    parseInt(hex.slice(5, 7), 16),
+  ];
 }
 
 /**
- * Draw a field, the AR6 outlines, and any selection over the top.
+ * A viewport: which part of the world is on screen.
+ *
+ * `zoom` 1 shows the globe; `centre` is the geographic point at the middle of
+ * the canvas. Kept as plain data so pan and zoom are pure state changes and
+ * every hit test goes through the same two functions as the drawing.
+ */
+export function defaultView() {
+  return { zoom: 1, centreLat: 0, centreLon: 0 };
+}
+
+/** Clamp a view so it cannot be panned off the world or zoomed inside-out. */
+export function clampView(view) {
+  const zoom = Math.min(Math.max(view.zoom, 1), 12);
+  // Half the visible span, in degrees.
+  const halfLat = 90 / zoom;
+  return {
+    zoom,
+    centreLat: Math.min(Math.max(view.centreLat, -90 + halfLat), 90 - halfLat),
+    centreLon: wrapLon(view.centreLon),
+  };
+}
+
+/** The projection for a view: geographic to canvas pixels, and back. */
+export function projection(view, width, height) {
+  const { zoom, centreLat, centreLon } = view;
+  const degreesPerPixelX = 360 / (width * zoom);
+  const degreesPerPixelY = 180 / (height * zoom);
+
+  const x = (lon) => {
+    // Shortest way round, so a ring near the seam does not fly across.
+    let delta = wrapLon(lon) - centreLon;
+    if (delta > 180) delta -= 360;
+    if (delta < -180) delta += 360;
+    return width / 2 + delta / degreesPerPixelX;
+  };
+  const y = (lat) => height / 2 - (lat - centreLat) / degreesPerPixelY;
+  const lonAt = (px) => wrapLon(centreLon + (px - width / 2) * degreesPerPixelX);
+  const latAt = (py) => centreLat - (py - height / 2) * degreesPerPixelY;
+  return { x, y, lonAt, latAt, degreesPerPixelX, degreesPerPixelY };
+}
+
+/**
+ * Draw a field, coastlines, region outlines and any selection.
  *
  * @param {HTMLCanvasElement} canvas
  * @param {object} options
- * @param {Float64Array} options.field row-major `(lat, lon)`
+ * @param {Float64Array} options.field row-major `(lat, lon)`, already in
+ *   display units
  * @param {Float64Array} options.lat
  * @param {Float64Array} options.lon
  * @param {object[]} options.regions AR6 outlines
+ * @param {number[][][]} options.coastlines rings of `[lon, lat]`
  * @param {string|null} options.highlight AR6 code to emphasise
  * @param {object|null} options.box `{south, north, west, east}` selection
- * @param {boolean} options.diverging
- * @returns {{low: number, high: number}} the colour domain actually used
+ * @param {'temperature'|'precipitation'} options.variable which classes to use
+ * @param {object} options.view from {@link defaultView}
  */
-export function drawMap(canvas, { field, lat, lon, regions, highlight, box, diverging }) {
+export function drawMap(
+  canvas,
+  { field, lat, lon, regions, coastlines = [], highlight, box, variable, view }
+) {
   const ratio = window.devicePixelRatio || 1;
   const width = canvas.clientWidth;
   const height = Math.round(width / 2);
@@ -107,11 +164,12 @@ export function drawMap(canvas, { field, lat, lon, regions, highlight, box, dive
 
   const nLat = lat.length;
   const nLon = lon.length;
-  const scale = colourScale(field, { diverging });
+  const scale = classedScale(variable);
 
-  // Paint at grid resolution, then let the canvas scale it. The grid is
-  // ordered south-to-north and 0-360 in longitude; the image is north-to-south
-  // and -180-180, so both axes are remapped here rather than in the caller.
+  // Paint the whole globe at grid resolution once, then let the canvas place
+  // and scale it for the current view. The grid runs south-to-north and
+  // 0-360; the image runs north-to-south and -180-180, so both axes are
+  // remapped here rather than in the caller.
   const image = context.createImageData(nLon, nLat);
   const lonOrder = Array.from({ length: nLon }, (_, j) => j).sort(
     (a, b) => wrapLon(lon[a]) - wrapLon(lon[b])
@@ -124,11 +182,12 @@ export function drawMap(canvas, { field, lat, lon, regions, highlight, box, dive
       const j = lonOrder[col];
       const value = field[i * nLon + j];
       const offset = (row * nLon + col) * 4;
-      if (!Number.isFinite(value)) {
+      const hex = scale.colour(value);
+      if (!hex) {
         image.data[offset + 3] = 0;
         continue;
       }
-      const [r, g, b] = scale.colour(value);
+      const [r, g, b] = toRgb(hex);
       image.data[offset] = r;
       image.data[offset + 1] = g;
       image.data[offset + 2] = b;
@@ -136,33 +195,44 @@ export function drawMap(canvas, { field, lat, lon, regions, highlight, box, dive
     }
   }
 
-  // Via an offscreen canvas so the browser scales it smoothly; putImageData
-  // ignores the transform and would draw at grid size in the corner.
   const grid = document.createElement('canvas');
   grid.width = nLon;
   grid.height = nLat;
   grid.getContext('2d').putImageData(image, 0, 0);
-  context.imageSmoothingEnabled = true;
-  context.drawImage(grid, 0, 0, width, height);
 
-  const x = (longitude) => ((wrapLon(longitude) - WEST_EDGE) / 360) * width;
-  const y = (latitude) => ((90 - latitude) / 180) * height;
+  const project = projection(view, width, height);
+  // Where the whole world lands under this view. Drawn twice, offset by a
+  // world width, so panning across the seam shows continuous map rather than
+  // blank canvas.
+  const worldWidth = width * view.zoom;
+  const worldHeight = height * view.zoom;
+  const originX = project.x(-180) ;
+  const originY = project.y(90);
 
-  // Outlines. Drawn per ring, and skipped where a ring straddles the seam:
-  // joining across it would streak a line all the way back across the map.
-  context.lineWidth = 0.7;
-  context.strokeStyle = 'rgba(15, 23, 42, 0.45)';
-  for (const region of regions) {
-    const emphasis = region.code === highlight;
-    context.lineWidth = emphasis ? 2 : 0.7;
-    context.strokeStyle = emphasis ? '#f8fafc' : 'rgba(15, 23, 42, 0.45)';
-    for (const ring of region.rings) {
+  context.save();
+  context.beginPath();
+  context.rect(0, 0, width, height);
+  context.clip();
+  // Smooth while a gridbox is smaller than a few pixels, crisp once it is
+  // not. Past that point smoothing is inventing detail the model does not
+  // have, and showing the gridboxes is the honest picture of its resolution.
+  context.imageSmoothingEnabled = worldWidth / nLon < 6;
+  for (const shift of [-worldWidth, 0, worldWidth]) {
+    context.drawImage(grid, originX + shift, originY, worldWidth, worldHeight);
+  }
+
+  /** Stroke a set of rings, splitting where they cross the seam. */
+  const strokeRings = (rings, colour, lineWidth, alpha = 1) => {
+    context.strokeStyle = colour;
+    context.lineWidth = lineWidth;
+    context.globalAlpha = alpha;
+    for (const ring of rings) {
       context.beginPath();
       let previous = null;
       for (const [longitude, latitude] of ring) {
-        const px = x(longitude);
-        const py = y(latitude);
-        if (previous !== null && Math.abs(px - previous) > width / 2) {
+        const px = project.x(longitude);
+        const py = project.y(latitude);
+        if (previous !== null && Math.abs(px - previous) > width) {
           context.stroke();
           context.beginPath();
           context.moveTo(px, py);
@@ -175,35 +245,55 @@ export function drawMap(canvas, { field, lat, lon, regions, highlight, box, dive
       }
       context.stroke();
     }
+    context.globalAlpha = 1;
+  };
+
+  // Coastlines first: they are what a reader orients by, and the AR6 boxes
+  // should sit over them rather than under.
+  strokeRings(coastlines, 'rgba(15, 23, 42, 0.75)', 0.6);
+
+  for (const region of regions) {
+    const emphasis = region.code === highlight;
+    strokeRings(
+      region.rings,
+      emphasis ? '#f8fafc' : 'rgba(15, 23, 42, 0.22)',
+      emphasis ? 2 : 0.5,
+      emphasis ? 1 : 0.8
+    );
   }
 
   if (box) {
     context.setLineDash([5, 4]);
     context.lineWidth = 2;
     context.strokeStyle = '#facc15';
-    const left = x(box.west);
-    const right = x(box.east);
-    const top = y(box.north);
-    const bottom = y(box.south);
-    if (right >= left) {
-      context.strokeRect(left, top, right - left, bottom - top);
-    } else {
-      // Straddles the seam: draw it as the two pieces it actually is.
-      context.strokeRect(left, top, width - left, bottom - top);
-      context.strokeRect(0, top, right, bottom - top);
+    const top = project.y(box.north);
+    const bottom = project.y(box.south);
+    for (const shift of [-worldWidth, 0, worldWidth]) {
+      const left = project.x(box.west) + shift;
+      const right = project.x(box.east) + shift;
+      if (right >= left) context.strokeRect(left, top, right - left, bottom - top);
     }
     context.setLineDash([]);
   }
-
-  return { low: scale.low, high: scale.high, colour: scale.colour };
+  context.restore();
 }
 
-/** Canvas position to geographic coordinates. */
-export function toLatLon(canvas, event) {
+/**
+ * Canvas position to geographic coordinates, under a view.
+ *
+ * Goes through the same projection the drawing does, so a click always lands
+ * where the pointer is however the map has been panned or zoomed.
+ */
+export function toLatLon(canvas, event, view = defaultView()) {
   const rect = canvas.getBoundingClientRect();
-  const fx = Math.min(Math.max((event.clientX - rect.left) / rect.width, 0), 1);
-  const fy = Math.min(Math.max((event.clientY - rect.top) / rect.height, 0), 1);
-  return { lat: 90 - fy * 180, lon: WEST_EDGE + fx * 360 };
+  const height = Math.round(rect.width / 2);
+  const project = projection(view, rect.width, height);
+  const px = event.clientX - rect.left;
+  const py = ((event.clientY - rect.top) / rect.height) * height;
+  return {
+    lat: Math.min(Math.max(project.latAt(py), -90), 90),
+    lon: project.lonAt(px),
+  };
 }
 
 /**
@@ -237,8 +327,15 @@ function pointInRing(ring, lon, lat) {
   return inside;
 }
 
-/** Draw the colour bar for a scale. */
-export function drawColourBar(canvas, { low, high, colour, label }) {
+/**
+ * Draw the classed colour bar.
+ *
+ * Equal-width blocks with their edges labelled, rather than a gradient: the
+ * classes are the scale, and a gradient would misrepresent them. The outermost
+ * classes are open-ended and drawn as triangles, so a reader can see that a
+ * value beyond the last edge is off the scale rather than at its end.
+ */
+export function drawColourBar(canvas, { edges, colours, label }) {
   const ratio = window.devicePixelRatio || 1;
   const width = canvas.clientWidth;
   const height = canvas.clientHeight;
@@ -250,20 +347,44 @@ export function drawColourBar(canvas, { low, high, colour, label }) {
   context.clearRect(0, 0, width, height);
 
   const barHeight = 12;
-  for (let px = 0; px < width; px += 1) {
-    const [r, g, b] = colour(low + ((high - low) * px) / (width - 1));
-    context.fillStyle = `rgb(${r},${g},${b})`;
-    context.fillRect(px, 0, 1, barHeight);
+  const cap = 9;
+  const inner = width - cap * 2;
+  const blocks = edges.length - 1;
+  const blockWidth = inner / blocks;
+
+  // Open-ended first class, as a left-pointing triangle.
+  context.fillStyle = colours[0];
+  context.beginPath();
+  context.moveTo(0, barHeight / 2);
+  context.lineTo(cap, 0);
+  context.lineTo(cap, barHeight);
+  context.closePath();
+  context.fill();
+
+  for (let i = 0; i < blocks; i += 1) {
+    context.fillStyle = colours[i + 1];
+    context.fillRect(cap + i * blockWidth, 0, blockWidth + 0.5, barHeight);
   }
+
+  context.fillStyle = colours[colours.length - 1];
+  context.beginPath();
+  context.moveTo(width, barHeight / 2);
+  context.lineTo(width - cap, 0);
+  context.lineTo(width - cap, barHeight);
+  context.closePath();
+  context.fill();
 
   const style = getComputedStyle(document.documentElement);
   context.fillStyle = style.getPropertyValue('--muted').trim() || '#64748b';
-  context.font = '11px ui-sans-serif, system-ui, sans-serif';
+  context.font = '10px ui-sans-serif, system-ui, sans-serif';
   context.textBaseline = 'top';
-  context.textAlign = 'left';
-  context.fillText(low.toFixed(1), 0, barHeight + 4);
-  context.textAlign = 'right';
-  context.fillText(high.toFixed(1), width, barHeight + 4);
   context.textAlign = 'center';
-  context.fillText(label, width / 2, barHeight + 4);
+  for (let i = 0; i < edges.length; i += 1) {
+    // Every edge on a short bar would collide; every other one reads fine.
+    if (edges.length > 8 && i % 2 === 1 && i !== edges.length - 1) continue;
+    context.fillText(String(edges[i]), cap + i * blockWidth, barHeight + 3);
+  }
+
+  context.textAlign = 'left';
+  context.fillText(label, 0, barHeight + 16);
 }

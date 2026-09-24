@@ -108,14 +108,26 @@
           </p>
         </div>
         <p class="hint" id="map-hint">
-          Click a region to select it, or drag to define your own. The map shows
-          the forced response — the signal the scenario drives — without internal
-          variability, which is why it looks smooth where the timeseries does not.
+          Click a region to select it, or drag to define your own; scroll to
+          zoom, and hold shift to do whichever the other mode does. The map
+          shows the forced response — the signal the scenario drives — without
+          internal variability, which is why it looks smooth where the
+          timeseries does not. Precipitation is shown as percent change, the
+          convention for maps, while the timeseries above stays in mm/day.
         </p>
         <canvas id="map"></canvas>
-        <canvas id="colourbar" height="30"></canvas>
+        <canvas id="colourbar" height="46"></canvas>
         <div class="actions">
           <button type="button" id="load-map">Load map (2 MB)</button>
+          <div class="modes" id="map-modes" hidden role="group" aria-label="Map mode">
+            <button type="button" id="mode-select" data-mode="select" aria-pressed="true">
+              Select
+            </button>
+            <button type="button" id="mode-pan" data-mode="pan" aria-pressed="false">
+              Pan
+            </button>
+          </div>
+          <button type="button" id="reset-view" hidden>Reset view</button>
           <button type="button" id="clear-box" hidden>Clear custom region</button>
         </div>
       </section>

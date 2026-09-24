@@ -341,8 +341,34 @@ button.link {
 }
 
 #colourbar {
-  height: 30px;
+  height: 46px;
   margin-top: 6px;
+}
+
+.modes {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.modes button {
+  border: 0;
+  border-radius: 0;
+  background: var(--bg);
+}
+
+.modes button + button {
+  border-left: 1px solid var(--border);
+}
+
+.modes button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.modes button[aria-pressed='true']:hover {
+  color: #fff;
 }
 
 .hint {

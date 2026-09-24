@@ -55,6 +55,8 @@ export class Explorer {
     this.patternArtifacts = new Map();
     this.regionOutlines = null;
     this.scenarioEmissions = null;
+    this.coastlineRings = null;
+    this.prClimatology = null;
   }
 
   /**
@@ -125,6 +127,34 @@ export class Explorer {
       this.regionOutlines = (await response.json()).regions;
     }
     return this.regionOutlines;
+  }
+
+  /** Coastlines, once, on demand. The geography a reader orients by. */
+  async coastlines() {
+    if (!this.coastlineRings) {
+      const response = await fetch(`${this.base}coastlines_v1.json`);
+      if (!response.ok) throw new Error('could not load coastlines');
+      this.coastlineRings = (await response.json()).rings;
+    }
+    return this.coastlineRings;
+  }
+
+  /**
+   * Gridded precipitation climatology, the denominator for percent change.
+   *
+   * Only `pr` has one, and only the map needs it: 220 KB fetched beside the
+   * pattern artifact rather than on load.
+   */
+  async climatology() {
+    if (!this.prClimatology) {
+      const { Artifact } = await import('../lib/bundle.js');
+      const url = `${this.base}meteor_NorESM2-MM_pr_climatology_v1.nc`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`could not load ${url}`);
+      const artifact = new Artifact(await response.arrayBuffer());
+      this.prClimatology = artifact.array('pr_climatology');
+    }
+    return this.prClimatology;
   }
 
   /**

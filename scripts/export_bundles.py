@@ -170,6 +170,37 @@ def export_plot_emissions(scenario_inputs_by_name, path):
     return path
 
 
+def export_pr_climatology(field, path):
+    """
+    Write the gridded precipitation baseline the percent-change map divides by.
+
+    Squeezed to (lat, lon): the CMIP6 reference arrives with a singleton
+    ensemble axis that would otherwise travel all the way to the browser.
+    Classic netCDF-3 and float32, like everything else a client reads.
+    """
+    array = field.squeeze()
+    extra = [d for d in array.dims if d not in ("lat", "lon")]
+    if extra:
+        array = array.isel({d: 0 for d in extra})
+
+    dataset = xr.Dataset(
+        {"pr_climatology": (("lat", "lon"), array.values.astype(np.float32))},
+        coords={"lat": array["lat"].values, "lon": array["lon"].values},
+        attrs={
+            "format": "meteor-pr-climatology",
+            "schema_version": "1",
+            "description": (
+                "Annual-mean precipitation over the first year of the output "
+                "window, the denominator for percent-change maps."
+            ),
+            "units": "kg m-2 s-1",
+            "window_start": WINDOW[0],
+        },
+    )
+    dataset.to_netcdf(path, format="NETCDF3_64BIT")
+    print(f"wrote {path}  {os.path.getsize(path)/1024:.0f} KB")
+
+
 def locations():
     locs = ["global"]
     locs += [f"regional:{r.abbrev}" for r in regionmask.defined_regions.ar6.all]
@@ -195,7 +226,11 @@ def main():
 
         ref = None
         if var == "pr":
-            ref, _ = emu._load_transform_reference(var, *WINDOW, verbose=True)
+            ref, baseline = emu._load_transform_reference(var, *WINDOW, verbose=True)
+            # The map shows precipitation change as a percentage, which needs a
+            # gridded denominator the pattern artifact does not carry. This is
+            # the same first-year mean field the gamma fit already uses.
+            export_pr_climatology(baseline, os.path.join(OUT, f"meteor_{MODEL}_pr_climatology_v1.nc"))
 
         path = os.path.join(OUT, f"meteor_{MODEL}_{var}_bundle_v1.nc")
         export_timeseries_bundle(

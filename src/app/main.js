@@ -8,7 +8,16 @@
 
 import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
-import { drawColourBar, drawMap, regionAt, toLatLon } from './map.js';
+import {
+  clampView,
+  classedScale,
+  defaultView,
+  drawColourBar,
+  drawMap,
+  projection,
+  regionAt,
+  toLatLon,
+} from './map.js';
 import { Explorer, WINDOW } from './explorer.js';
 import { placeLabel } from './places.js';
 import {
@@ -57,6 +66,10 @@ const elements = {
   contextSeries: document.getElementById('context-series'),
   contextTitle: document.getElementById('context-title'),
   map: document.getElementById('map'),
+  mapModes: document.getElementById('map-modes'),
+  modeSelect: document.getElementById('mode-select'),
+  modePan: document.getElementById('mode-pan'),
+  resetView: document.getElementById('reset-view'),
   mapPanel: document.getElementById('map').closest('.panel'),
   mapTitle: document.getElementById('map-title'),
   mapYear: document.getElementById('map-year'),
@@ -82,6 +95,14 @@ let lastMap = null;
 let customBox = null;
 /** Scenario emissions for the context panel, once loaded. */
 let scenarioEmissions = null;
+/** Coastlines, once loaded. */
+let coastlines = [];
+/** Gridded precipitation climatology, the percent-change denominator. */
+let prClimatology = null;
+/** Which gesture the plain drag performs; shift does the other. */
+let mapMode = 'select';
+/** What part of the world the map shows. */
+let mapView = defaultView();
 
 function setStatus(message, state = '') {
   elements.status.textContent = message;
@@ -410,10 +431,15 @@ async function loadMap() {
   elements.loadMap.disabled = true;
   elements.loadMap.textContent = 'Loading…';
   try {
-    outlines = await explorer.regions();
+    [outlines, coastlines] = await Promise.all([
+      explorer.regions(),
+      explorer.coastlines(),
+    ]);
     await explorer.patterns(elements.variable.value);
     elements.mapPanel.dataset.map = 'ready';
     elements.loadMap.hidden = true;
+    elements.mapModes.hidden = false;
+    setMapMode('select');
     await renderMap();
   } catch (error) {
     setStatus(`Could not load the map: ${error.message}`, 'error');
@@ -422,13 +448,36 @@ async function loadMap() {
   }
 }
 
+/**
+ * The map's own units, which are not the timeseries panel's.
+ *
+ * Temperature is a change in °C either way. Precipitation is a *percent*
+ * change, which is the convention for maps and the only readable choice: an
+ * absolute change of 0.2 mm/day is negligible in the tropics and
+ * transformative in a desert, so an absolute map mostly shows where it already
+ * rains.
+ */
+function toMapUnits(field, variable) {
+  if (variable === 'tas') return Float64Array.from(field);
+  return Float64Array.from(field, (v, i) => {
+    const baseline = prClimatology[i];
+    // Where there is essentially no rain, a percentage is meaningless rather
+    // than large, so leave it blank instead of rendering a spurious extreme.
+    if (!Number.isFinite(baseline) || baseline <= 1e-9) return NaN;
+    return (v / baseline) * 100;
+  });
+}
+
 /** Compute and draw the forced-response map for the selected year. */
 async function renderMap() {
   if (elements.mapPanel.dataset.map !== 'ready') return;
 
   const variable = elements.variable.value;
-  const spec = VARIABLES[variable];
   const year = Number(elements.mapYear.value);
+
+  if (variable === 'pr' && !prClimatology) {
+    prClimatology = await explorer.climatology();
+  }
 
   const { field, lat, lon } = await explorer.forcedMap({
     variable,
@@ -436,33 +485,31 @@ async function renderMap() {
     year,
   });
 
-  const converted = Float64Array.from(field, spec.convert);
+  const converted = toMapUnits(field, variable);
   lastMap = { field: converted, lat, lon, variable, year };
 
-  const scale = drawMap(elements.map, {
-    field: converted,
-    lat,
-    lon,
-    regions: outlines,
-    highlight: elements.location.value.startsWith('regional:')
-      ? elements.location.value.slice('regional:'.length)
-      : null,
-    box: customBox,
-    // Temperature is an anomaly about zero and wants a diverging scale;
-    // precipitation here is a change too, so it does as well.
-    diverging: true,
-  });
-
-  drawColourBar(elements.colourbar, {
-    ...scale,
-    label: `${spec.label} change in ${year} (${variable === 'tas' ? '°C' : 'mm/day'})`,
-  });
+  redrawMap();
   elements.mapTitle.textContent = `Forced response, ${year}`;
 }
 
-/** Selecting a region, or drawing one, on the map. */
+/** Switch which gesture a plain drag performs. */
+function setMapMode(mode) {
+  mapMode = mode;
+  elements.modeSelect.setAttribute('aria-pressed', String(mode === 'select'));
+  elements.modePan.setAttribute('aria-pressed', String(mode === 'pan'));
+  elements.map.style.cursor = mode === 'pan' ? 'grab' : 'crosshair';
+}
+
+/** Selecting a region, drawing one, panning and zooming. */
 function attachMap() {
   elements.loadMap.addEventListener('click', loadMap);
+  elements.modeSelect.addEventListener('click', () => setMapMode('select'));
+  elements.modePan.addEventListener('click', () => setMapMode('pan'));
+
+  elements.resetView.addEventListener('click', () => {
+    mapView = defaultView();
+    redrawMap();
+  });
 
   elements.mapYear.addEventListener('input', () => {
     elements.mapYearValue.textContent = elements.mapYear.value;
@@ -473,46 +520,105 @@ function attachMap() {
     customBox = null;
     elements.clearBox.hidden = true;
     run();
-    renderMap();
-    renderContext();
+    redrawMap();
   });
 
-  let dragFrom = null;
-  let dragged = false;
+  // Wheel zooms about the pointer, so the feature under the cursor stays put
+  // — anchoring on the centre instead makes zooming in on anything a chase.
+  elements.map.addEventListener(
+    'wheel',
+    (event) => {
+      if (elements.mapPanel.dataset.map !== 'ready') return;
+      event.preventDefault();
+      const before = toLatLon(elements.map, event, mapView);
+      const factor = Math.exp(-event.deltaY * 0.0015);
+      const zoomed = clampView({ ...mapView, zoom: mapView.zoom * factor });
+      const after = toLatLon(elements.map, event, zoomed);
+      mapView = clampView({
+        zoom: zoomed.zoom,
+        centreLat: zoomed.centreLat + (before.lat - after.lat),
+        centreLon: zoomed.centreLon + (before.lon - after.lon),
+      });
+      elements.resetView.hidden = mapView.zoom === 1;
+      redrawMap();
+    },
+    { passive: false }
+  );
+
+  let gesture = null;
 
   elements.map.addEventListener('pointerdown', (event) => {
     if (elements.mapPanel.dataset.map !== 'ready') return;
-    dragFrom = toLatLon(elements.map, event);
-    dragged = false;
+    // Shift does whichever the active mode does not, so either gesture is
+    // always one key away without leaving the mode you prefer.
+    const panning = event.shiftKey ? mapMode === 'select' : mapMode === 'pan';
+    gesture = {
+      panning,
+      from: toLatLon(elements.map, event, mapView),
+      startView: { ...mapView },
+      startX: event.clientX,
+      startY: event.clientY,
+      moved: false,
+    };
     capture(elements.map, event);
+    if (panning) elements.map.style.cursor = 'grabbing';
   });
 
   elements.map.addEventListener('pointermove', (event) => {
-    if (!dragFrom) return;
-    const to = toLatLon(elements.map, event);
+    if (!gesture) return;
+
+    if (gesture.panning) {
+      const rect = elements.map.getBoundingClientRect();
+      const height = Math.round(rect.width / 2);
+      const project = projection(gesture.startView, rect.width, height);
+      const scaleY = height / rect.height;
+      mapView = clampView({
+        zoom: gesture.startView.zoom,
+        centreLat:
+          gesture.startView.centreLat +
+          (event.clientY - gesture.startY) * scaleY * project.degreesPerPixelY,
+        centreLon:
+          gesture.startView.centreLon -
+          (event.clientX - gesture.startX) * project.degreesPerPixelX,
+      });
+      gesture.moved = true;
+      elements.resetView.hidden = mapView.zoom === 1 && mapView.centreLat === 0;
+      redrawMap();
+      return;
+    }
+
+    const to = toLatLon(elements.map, event, mapView);
     // A click and a tiny drag are the same gesture to a human, so only treat
-    // it as a box once it is big enough to have been meant.
-    if (Math.abs(to.lat - dragFrom.lat) < 2 && Math.abs(to.lon - dragFrom.lon) < 2) return;
-    dragged = true;
-    customBox = boxFrom(dragFrom, to);
-    // Redraw from the field already in hand: the outline moves with the
-    // pointer, and recomputing the map for each move would not.
+    // it as a box once it is big enough to have been meant. In degrees of the
+    // current view, so the threshold stays a few pixels however far in we are.
+    const threshold = 2 / mapView.zoom;
+    if (
+      Math.abs(to.lat - gesture.from.lat) < threshold &&
+      Math.abs(to.lon - gesture.from.lon) < threshold
+    ) {
+      return;
+    }
+    gesture.moved = true;
+    customBox = boxFrom(gesture.from, to);
     redrawMap();
   });
 
   const finish = (event) => {
-    if (!dragFrom) return;
-    const to = toLatLon(elements.map, event);
-    dragFrom = null;
+    if (!gesture) return;
+    const { panning, moved } = gesture;
+    const to = toLatLon(elements.map, event, mapView);
+    gesture = null;
+    setMapMode(mapMode);
 
-    if (dragged) {
+    if (panning) return;
+
+    if (moved) {
       elements.clearBox.hidden = false;
       run();
       return;
     }
 
-    // A plain click selects the AR6 region under the pointer, if the bundle
-    // carries it — every AR6 region does.
+    // A plain click selects the AR6 region under the pointer.
     const region = regionAt(outlines, to);
     if (!region) return;
     const spec = `regional:${region.code}`;
@@ -521,11 +627,12 @@ function attachMap() {
     elements.clearBox.hidden = true;
     elements.location.value = spec;
     run();
-    renderMap();
+    redrawMap();
   };
   elements.map.addEventListener('pointerup', finish);
   elements.map.addEventListener('pointercancel', () => {
-    dragFrom = null;
+    gesture = null;
+    setMapMode(mapMode);
   });
 }
 
@@ -620,21 +727,30 @@ async function renderContext() {
 /** Redraw the map from the last field, without recomputing it. */
 function redrawMap() {
   if (!lastMap || elements.mapPanel.dataset.map !== 'ready') return;
-  const spec = VARIABLES[lastMap.variable];
-  const scale = drawMap(elements.map, {
+  const kind = lastMap.variable === 'tas' ? 'temperature' : 'precipitation';
+
+  drawMap(elements.map, {
     field: lastMap.field,
     lat: lastMap.lat,
     lon: lastMap.lon,
     regions: outlines,
+    coastlines,
     highlight: elements.location.value.startsWith('regional:')
       ? elements.location.value.slice('regional:'.length)
       : null,
     box: customBox,
-    diverging: true,
+    variable: kind,
+    view: mapView,
   });
+
+  const scale = classedScale(kind);
   drawColourBar(elements.colourbar, {
-    ...scale,
-    label: `${spec.label} change in ${lastMap.year} (${lastMap.variable === 'tas' ? '°C' : 'mm/day'})`,
+    edges: scale.edges,
+    colours: scale.colours,
+    label:
+      lastMap.variable === 'tas'
+        ? `Temperature change in ${lastMap.year} (°C)`
+        : `Precipitation change in ${lastMap.year} (%)`,
   });
 }
 
