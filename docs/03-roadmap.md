@@ -66,202 +66,102 @@ is still the answer for custom *emissions* (needs CICERO-SCM), and nothing else.
 
 ---
 
-## Now
+## Done
 
-### 1. Custom regions and points, and forced-response maps
+Custom regions and forced-response maps (the 2 MB pattern tier), CMIP7
+scenarios by Route C, shareable links and CSV/PNG export, and the
+scenario-context figure. Details are below under their original entries.
 
-**A week, in two halves.** The 2 MB tier above. First half: load the pattern
-artifact, reconstruct the forced response on the grid, draw a map. Second half:
-let the user define a location — a lat/lon point, a box, or a drawn rectangle —
-and project onto it.
+## Now — agreed order
 
-Validate against METEOR the way everything else here was: compare a
-reconstructed map and a custom-region timeseries against
-`generate_ensemble_outputs` with `gridded=` and a matching `regional:` request.
-The reconstruction identity is in the schema, so this should agree to float32
-precision; if it does not, that is a finding, not a tolerance to loosen.
+### 1. The map: coastlines, zoom and pan, discrete colours
 
-Then decide whether the 11.3 MB noise tier is worth an opt-in button for
-variability at a custom location. My guess is yes, for this audience, and that
-it should be an explicit click rather than something the page does on load.
+**Two to three days.** Three separate improvements to the same panel.
 
-### 2. CMIP7 scenarios — done (Route C)
+**Coastlines.** AR6 outlines are the only geography on the map today, and they
+are administrative boxes rather than land, so the eye has nothing familiar to
+anchor on. `regionmask.defined_regions.natural_earth_v5_0_0.land_110` supplies
+land polygons — the same route the AR6 outlines already take, no new
+dependency, and Natural Earth is public domain. Measured: **122 KB** of raw
+GeoJSON simplified at 0.2°, 70 KB at 0.5°. At a grid of roughly 1° the coarser
+one loses nothing physical but looks ragged, so 0.2° is probably right; it
+loads once, alongside a 2 MB artifact, so the difference is immaterial.
 
-**Shipped.** All seven markers are in the bundles, driven through METEOR's own
-CICERO-SCM from the release's harmonized emissions — Route C, the consistent
-one. `scripts/convert_scenariomip.py` converts a copy you download yourself;
-`data/README.md` records where the redistribution line falls. METEOR#101 gained
-the ability to accept supplied emissions so the forcing could be bundled
-without the emissions ever being.
+**Zoom and pan.** The interesting regions are small and the map is global.
+This touches more than it looks: every coordinate transform in `map.js`, the
+click-to-select hit test, and the drag-to-draw gesture, which currently owns
+the same mouse button panning would want. Decide the gesture split first —
+probably drag to pan, shift-drag or a mode toggle to define a region — because
+retrofitting that is worse than choosing it.
 
-Resulting global response at 2100 (NorESM2-MM, K): very-low 1.30, low 1.47,
-low-to-negative 1.37 (it peaks at 1.49 in 2050 and declines — net-negative
-emissions doing what they should), medium-to-low 1.97, high-to-low 2.31,
-medium 2.59, high 2.93. These run cooler than MAGICC's assessed GSAT for the
-same scenarios, which is NorESM2-MM's sensitivity rather than an error.
+**Discrete colours.** A continuous ramp reads as a smooth field and invites
+false precision about values between contours. Classed colours — nine or eleven
+bins over a symmetric range, with the bin edges shown on the colour bar — is
+both the IPCC convention and easier to read a number off. Cheap: the change is
+confined to `colourScale` in `map.js` and the bar it feeds.
 
-Source: **ScenarioMIP-CMIP7 IAM quantification**, `10.5281/zenodo.19825038`,
-v0.2. Examined 2026-09-23; the early-access embargo has since lifted.
+### 2. Other ESMs, and settle where data lives
 
-**We may use it; we may not openly re-serve it.** That is a different
-constraint from the embargo and it does not expire. The precedent is
-[`benmsanderson/FLEX/data/README.md`](https://github.com/benmsanderson/FLEX/tree/main/data):
-the scenario files are not stored in the repository, a documented script
-converts them from the user's own download, and anything that *is* retained is
-attributed separately from the repository's own licence.
+**A day of client work per batch, plus training; the storage decision is the
+real content.**
 
-What it contains — 7 marker scenarios (High–SSP3, High-to-Low–SSP5,
-Medium–SSP2, Medium-to-Low–SSP2, Low–SSP2, Low-to-Negative–SSP2, Very Low–SSP1),
-7 IAMs, MAGICCv7.6.0a3, annual 2000–2100:
+Better news than expected on feasibility. METEOR needs only **piControl,
+abrupt-4xCO2, historical and one SSP** — `sulxanom`, the aerosol axis, is not a
+separate experiment but the scenario run reused
+(`cmip6_meteor_data_getter.py`: `training_data["sulxanom"] = training_data[scenario_train]`).
+Those are among the most widely available CMIP6 experiments, so the binding
+constraint is download and fit time on your machine, not which models ran an
+exotic perturbation.
 
-- **GSAT** — median, 33rd, 67th percentile. 2100 medians span **1.37 °C
-  (Very Low)** to **3.42 °C (High)**.
-- **Effective radiative forcing**, decomposed: total, anthropogenic, CO2, CH4,
-  N2O, F-gases, greenhouse gases, ozone, aerosols (direct BC/OC/SOx, indirect),
-  Montreal gases, solar, volcanic.
+The client side is nearly free: a bundle records its own `cmip6_model` and the
+loader already keys off it. What needs deciding is storage, because this is
+what forces it:
 
-No emissions, despite the title — only the climate assessment. That rules out
-the RCMIP-into-CICERO route, and it does not matter: METEOR's experiments are a
-greenhouse-gas axis and an aerosol axis (`co2x4`, `sulxanom`), which is exactly
-the split this file already provides, assessed by MAGICC. Per-experiment forcing
-can be built from the ERF columns directly, skipping our own SCM run.
+| per model | committed today |
+|---|---:|
+| `tas` + `pr` bundles | ~355 KB |
+| `tas` + `pr` pattern artifacts | 4 MB |
+| noise artifacts, if the 11 MB tier ever ships | 23 MB |
 
-#### How METEOR splits a scenario's forcing — verified, not assumed
+Five models is 20 MB of pattern artifacts before the noise tier is considered,
+and git keeps every version of each forever. The tiered answer from the open
+decisions below is the one to take: keep the small bundles committed so the
+default view stays instant and offline, and fetch the multi-megabyte artifacts
+from a Zenodo deposit on demand. That also gives the artifacts a DOI, which
+they should have anyway.
 
-METEOR's pattern model has two response axes, and `compute_scenario_forcing`
-feeds them by running CICERO-SCM and splitting its components. Read from
-`scm_forcer_engine.run_and_return_per_forcer_results` and then confirmed
-numerically on ssp245:
+Worth settling in the same breath: whether the model picker offers models
+individually, shows across-model spread, or both. The second is what turns the
+tool from "one model's variability" into something that represents projection
+uncertainty honestly.
 
-```
-sulxanom = SO2 + SO4_IND                    (exact, 0.0e+00)
-co2x4    = Total_forcing - sulxanom         (1.8e-15, float noise)
-```
+### 3. Compare two scenarios at once
 
-Two details that a reasonable guess gets wrong:
+**Three to four days, and the most UI-heavy item here.**
 
-* **BC and OC belong on the CO2 axis, not the aerosol one.** `bc_oc_to_co2` is
-  true by default, on the argument that CO2 timescales suit carbonaceous
-  aerosols better than sulphate ones. So the aerosol axis is *sulphate only* —
-  direct plus indirect — and mapping CMIP7's whole `ERF|Aerosols` group onto
-  `sulxanom` would be wrong.
-* **METEOR's forcing is anthropogenic-only.** CICERO returns no solar or
-  volcanic component, so the CMIP7 equivalent is `ERF|Anthropogenic`, not the
-  `ERF` total.
+Two scenarios selected together, and every panel answers for both:
 
-Which gives the mapping, if ERF is used directly:
+- **Line plots.** Two ensembles overlaid, each in its scenario's colour. The
+  fan bands are the hard part: two translucent 5–95% bands over each other turn
+  to mud. Options are bands for one and lines for the other, thinner quantile
+  bands for both, or a toggle. Worth prototyping before committing.
+- **Emissions figure.** Already draws all fifteen; it just needs to highlight
+  the whole selection rather than a single name — `drawScenarioContext` takes
+  `selected` as one string today, so this becomes a set.
+- **Maps: both, and their difference.** The difference map is the point, and it
+  needs its own treatment — a scale centred on zero with its own colour bar,
+  and a note that it is a difference of *forced responses*, carrying no
+  internal variability, so it is a signal difference rather than a "will be
+  different by" figure.
 
-| METEOR axis | CICERO today | CMIP7 ERF equivalent |
-|---|---|---|
-| `sulxanom` | `SO2 + SO4_IND` | `ERF\|Aerosols\|Direct Effect\|SOx` + `ERF\|Aerosols\|Indirect Effect` |
-| `co2x4` | `Total - sulxanom` | `ERF\|Anthropogenic` − the above |
+Knock-ons: `scn` in the URL becomes a list, which the state codec and its
+validation must accept without letting a link request twenty; the CSV export
+needs a scenario column or a second file; and the chart title, PNG caption and
+status line all assume one scenario today.
 
-#### But the two SCMs disagree, and that decides the route
-
-Comparing METEOR's own ssp245 forcing against MAGICC's Medium–SSP2:
-
-| W/m² | METEOR (CICERO) | MAGICC | |
-|---|---:|---:|---|
-| 2020 anthropogenic total | 3.430 | 2.694 | **0.74 apart** |
-| 2020 sulphate axis | −0.781 | −0.958 | |
-| 2100 anthropogenic total | 5.113 | 5.305 | |
-| 2100 sulphate axis | −0.286 | −0.498 | |
-
-MAGICC's 2.69 W/m² for 2020 is close to AR6's assessed present-day forcing;
-CICERO's is higher. Either is defensible on its own, but **mixing them is not**:
-a user comparing SSP245 against Medium–SSP2 in the same interface would see a
-difference that is partly scenario and partly simple climate model, with
-nothing on screen to say which.
-
-#### The file does contain emissions
-
-Correcting an earlier note in this document: the release carries 55
-`Harmonized and Infilled|Emissions|*` species as well as the climate
-assessment. An earlier scan missed them by only printing MAGICC-suffixed
-variables. That makes it possible to drive METEOR's own CICERO-SCM with CMIP7
-emissions and stay consistent with the existing SSP bundles.
-
-Conversion to METEOR's RCMIP format is real but bounded work:
-
-* **Years.** The release covers 2000–2100; METEOR's forcing axis starts at
-  1750. Splice onto the historical part of an existing SSP emissions file —
-  the CMIP7 emissions are harmonized *to* that history, so the overlap should
-  be close, and the splice is worth checking rather than assuming.
-* **Units.** Per species: Mt CO2 → Pg C, kt N2O → Tg N, Mt SO2 → Tg S,
-  Mt NO2 → Mt N, and so on.
-* **Gaps.** METEOR wants `HCFC-123`, which the release does not carry, and
-  wants biomass-burning BC/OC split from total BC/OC, which it also does not.
-  It carries species METEOR cannot ingest (NF3, SO2F2, cC4F8, CH2Cl2, CHCl3,
-  CH3Cl, several PFCs), whose forcing would simply be lost.
-
-#### Three routes
-
-| | Cost | Consistent with the SSPs? | Regional pattern |
-|---|---|---|---|
-| **A** GSAT as pathway presets | Hours | GSAT matches MAGICC, forcing does not | Base scenario's, rescaled — wrong where aerosols differ |
-| **B** MAGICC ERF onto the two axes | ~A day | **No** — CICERO vs MAGICC, 0.74 W/m² apart in 2020 | Correct, from this scenario's own aerosol/GHG mix |
-| **C** CICERO on CMIP7 emissions | Days | **Yes** | Correct |
-
-C is the one that leaves the tool honest when both scenario families sit in the
-same menu, and it reuses `compute_scenario_forcing` unchanged. B is a
-worthwhile cross-check on the way: if a CICERO run on CMIP7 emissions lands
-near MAGICC's ERF, the conversion is probably right, and where it does not is
-itself worth knowing.
-
-#### The wrinkle a browser tool has and FLEX does not
-
-FLEX is a pipeline: the person running it downloads the data themselves, so
-"don't redistribute" is satisfied by a README and a converter. A hosted site
-*serves* whatever it needs to its visitors. Baking CMIP7 forcing or GSAT into a
-public bundle is redistribution, even though it is only a few kilobytes.
-
-Three ways to live with that, in preference order:
-
-1. **Load-your-own, client side.** A file input: the visitor downloads the
-   release from IIASA/Zenodo themselves — as they must anyway — and drops it
-   into the page. The browser parses it locally and nothing is ever served by
-   us. This keeps the rapid-assessment use case intact, redistributes nothing,
-   and generalises to any pathway or forcing set a user wants to try. It is
-   also a feature in its own right.
-2. **Local bundle generation.** `scripts/export_bundles.py` grows a
-   `--scenario-file` argument, so anyone can build a CMIP7-enabled bundle from
-   their own copy for their own use. Not served by us.
-3. **Ask.** Whether a *derived* product — regional timeseries, or forcing
-   already convolved into a step response — counts as re-serving the input is a
-   rights question rather than a technical one, and the portal can answer it. If
-   the answer is that derived products are fine, the hosted site can ship CMIP7
-   scenarios directly and options 1 and 2 become conveniences.
-
-Until that is settled, build option 1 and do not commit any ScenarioMIP file.
-
-### 3. Multi-model
-
-**A day of client work, plus hours of training per model per variable.**
-Today's spread is internal variability from one model, which for an assessment
-tool understates uncertainty in a way that looks authoritative. For this
-audience that is the difference between useful and misleading.
-
-Two stages: several models selectable individually, then an across-model view.
-The bundle format already supports it — each bundle records its own
-`cmip6_model` and the client keys off that.
-
-The long pole is training, on your machine. Worth starting before it is needed.
-
-### 4. Say what is emulated and what is not
-
-**Half a day.** A methods panel, pitched at someone who reads error bars: what
-METEOR emulates, what the spread currently represents, how the drawn pathway
-rescales the forced response, the 2015–2100 precipitation window, and a link to
-the validation evidence. Shorter and more technical than it would be for a
-public audience, but no less necessary once output travels as links and PNGs.
-
-### 5. Comparison mode and polish
-
-**2–3 days, plus 1–2.** Overlay scenarios or places; keyboard access to the
-pathway editor, which is pointer-only today; a worker if ensembles or models
-multiply enough to make generation janky.
-
----
+Sequencing note: this lands better after item 1, because three maps at once
+makes zoom and readable discrete colours matter considerably more than one map
+did.
 
 ## When the METEOR PRs merge
 
@@ -317,20 +217,15 @@ case this is not a browser feature.
 
 ## Suggested order
 
-1 → 3 (start training early) → 2 → 4 → 5, with the merge chores slotted in
-whenever the PRs land.
+Items 1, 2 and 3 above, in that order, with the merge chores slotted in
+whenever METEOR #104, #102 and #101 land.
 
-The argument: custom regions and maps are the thing you asked for and are far
-cheaper than anyone thought; multi-model is the long pole and the credibility
-fix; CMIP7 is the most distinctive feature and is cheap to build, but cannot be
-*published* until its embargo lifts — so it is worth building behind that, not
-waiting on it.
+The ordering has one real dependency in it: **item 3 wants item 1 done first.**
+Three maps at once — two scenarios and their difference — makes zoom and
+legible discrete colours matter far more than a single global map did, and
+retrofitting a pan gesture around an existing drag-to-draw is worse than
+choosing the split once.
 
-Three uncertainties would then be separable, which for an assessment tool is a
-better story than any one of them alone:
-
-| Source | Where it comes from |
-|---|---|
-| Internal variability | METEOR's ensemble, today |
-| Model and pattern uncertainty | Multi-model bundles (item 3) |
-| Forcing and climate sensitivity | MAGICC 33rd/67th percentiles (item 2) |
+Item 2 sits in the middle because its long pole is training time on your
+machine, which runs while the client work for item 3 proceeds, and because the
+storage decision it forces is one the project needs settled regardless.
