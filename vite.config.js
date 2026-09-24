@@ -37,6 +37,11 @@ export default defineConfig({
   // GitHub Pages serves this project at /<repository>/.
   base: process.env.PAGES_BASE ?? '/meteor-view/',
   plugins: [copyBundles()],
+  // The ensemble worker imports the kernel lazily, as the page does; only ES
+  // module workers can split code that way.
+  worker: {
+    format: 'es',
+  },
   build: {
     target: 'es2022',
   },

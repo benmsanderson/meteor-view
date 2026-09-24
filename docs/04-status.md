@@ -159,9 +159,19 @@ projection uncertainty honestly.
 
 Built as multi-selection with a two-scenario map comparison; see
 [`03-roadmap.md`](03-roadmap.md#3-compare-two-scenarios-at-once) for what was
-built against the plan. Several scenarios at 100 realizations take a few
-seconds on the main thread, the first place a worker might start to earn its
-keep.
+built against the plan.
+
+**Performance, profiled 2026-09-24.** 87% of generation time was the VAR
+noise recursion, and three-quarters of that was spin-up: every run simulated
+from 1750 to reach a 2015 window, when every model's VAR forgets its starting
+state within about 25 years. The client now measures each bundle's spin-up
+(`spinUpMonths` in `kernel.js`) and starts there, and generation runs in a
+pool of up to four Web Workers (`runner.js`). Six scenarios at 100
+realizations went from about 21 s with the page frozen to 2.3 s with the
+longest main-thread block at 71 ms. Results are bit-identical between worker
+and page; seeds still reproduce, but draw different realizations than before
+the spin-up change, so links made earlier show a different sample of the same
+ensemble.
 
 ## Things that would surprise you
 

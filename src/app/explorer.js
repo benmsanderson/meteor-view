@@ -6,12 +6,15 @@
  * pieces of that bookkeeping are not in the schema and were read out of
  * METEOR's own generation path:
  *
- * 1. **PCs are simulated over the full trajectory and then sliced** to the
- *    output window. METEOR generates from the pattern model's base year so the
- *    VAR spin-up resolves before the window opens, then slices on a January
- *    boundary. A client that instead starts the recursion at the window would
- *    open with PCs pinned at zero and ramping up out of nothing — plausible
- *    looking, and wrong for the first decades.
+ * 1. **PCs are spun up before the window and then sliced** to it. METEOR
+ *    generates from the pattern model's base year so the VAR spin-up
+ *    resolves before the window opens, then slices on a January boundary. A
+ *    client that instead starts the recursion at the window would open with
+ *    PCs pinned at zero and ramping up out of nothing — plausible looking,
+ *    and wrong for the first decades. This client spins up for as long as the
+ *    bundle's VAR measurably needs (see `spinUpMonths`) rather than from
+ *    1750, which is the same process in distribution at a quarter of the
+ *    cost.
  *
  * 2. **`t_glob` is the global mean of the variable's own forced response**, not
  *    of temperature. The noise model for a variable is trained against that
@@ -27,6 +30,7 @@ import {
   forcedResponse,
   generateEnsemble,
   scaleToWarmingPathway,
+  spinUpMonths,
 } from '../lib/kernel.js';
 import { normalGenerator } from '../lib/stats.js';
 
@@ -398,11 +402,15 @@ function generateEnsembleWindowed({
   nRealizations,
   normal,
 }) {
+  // Start the recursion only as far before the window as the VAR needs. The
+  // spin-up is a whole number of years, so the harmonics keep their phase.
+  const spinUp = Math.min(startMonth, spinUpMonths(bundle));
+  const from = startMonth - spinUp;
   const spunUp = generateEnsemble({
     bundle,
     location,
-    tGlob: tGlobFull,
-    forcedMonthly: forcedMonthlyFull,
+    tGlob: tGlobFull.subarray(from, endMonth),
+    forcedMonthly: forcedMonthlyFull.subarray(from, endMonth),
     nRealizations,
     normal,
     transform: false,
@@ -413,7 +421,7 @@ function generateEnsembleWindowed({
     anomaly: true,
   });
 
-  let windowed = spunUp.map((series) => series.slice(startMonth, endMonth));
+  let windowed = spunUp.map((series) => series.slice(spinUp));
 
   if (bundle.hasTransform) {
     // Steps 5 and 6, on the window alone.

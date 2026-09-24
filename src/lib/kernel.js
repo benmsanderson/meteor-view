@@ -169,6 +169,77 @@ export function simulateVar({
   return pcs;
 }
 
+/** Measured spin-ups, per bundle and variable, since they never change. */
+const spinUpCache = new WeakMap();
+
+/**
+ * How many months the VAR needs to forget a zero initial state.
+ *
+ * The noise process is a stationary VAR with no exogenous input, so the only
+ * thing a spin-up does is let the zeros it starts from decay. METEOR spins up
+ * from the pattern model's base year, 1750 for the shipped bundles: 3180
+ * months before a 2015 window, when every model trained so far forgets its
+ * starting state to one part in a million within about 320 (MIROC6 `tas` is
+ * the slowest). Those extra months were three-quarters of the cost of every
+ * run.
+ *
+ * Measured rather than assumed, so a model with longer memory gets a longer
+ * spin-up: iterate the noise-free recursion from a generic starting state and
+ * count the months until it has shrunk below `tolerance` of where it started.
+ * 1e-8 rather than 1e-6 because a generic starting state is not aligned with
+ * the slowest mode, so the count runs a little short of the eigenvalue bound;
+ * the margin costs a few dozen months against the 3180 it replaces.
+ * Rounded up to whole years so the seasonal harmonics keep their phase.
+ *
+ * Seeds still reproduce: a given seed and spin-up always draw the same
+ * ensemble. What changes is *which* ensemble a seed draws, compared with a
+ * client that spun up from 1750.
+ *
+ * @param {import('./bundle.js').Bundle} bundle
+ * @param {number} [tolerance] relative size of the initial state left over
+ * @returns {number} months, a multiple of 12, or Infinity if the process does
+ *   not settle within a century, in which case the caller should use the
+ *   whole trajectory
+ */
+export function spinUpMonths(bundle, tolerance = 1e-8) {
+  if (spinUpCache.has(bundle)) return spinUpCache.get(bundle);
+
+  const nModes = bundle.nModes;
+  const lag = bundle.lagOrder;
+  const A = bundle.get('varx_A');
+
+  // A fixed, generic starting state across every lag: deterministic, and
+  // with no special alignment to any mode of the process.
+  let state = Array.from({ length: lag }, (_, l) =>
+    Float64Array.from({ length: nModes }, (_, k) => Math.sin(1 + 7.3 * k + 3.1 * l))
+  );
+  const norm = (vectors) => Math.hypot(...vectors.flatMap((v) => [...v]));
+  const initial = norm(state);
+
+  const limit = 100 * MONTHS;
+  let months = limit + 1;
+  for (let t = 1; t <= limit; t += 1) {
+    const next = new Float64Array(nModes);
+    for (let i = 0; i < nModes; i += 1) {
+      let acc = 0;
+      for (let l = 0; l < lag; l += 1) {
+        const lagBase = (l * nModes + i) * nModes;
+        for (let j = 0; j < nModes; j += 1) acc += A[lagBase + j] * state[l][j];
+      }
+      next[i] = acc;
+    }
+    state = [next, ...state.slice(0, lag - 1)];
+    if (norm(state) < tolerance * initial) {
+      months = t;
+      break;
+    }
+  }
+
+  const result = months > limit ? Infinity : Math.ceil(months / MONTHS) * MONTHS;
+  spinUpCache.set(bundle, result);
+  return result;
+}
+
 /**
  * The step-response kernel for one experiment: `s_i * (1 - exp(-t / tau_i))`.
  *

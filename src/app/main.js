@@ -1,9 +1,10 @@
 /**
  * Wiring: controls to kernel to canvas.
  *
- * Everything runs on the main thread. A 100-member, 86-year run is a few
- * hundred milliseconds, which is quick enough that a worker would cost more in
- * complexity than it saves in responsiveness.
+ * Ensemble generation runs in a small pool of Web Workers (`runner.js`):
+ * about 10 ms per realization, so a six-scenario comparison at 100
+ * realizations would otherwise freeze the page for seconds. Everything else —
+ * maps, the context figure, drawing — is quick and stays on the main thread.
  */
 
 import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
@@ -20,6 +21,7 @@ import {
   valueAt,
 } from './map.js';
 import { Explorer, WINDOW, availableModels } from './explorer.js';
+import { EnsembleRunner } from './runner.js';
 import { placeLabel } from './places.js';
 import {
   groupScenarios,
@@ -113,6 +115,10 @@ const elements = {
 let explorer;
 /** Where the data files are served from. */
 let dataBase;
+/** Generates ensembles off the main thread. */
+let runner;
+/** Guards against an older, slower run landing after a newer one. */
+let runRequest = 0;
 let lastRun = null;
 /** Part of the shareable state: the same seed redraws the same realizations. */
 let seed = DEFAULT_SEED;
@@ -267,10 +273,11 @@ function readSelection(changed) {
  * 11 MB noise artifact, which is not loaded. So a drawn region shows the signal
  * without the spread, and says so rather than implying the spread is zero.
  */
-function run() {
+async function run() {
   if (!explorer) return;
+  const request = ++runRequest;
   if (customBox) {
-    runCustomRegion();
+    runCustomRegion(request);
     return;
   }
 
@@ -278,24 +285,43 @@ function run() {
   const spec = VARIABLES[variable];
   const location = elements.location.value;
   const nRealizations = Number(elements.realizations.value);
+  const scenarios = [...selection];
+  const model = explorer.model;
 
   const started = performance.now();
-  const runs = [];
-  let years;
-  try {
-    for (const scenario of selection) {
-      const result = explorer.run({ variable, location, scenario, nRealizations, seed });
-      years = result.years;
-      runs.push({
-        scenario,
-        series: result.series.map((series) => Float64Array.from(series, spec.convert)),
-      });
+  let done = 0;
+  const progress = () => {
+    if (scenarios.length > 1 && request === runRequest) {
+      setStatus(`Generating ${done} of ${scenarios.length} scenarios…`);
     }
+  };
+  progress();
+
+  let results;
+  try {
+    // Every scenario at once: the pool spreads them over its workers.
+    results = await Promise.all(
+      scenarios.map((scenario) =>
+        runner.run(model, { variable, location, scenario, nRealizations, seed }).then((r) => {
+          done += 1;
+          progress();
+          return r;
+        })
+      )
+    );
   } catch (error) {
-    setStatus(error.message, 'error');
+    if (request === runRequest) setStatus(error.message, 'error');
     return;
   }
+  // Something newer was asked for while this ran; its result is what to show.
+  if (request !== runRequest) return;
   const elapsed = performance.now() - started;
+
+  const years = results[0].years;
+  const runs = results.map((result, i) => ({
+    scenario: scenarios[i],
+    series: result.series.map((series) => Float64Array.from(series, spec.convert)),
+  }));
 
   lastRun = { years, runs, variable, location };
   syncUrl();
@@ -306,7 +332,7 @@ function run() {
 
   setStatus(
     `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
-      `${placeLabel(location)} under ${listScenarios(selection)}, ` +
+      `${placeLabel(location)} under ${listScenarios(scenarios)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
 }
@@ -319,7 +345,7 @@ function listScenarios(names) {
 }
 
 /** The forced response for a drawn region, with no ensemble behind it. */
-async function runCustomRegion() {
+async function runCustomRegion(request) {
   const variable = elements.variable.value;
   const spec = VARIABLES[variable];
   const { boxRegion } = await import('../lib/pattern.js');
@@ -337,9 +363,10 @@ async function runCustomRegion() {
       runs.push({ scenario, series: [Float64Array.from(result.forced, spec.convert)] });
     }
   } catch (error) {
-    setStatus(error.message, 'error');
+    if (request === runRequest) setStatus(error.message, 'error');
     return;
   }
+  if (request !== runRequest || !customBox) return;
 
   lastRun = { years, runs, variable, location: describeBox(customBox), forcedOnly: true };
   syncUrl();
@@ -1192,6 +1219,17 @@ async function start() {
   // relative URL resolves differently in each case.
   dataBase = `${import.meta.env.BASE_URL}data/`;
   const models = await availableModels(dataBase);
+  runner = new EnsembleRunner({
+    loadExplorer: (model) => Explorer.load(dataBase, model),
+    createWorker: () => {
+      // Written out in full so Vite recognises and bundles the worker.
+      const worker = new Worker(new URL('./ensemble-worker.js', import.meta.url), {
+        type: 'module',
+      });
+      worker.postMessage({ type: 'init', base: new URL(dataBase, window.location.href).href });
+      return worker;
+    },
+  });
 
   // The model decides which bundles to fetch, so it is read from the link
   // before anything else; the rest is validated once the bundles say what
