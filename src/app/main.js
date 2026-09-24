@@ -18,7 +18,7 @@ import {
   regionAt,
   toLatLon,
 } from './map.js';
-import { Explorer, WINDOW } from './explorer.js';
+import { Explorer, WINDOW, availableModels } from './explorer.js';
 import { placeLabel } from './places.js';
 import {
   groupScenarios,
@@ -51,6 +51,7 @@ const VARIABLES = {
 
 const elements = {
   controls: document.getElementById('controls'),
+  model: document.getElementById('model'),
   variable: document.getElementById('variable'),
   location: document.getElementById('location'),
   scenario: document.getElementById('scenario'),
@@ -84,6 +85,8 @@ const elements = {
 
 /** @type {Explorer} */
 let explorer;
+/** Where the data files are served from. */
+let dataBase;
 let lastRun = null;
 /** Part of the shareable state: the same seed redraws the same realizations. */
 let seed = DEFAULT_SEED;
@@ -310,6 +313,7 @@ function drawSeasonalPanel() {
 /** The current control state, as the URL records it. */
 function currentState() {
   return {
+    model: elements.model.value,
     variable: elements.variable.value,
     location: elements.location.value,
     scenario: elements.scenario.value,
@@ -332,6 +336,7 @@ function syncUrl() {
 
 /** Apply state parsed from the URL to the controls. */
 function applyState(state) {
+  elements.model.value = state.model;
   elements.variable.value = state.variable;
   if (explorer.locations.includes(state.location)) elements.location.value = state.location;
   if (explorer.scenarios.includes(state.scenario)) elements.scenario.value = state.scenario;
@@ -769,8 +774,45 @@ function redraw() {
   drawSeasonalPanel();
 }
 
+/**
+ * Load another model's bundles and redraw everything from them.
+ *
+ * Locations and scenarios are the same for every model the exporter writes,
+ * but the grid is not, so everything cached from the previous model's pattern
+ * artifact — the climatology, the drawn map — goes with it. Outlines,
+ * coastlines and emissions do not depend on the model and are carried over.
+ */
+async function switchModel(model) {
+  const previous = explorer;
+  elements.model.disabled = true;
+  setStatus(`Loading ${model}…`);
+  try {
+    explorer = await Explorer.load(dataBase, model);
+  } catch (error) {
+    setStatus(`Could not load ${model}: ${error.message}`, 'error');
+    elements.model.value = previous.model;
+    elements.model.disabled = false;
+    return;
+  }
+  explorer.regionOutlines = previous.regionOutlines;
+  explorer.coastlineRings = previous.coastlineRings;
+  explorer.scenarioEmissions = previous.scenarioEmissions;
+  prClimatology = null;
+  lastMap = null;
+  elements.model.disabled = false;
+
+  showProvenance();
+  run();
+  renderContext();
+  renderMap();
+}
+
 function attachControls() {
   elements.controls.addEventListener('change', (event) => {
+    if (event.target === elements.model) {
+      switchModel(elements.model.value);
+      return;
+    }
     // Choosing a listed place supersedes a region drawn on the map.
     if (event.target === elements.location && customBox) {
       customBox = null;
@@ -797,17 +839,46 @@ function attachControls() {
   observer.observe(elements.context);
 }
 
+/** Which model, trained how, from which version of METEOR. */
+function showProvenance() {
+  const bundle = explorer.bundles.tas;
+  elements.provenance.textContent =
+    `Bundle: ${bundle.attrs.cmip6_model}, trained on ${bundle.attrs.training_scenario}, ` +
+    `METEOR ${bundle.attrs.meteor_version}, schema v${bundle.schemaVersion}. ` +
+    `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
+}
+
+/** One entry per model with artifacts on the site. */
+function populateModels(models) {
+  for (const model of models) {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    elements.model.append(option);
+  }
+  // A single model is not a choice, so do not present it as one.
+  elements.model.closest('.control').hidden = models.length < 2;
+}
+
 async function start() {
+  // An absolute path from the configured base, rather than a relative one:
+  // on Pages the page may be served with or without a trailing slash, and a
+  // relative URL resolves differently in each case.
+  dataBase = `${import.meta.env.BASE_URL}data/`;
+  const models = await availableModels(dataBase);
+
+  // The model decides which bundles to fetch, so it is read from the link
+  // before anything else; the rest is validated once the bundles say what
+  // locations and scenarios exist.
+  const { model } = fromQuery(window.location.search, { models });
   try {
-    // An absolute path from the configured base, rather than a relative one:
-    // on Pages the page may be served with or without a trailing slash, and a
-    // relative URL resolves differently in each case.
-    explorer = await Explorer.load(`${import.meta.env.BASE_URL}data/`);
+    explorer = await Explorer.load(dataBase, model);
   } catch (error) {
     setStatus(`Could not load the emulator bundles: ${error.message}`, 'error');
     return;
   }
 
+  populateModels(models);
   populateControls();
 
   // Apply the shared link before the first run, so a link opens on what it
@@ -816,6 +887,7 @@ async function start() {
     fromQuery(window.location.search, {
       locations: explorer.locations,
       scenarios: explorer.scenarios,
+      models,
     })
   );
 
@@ -825,11 +897,7 @@ async function start() {
   elements.contextSeries.addEventListener('change', renderContext);
   elements.mapPanel.dataset.map = 'idle';
 
-  const bundle = explorer.bundles.tas;
-  elements.provenance.textContent =
-    `Bundle: ${bundle.attrs.cmip6_model}, trained on ${bundle.attrs.training_scenario}, ` +
-    `METEOR ${bundle.attrs.meteor_version}, schema v${bundle.schemaVersion}. ` +
-    `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
+  showProvenance();
 
   run();
   renderContext();

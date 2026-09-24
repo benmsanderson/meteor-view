@@ -1,0 +1,6 @@
+{
+  "models": [
+    "NorESM2-MM",
+    "CanESM5"
+  ]
+}

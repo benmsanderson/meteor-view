@@ -272,6 +272,27 @@ def export_pr_climatology(field, path):
     write_if_changed(dataset, path)
 
 
+def register_model(out, model):
+    """Add a model to the manifest the client builds its model menu from.
+
+    The default model first, as the one a link without ``m=`` means; the rest
+    alphabetically, so the menu does not reorder with training order.
+    """
+    path = os.path.join(out, "models_v1.json")
+    models = []
+    if os.path.exists(path):
+        with open(path) as f:
+            models = json.load(f)["models"]
+    if model in models:
+        return
+    default = "NorESM2-MM"
+    models = sorted(set(models) | {model}, key=lambda m: (m != default, m.lower()))
+    with open(path, "w") as f:
+        json.dump({"models": models}, f, indent=2)
+        f.write("\n")
+    print(f"registered {model} in {path}")
+
+
 def locations():
     locs = ["global"]
     locs += [f"regional:{r.abbrev}" for r in regionmask.defined_regions.ar6.all]
@@ -390,6 +411,9 @@ def main():
     emissions_path = os.path.join(OUT, "scenario_emissions_v1.json")
     export_plot_emissions(scenarios, emissions_path)
     print(f"wrote {emissions_path}  {os.path.getsize(emissions_path)/1024:.0f} KB")
+
+    # Last, so a model appears in the menu only once all its files exist.
+    register_model(OUT, MODEL)
 
 
 if __name__ == "__main__":

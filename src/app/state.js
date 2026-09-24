@@ -10,12 +10,16 @@
  * Defaults are omitted, so the common case stays short and readable:
  *
  *     ?v=pr&loc=regional%3ASAS&scn=ssp370&n=50
+ *
+ * The model is part of that state too: the same scenario under a different
+ * model is a different claim, so a link that dropped it would be ambiguous.
  */
 
 /** Fixed default seed, so a link without one is still reproducible. */
 export const DEFAULT_SEED = 20260921;
 
 export const DEFAULTS = {
+  model: 'NorESM2-MM',
   variable: 'tas',
   location: 'global',
   scenario: 'ssp245',
@@ -31,6 +35,7 @@ export const DEFAULTS = {
  */
 export function toQuery(state) {
   const params = new URLSearchParams();
+  if (state.model !== DEFAULTS.model) params.set('m', state.model);
   if (state.variable !== DEFAULTS.variable) params.set('v', state.variable);
   if (state.location !== DEFAULTS.location) params.set('loc', state.location);
   if (state.scenario !== DEFAULTS.scenario) params.set('scn', state.scenario);
@@ -54,11 +59,15 @@ export function toQuery(state) {
  * @param {object} options
  * @param {string[]} options.locations valid location specifiers
  * @param {string[]} options.scenarios valid scenario names
+ * @param {string[]} [options.models] models with artifacts on the site
  * @returns {object} state
  */
-export function fromQuery(search, { locations = [], scenarios = [] } = {}) {
+export function fromQuery(search, { locations = [], scenarios = [], models = [] } = {}) {
   const params = new URLSearchParams(search);
   const state = { ...DEFAULTS };
+
+  const model = params.get('m');
+  if (model && models.includes(model)) state.model = model;
 
   const variable = params.get('v');
   if (variable === 'tas' || variable === 'pr') state.variable = variable;

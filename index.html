@@ -28,6 +28,11 @@
 
     <main>
       <form class="controls" id="controls">
+        <div class="control" hidden>
+          <label for="model">Model</label>
+          <select id="model"></select>
+        </div>
+
         <div class="control">
           <label for="variable">Variable</label>
           <select id="variable">
@@ -164,9 +169,10 @@
           difference.
         </p>
         <p>
-          <strong>What it is not.</strong> One model, NorESM2-MM, so the spread you
-          see is internal variability — not model uncertainty, and not the full
-          uncertainty in a projection. Maps show the forced response only;
+          <strong>What it is not.</strong> One model at a time, so the spread you
+          see is that model's internal variability — not model uncertainty, and
+          not the full uncertainty in a projection. Switching models shows how
+          much they disagree; the band around any one of them does not. Maps show the forced response only;
           variability at a region you draw yourself would need a further 11 MB of
           EOF maps that this page does not load. Custom <em>emissions</em> need a
           simple climate model, which is not here either, so the scenarios on offer

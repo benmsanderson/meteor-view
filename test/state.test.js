@@ -14,6 +14,7 @@ import { groupScenarios, scenarioFamily, scenarioLabel } from '../src/app/scenar
 const CONTEXT = {
   locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
   scenarios: ['ssp126', 'ssp245', 'ssp585'],
+  models: ['NorESM2-MM', 'CanESM5'],
 };
 
 describe('URL state', () => {
@@ -23,6 +24,7 @@ describe('URL state', () => {
 
   it('round-trips a full state', () => {
     const state = {
+      model: 'CanESM5',
       variable: 'pr',
       location: 'regional:NEU',
       scenario: 'ssp585',
@@ -41,8 +43,24 @@ describe('URL state', () => {
   });
 
   it('falls back per field rather than failing whole', () => {
-    const parsed = fromQuery('?v=nonsense&loc=regional:NOWHERE&scn=ssp999&n=abc', CONTEXT);
+    const parsed = fromQuery(
+      '?m=HadGEM9&v=nonsense&loc=regional:NOWHERE&scn=ssp999&n=abc',
+      CONTEXT
+    );
     expect(parsed).toEqual(DEFAULTS);
+  });
+
+  it('names the model only when it is not the default', () => {
+    expect(toQuery({ ...DEFAULTS, model: 'CanESM5' })).toBe('?m=CanESM5');
+    expect(toQuery({ ...DEFAULTS, model: DEFAULTS.model })).toBe('');
+  });
+
+  it('accepts only models the site carries', () => {
+    // The model decides which files are fetched, so an unknown one must not
+    // reach a URL.
+    expect(fromQuery('?m=CanESM5', CONTEXT).model).toBe('CanESM5');
+    expect(fromQuery('?m=../../etc', CONTEXT).model).toBe(DEFAULTS.model);
+    expect(fromQuery('?m=CanESM5', { ...CONTEXT, models: [] }).model).toBe(DEFAULTS.model);
   });
 
   it('caps the realization count a link can demand', () => {
