@@ -25,7 +25,7 @@ describe('bundle', () => {
     expect(tas.nModes).toBe(40);
     expect(tas.lagOrder).toBe(2);
     expect(tas.locations.length).toBe(67);
-    expect(tas.scenarios.length).toBe(8);
+    expect(tas.scenarios.length).toBe(15);
   });
 
   it('covers global, the AR6 regions and points', () => {

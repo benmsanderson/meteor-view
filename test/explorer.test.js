@@ -290,7 +290,7 @@ describe('explorer bookkeeping', () => {
   it('offers every bundled scenario', () => {
     expect(explorer.scenarios).toContain('ssp126');
     expect(explorer.scenarios).toContain('ssp585');
-    expect(explorer.scenarios.length).toBe(8);
+    expect(explorer.scenarios.length).toBe(15);
   });
 });
 

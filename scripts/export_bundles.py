@@ -30,7 +30,10 @@ import numpy as np
 import regionmask
 import xarray as xr
 
+from ciceroscm import input_handler
+
 from meteor.meteor_interface import MeteorInterface
+from meteor.scm_input_lib import load_emissions_concentrations_from_name
 from meteor.portable_artifact import export_pattern_scaling
 from meteor.timeseries_bundle import (
     export_golden_fixture,
@@ -43,7 +46,22 @@ CACHE = "/Users/bensan/GitHub/METEOR/cache"
 OUT = sys.argv[1] if len(sys.argv) > 1 else "."
 MODEL = "NorESM2-MM"
 WINDOW = (2015, 2100)
-SCENARIOS = ["ssp119", "ssp126", "ssp245", "ssp370", "ssp434", "ssp460", "ssp534-over", "ssp585"]
+#: CMIP6 SSPs, shipped with METEOR.
+SSP_SCENARIOS = [
+    "ssp119", "ssp126", "ssp245", "ssp370", "ssp434", "ssp460", "ssp534-over", "ssp585",
+]
+
+#: CMIP7 ScenarioMIP markers, in ascending forcing order. Their emissions are
+#: not shipped with METEOR and are not in this repository: run
+#: scripts/convert_scenariomip.py over your own copy of the release first. If
+#: the converted files are absent the export simply omits them.
+CMIP7_SCENARIOS = [
+    "cmip7-very-low", "cmip7-low", "cmip7-low-to-negative", "cmip7-medium-to-low",
+    "cmip7-medium", "cmip7-high-to-low", "cmip7-high",
+]
+
+#: Where convert_scenariomip.py wrote its output. Gitignored.
+SCENARIO_WORK = "scenario-work"
 
 CITIES = {
     "London": (51.5, -0.1),
@@ -57,6 +75,41 @@ CITIES = {
 }
 
 
+def scenario_inputs():
+    """
+    Emissions and concentrations for every scenario, as a name -> pair mapping.
+
+    Passed to the exporter wholesale rather than as a list of names, because
+    the CMIP7 markers have no name METEOR could resolve: their emissions are
+    third-party data it does not ship. Loading the SSPs here too keeps one code
+    path rather than two.
+
+    Omits the CMIP7 markers, with a warning, when the converted files are not
+    present -- an export without them is still a valid bundle.
+    """
+    inputs = {name: load_emissions_concentrations_from_name(name) for name in SSP_SCENARIOS}
+
+    handler = input_handler.InputHandler({})
+    missing = []
+    for name in CMIP7_SCENARIOS:
+        emissions = os.path.join(SCENARIO_WORK, f"{name}_em_RCMIP.txt")
+        concentrations = os.path.join(SCENARIO_WORK, f"{name}_conc_RCMIP.txt")
+        if not (os.path.exists(emissions) and os.path.exists(concentrations)):
+            missing.append(name)
+            continue
+        inputs[name] = (
+            handler.read_emissions(emissions),
+            input_handler.read_inputfile(concentrations),
+        )
+
+    if missing:
+        print(
+            f"  note: {len(missing)} CMIP7 scenarios omitted -- run "
+            f"scripts/convert_scenariomip.py to include them"
+        )
+    return inputs
+
+
 def locations():
     locs = ["global"]
     locs += [f"regional:{r.abbrev}" for r in regionmask.defined_regions.ar6.all]
@@ -67,7 +120,11 @@ def locations():
 def main():
     os.makedirs(OUT, exist_ok=True)
     locs = locations()
-    print(f"{len(locs)} locations, {len(SCENARIOS)} scenarios")
+    print(f"{len(locs)} locations")
+
+    scenarios = scenario_inputs()
+    print(f"{len(scenarios)} scenarios: {sum(1 for k in scenarios if not k.startswith('cmip7'))} SSP, "
+          f"{sum(1 for k in scenarios if k.startswith('cmip7'))} CMIP7")
 
     emu = MeteorInterface(MODEL, ["tas", "pr"], cache_dir=CACHE)
     emu.train(verbose=True)
@@ -91,7 +148,7 @@ def main():
             training_scenario="ssp245",
             transform_reference=ref,
             transform_window=WINDOW if ref is not None else None,
-            scenarios=SCENARIOS,
+            scenarios=scenarios,
             source_url="https://github.com/benmsanderson/meteor-view",
         )
         print(f"wrote {path}  {os.path.getsize(path)/1024:.1f} KB")
@@ -112,7 +169,7 @@ def main():
                 training_scenario="ssp245",
                 transform_reference=ref,
                 transform_window=WINDOW if ref is not None else None,
-                scenarios=["ssp245"],
+                scenarios={"ssp245": scenarios["ssp245"]},
                 source_url="https://github.com/benmsanderson/meteor-view",
             )
             sub_bundle = load_timeseries_bundle(sub)

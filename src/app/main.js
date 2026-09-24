@@ -11,6 +11,7 @@ import { chartToPng, download, downloadText, filenameStem, toCsv } from './expor
 import { drawColourBar, drawMap, regionAt, toLatLon } from './map.js';
 import { Explorer, WINDOW } from './explorer.js';
 import { placeLabel } from './places.js';
+import { groupScenarios, scenarioFamily, scenarioLabel } from './scenarios.js';
 import { DEFAULT_SEED, fromQuery, toQuery, toUrl } from './state.js';
 
 /** Seconds per year, for the precipitation unit conversion. */
@@ -103,12 +104,19 @@ function populateControls() {
     elements.location.append(group);
   }
 
+  // Grouped by generation, because the two are not interchangeable and the
+  // menu is the only place that can say so before a comparison is made.
   elements.scenario.replaceChildren();
-  for (const scenario of explorer.scenarios) {
-    const option = document.createElement('option');
-    option.value = scenario;
-    option.textContent = scenario.toUpperCase().replace('SSP', 'SSP');
-    elements.scenario.append(option);
+  for (const { family, names } of groupScenarios(explorer.scenarios)) {
+    const group = document.createElement('optgroup');
+    group.label = family;
+    for (const scenario of names) {
+      const option = document.createElement('option');
+      option.value = scenario;
+      option.textContent = scenarioLabel(scenario);
+      group.append(option);
+    }
+    elements.scenario.append(group);
   }
   elements.scenario.value = explorer.scenarios.includes('ssp245')
     ? 'ssp245'
@@ -168,7 +176,7 @@ function run() {
 
   setStatus(
     `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
-      `${placeLabel(location)} under ${elements.scenario.value.toUpperCase()}, ` +
+      `${placeLabel(location)} under ${scenarioLabel(elements.scenario.value)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
 }
@@ -357,7 +365,7 @@ function attachActions() {
       title: `${spec.label} at ${placeLabel(lastRun.location)}`,
       subtitle:
         `${explorer.bundles[lastRun.variable].attrs.cmip6_model} · ` +
-        `${lastRun.scenario.toUpperCase()} · ` +
+        `${scenarioLabel(lastRun.scenario)} · ` +
         `${lastRun.converted.length} realizations · ${WINDOW.start}–${WINDOW.end}`,
     });
     download(`${stem()}.png`, blob);

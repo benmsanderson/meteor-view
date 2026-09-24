@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 
 import { DEFAULTS, fromQuery, toQuery } from '../src/app/state.js';
 import { filenameStem, toCsv } from '../src/app/export.js';
+import { groupScenarios, scenarioFamily, scenarioLabel } from '../src/app/scenarios.js';
 
 const CONTEXT = {
   locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
@@ -140,5 +141,43 @@ describe('seed handling', () => {
     expect(fromQuery(toQuery(state), CONTEXT).seed).toBe(0);
     const big = { ...DEFAULTS, seed: 4294967295 };
     expect(fromQuery(toQuery(big), CONTEXT).seed).toBe(4294967295);
+  });
+});
+
+describe('scenario families', () => {
+  const ALL = [
+    'ssp119', 'ssp126', 'ssp245', 'ssp370', 'ssp434', 'ssp460', 'ssp534-over',
+    'ssp585', 'cmip7-very-low', 'cmip7-low', 'cmip7-low-to-negative',
+    'cmip7-medium-to-low', 'cmip7-medium', 'cmip7-high-to-low', 'cmip7-high',
+  ];
+
+  it('separates the two generations', () => {
+    const groups = groupScenarios(ALL);
+    expect(groups.map((g) => g.family)).toEqual(['CMIP7 ScenarioMIP', 'CMIP6 SSPs']);
+    expect(groups[0].names).toHaveLength(7);
+    expect(groups[1].names).toHaveLength(8);
+  });
+
+  it('leads with CMIP7, which is the reason to reach for this tool', () => {
+    expect(groupScenarios(ALL)[0].family).toBe('CMIP7 ScenarioMIP');
+  });
+
+  it('orders by severity rather than alphabetically', () => {
+    // The bundle lists scenarios alphabetically, which would put High first.
+    const cmip7 = groupScenarios(ALL)[0].names;
+    expect(cmip7[0]).toBe('cmip7-very-low');
+    expect(cmip7[cmip7.length - 1]).toBe('cmip7-high');
+  });
+
+  it('gives readable names', () => {
+    expect(scenarioLabel('ssp534-over')).toBe('SSP5-3.4-OS');
+    expect(scenarioLabel('cmip7-medium-to-low')).toBe('Medium to Low (SSP2)');
+    expect(scenarioFamily('cmip7-high')).toBe('CMIP7 ScenarioMIP');
+    expect(scenarioFamily('ssp245')).toBe('CMIP6 SSPs');
+  });
+
+  it('falls back for a scenario it has no label for', () => {
+    expect(scenarioLabel('ssp999')).toBe('SSP999');
+    expect(groupScenarios(['ssp999'])[0].names).toEqual(['ssp999']);
   });
 });

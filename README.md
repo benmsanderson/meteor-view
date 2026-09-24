@@ -162,6 +162,12 @@ interface until then — is the most important thing left.
 - **Precipitation is 2015–2100 only**, the window its distribution transform was
   fitted for. Another window needs a re-export on the METEOR side.
 - **One model.** NorESM2-MM, trained on ssp245.
+- **Two scenario generations, not interchangeable.** The eight CMIP6 SSPs and
+  the seven CMIP7 ScenarioMIP markers were built years apart against different
+  vintages of history. Both are driven through the same simple climate model
+  here, which is what makes comparing them meaningful; see
+  [`data/README.md`](data/README.md) for how the CMIP7 forcing is derived and
+  why the emissions behind it are not in this repository.
 
 ## Data provenance
 

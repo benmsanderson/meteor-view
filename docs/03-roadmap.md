@@ -85,7 +85,20 @@ Then decide whether the 11.3 MB noise tier is worth an opt-in button for
 variability at a custom location. My guess is yes, for this audience, and that
 it should be an explicit click rather than something the page does on load.
 
-### 2. CMIP7 scenarios — embargo lifted, redistribution is the constraint
+### 2. CMIP7 scenarios — done (Route C)
+
+**Shipped.** All seven markers are in the bundles, driven through METEOR's own
+CICERO-SCM from the release's harmonized emissions — Route C, the consistent
+one. `scripts/convert_scenariomip.py` converts a copy you download yourself;
+`data/README.md` records where the redistribution line falls. METEOR#101 gained
+the ability to accept supplied emissions so the forcing could be bundled
+without the emissions ever being.
+
+Resulting global response at 2100 (NorESM2-MM, K): very-low 1.30, low 1.47,
+low-to-negative 1.37 (it peaks at 1.49 in 2050 and declines — net-negative
+emissions doing what they should), medium-to-low 1.97, high-to-low 2.31,
+medium 2.59, high 2.93. These run cooler than MAGICC's assessed GSAT for the
+same scenarios, which is NorESM2-MM's sensitivity rather than an error.
 
 Source: **ScenarioMIP-CMIP7 IAM quantification**, `10.5281/zenodo.19825038`,
 v0.2. Examined 2026-09-23; the early-access embargo has since lifted.
