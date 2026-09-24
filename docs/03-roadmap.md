@@ -76,29 +76,51 @@ scenario-context figure. Details are below under their original entries.
 
 ### 1. The map: coastlines, zoom and pan, discrete colours
 
-**Two to three days.** Three separate improvements to the same panel.
+**Two to three days.** Design settled 2026-09-24; what follows is decided, not
+proposed.
 
-**Coastlines.** AR6 outlines are the only geography on the map today, and they
-are administrative boxes rather than land, so the eye has nothing familiar to
-anchor on. `regionmask.defined_regions.natural_earth_v5_0_0.land_110` supplies
-land polygons — the same route the AR6 outlines already take, no new
-dependency, and Natural Earth is public domain. Measured: **122 KB** of raw
-GeoJSON simplified at 0.2°, 70 KB at 0.5°. At a grid of roughly 1° the coarser
-one loses nothing physical but looks ragged, so 0.2° is probably right; it
-loads once, alongside a 2 MB artifact, so the difference is immaterial.
+**Coastlines.** `regionmask.defined_regions.natural_earth_v5_0_0.land_110`,
+simplified at **0.2°** — measured at 122 KB of GeoJSON, against 70 KB at 0.5°
+which looks ragged. Same export route as the AR6 outlines, no new dependency,
+Natural Earth is public domain.
 
-**Zoom and pan.** The interesting regions are small and the map is global.
-This touches more than it looks: every coordinate transform in `map.js`, the
-click-to-select hit test, and the drag-to-draw gesture, which currently owns
-the same mouse button panning would want. Decide the gesture split first —
-probably drag to pan, shift-drag or a mode toggle to define a region — because
-retrofitting that is worse than choosing it.
+**Gestures: mode buttons, with a modifier for experts.** Two controls on the
+map, pan and select, wheel to zoom, and shift-drag doing whichever the active
+mode is not. Chosen over the web-map convention (drag pans, shift-drag draws)
+because drawing a region is a headline feature here and would become invisible,
+and because modifier-only designs are poor on touch.
 
-**Discrete colours.** A continuous ramp reads as a smooth field and invites
-false precision about values between contours. Classed colours — nine or eleven
-bins over a symmetric range, with the bin edges shown on the colour bar — is
-both the IPCC convention and easier to read a number off. Cheap: the change is
-confined to `colourScale` in `map.js` and the bar it feeds.
+```
+[ pan ] [ select ]              scroll to zoom
+select mode:  drag = draw region,  shift-drag = pan
+pan mode:     drag = pan,          shift-drag = draw
+```
+
+**Fixed colour classes, from the AR7 colormaps.** Eleven classes sampled from
+the IPCC AR7 WGI diverging colormaps — the same source as the published
+figures, so a map from here sits beside them:
+
+| | |
+|---|---|
+| Temperature (`temp_div`) | `#053061` … `#f9f8f8` … `#67001f` |
+| Precipitation (`prec_div`) | `#543005` … `#f8f8f8` … `#003c30` |
+
+Bin edges are **published and fixed** — the same at every year, scenario and
+model — with out-of-range values shown by triangles on the bar. This fixes a
+real flaw rather than adding polish: the scale currently recomputes per year,
+so 2030 renders as red as 2100 and the year slider silently rescales under the
+reader. It is also the only option under which the planned difference map means
+anything.
+
+**Precipitation as percent change.** The IPCC convention for maps, and the only
+readable one: 0.2 mm/day is negligible in the tropics and transformative in a
+desert, so an absolute map mostly shows where it already rains. The timeseries
+panel stays in mm/day, which is a deliberate divergence worth a note in the UI.
+
+This needs a denominator the map tier does not currently carry: a gridded
+precipitation climatology. It is available at export time — the first-year mean
+field that `_load_transform_reference` already computes for the gamma fit — and
+costs about 220 KB at float32, fetched alongside the pattern artifact.
 
 ### 2. Other ESMs, and settle where data lives
 
