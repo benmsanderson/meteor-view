@@ -19,8 +19,23 @@ draw, 15 scenarios across two generations, forced-response maps with pan and
 zoom, shareable links, CSV and PNG export, and a scenario-context figure. 82
 tests, four layers of validation against METEOR itself. Deployed size 4.7 MB.
 
-One model: **NorESM2-MM**. That is the main gap and the reason for the training
-run below.
+**Update, later on 2026-09-24.** On this branch, not yet on the default branch
+or the live site:
+
+- **Seven models**, switchable from a Model menu and carried in links as `m=`:
+  NorESM2-MM plus the six below, all with fifteen scenarios. Golden fixtures
+  pass for all seven (133 tests). 2081–2100 warming under ssp245 runs from
+  2.1 °C (NorESM2-MM, MIROC6) to 4.1 °C (CanESM5), in the order their
+  sensitivities would predict.
+- **The live precipitation map is broken** and this branch fixes it: the build
+  never copied `pr_climatology`, so the map's denominator 404s.
+- **Deployed size is now 18 MB**, 15 MB of it pattern artifacts. That is the
+  cost of committing them until the Zenodo deposit exists.
+- **`origin/integration/meteor-view` is stale.** It predates #101's `b4cf389`,
+  which the exporter needs to pass the CMIP7 emissions in. The six new models
+  were exported from a local rebuild (`cb9f593`), which `refresh-integration.sh`
+  verified is exactly `base` plus the three PRs, but that commit is not on
+  GitHub. Run `scripts/refresh-integration.sh --push` to fix the branch.
 
 ## What is in flight
 
@@ -55,7 +70,12 @@ moves under review.
 
 ## Next steps, in order
 
-### 1. Train more models — the long pole, ready to run
+### 1. Train more models — done for six, see the update above
+
+The six models below trained in a 4-core, 15 GB cloud container in 3–7
+minutes each, with a 10.5 GB peak. That is far less than the NorESM2-MM figures
+below, because those grids are coarser. The instructions still hold for
+further models.
 
 Everything needed is in the repository. Nothing here is blocked.
 
@@ -130,9 +150,7 @@ produces no diff at all.
 
 ### 2. Make the client multi-model
 
-Training produces the data; the client still assumes one model. `NorESM2-MM`
-appears in five places under `src/`, all of them filename construction in
-`explorer.js`. The work is a model picker, then a decision about whether to
+The model picker is done. What is left is a decision about whether to
 show models individually, show across-model spread, or both — the second is
 what turns "one model's internal variability" into something that represents
 projection uncertainty honestly.

@@ -165,7 +165,10 @@ interface until then — is the most important thing left.
   exposes it.
 - **Precipitation is 2015–2100 only**, the window its distribution transform was
   fitted for. Another window needs a re-export on the METEOR side.
-- **One model.** NorESM2-MM, trained on ssp245.
+- **Seven models, one at a time.** NorESM2-MM, CanESM5, INM-CM5-0,
+  IPSL-CM6A-LR, MIROC6, MPI-ESM1-2-LR and MRI-ESM2-0, each trained on ssp245.
+  The spread shown is one model's internal variability; across-model spread
+  is not drawn yet.
 - **Two scenario generations, not interchangeable.** The eight CMIP6 SSPs and
   the seven CMIP7 ScenarioMIP markers were built years apart against different
   vintages of history. Both are driven through the same simple climate model

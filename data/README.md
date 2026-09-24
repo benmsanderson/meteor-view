@@ -25,7 +25,8 @@ quietly add another copy of each artifact to history.
 
 `meteor_*_bundle_v1.nc`, `meteor_*_pattern_v1.nc`, `meteor_*_golden_*.nc`
 
-METEOR output, derived from CMIP6 (NorESM2-MM). Small, same-origin, versioned
+METEOR output, derived from CMIP6 (the models in `models_v1.json`, which the
+exporter maintains and the client builds its model menu from). Small, same-origin, versioned
 with the client that reads them. Regenerate with `scripts/export_bundles.py`;
 `docs/03-roadmap.md` records the plan to move them to a Zenodo deposit once the
 schema settles.
