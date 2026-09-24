@@ -134,13 +134,32 @@ Validated against METEOR's own gridded prediction: maps agree to 1e-6 relative,
 and a box drawn over the Sahara lands within 10% of the AR6 region it
 approximates. Two complete maps reconstruct in about 27 ms.
 
+## Baselines
+
+Temperature, and both maps, are change from a reference period you choose:
+**1850–1900**, the pre-industrial convention warming levels are defined
+against, or **2005–2024**, recent history. Either is the model's own forced
+response averaged over the period under CMIP7 Medium, shared by every
+scenario, so the difference between two scenarios — including the B − A map
+— does not depend on the choice.
+
+The switch is also a diagnostic. The seven models warm by between 0.7 °C
+(NorESM2-MM) and 1.6 °C (CanESM5) from 1850–1900 to 2005–2024, so measuring
+from recent history removes the part of their disagreement about the future
+that is inherited from their disagreement about the past.
+
+The precipitation timeseries stays in absolute mm/day: it passes through a
+nonlinear distribution transform, so there is no clean reference-period level
+to subtract. Precipitation *maps* are percent change from the period, relative
+to that period's own precipitation.
+
 ## Sharing and taking the numbers away
 
 Every control — including the RNG seed — lives in the URL, so a view is a
 link:
 
 ```
-?v=pr&loc=regional%3ASAS&scn=ssp126,ssp370,cmip7-high&cmp=ssp126,cmip7-high&n=50
+?v=pr&loc=regional%3ASAS&scn=ssp126,ssp370,cmip7-high&cmp=ssp126,cmip7-high&n=50&ref=recent
 ```
 
 **Copy link to this view** puts that on the clipboard. Opening it reproduces

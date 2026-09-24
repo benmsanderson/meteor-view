@@ -20,7 +20,7 @@ import {
   toLatLon,
   valueAt,
 } from './map.js';
-import { Explorer, WINDOW, availableModels } from './explorer.js';
+import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
 import { placeLabel } from './places.js';
 import {
@@ -47,8 +47,10 @@ const SECONDS_PER_DAY = 86400;
 const VARIABLES = {
   tas: {
     label: 'Temperature',
-    // METEOR's timeseries output is an anomaly, not an absolute temperature.
-    yLabel: 'Temperature anomaly (°C)',
+    // METEOR's timeseries output is an anomaly, not an absolute temperature;
+    // the page expresses it as change from the chosen baseline.
+    yLabel: 'Temperature change (°C)',
+    baselined: true,
     convert: (v) => v,
     format: (v) => `${v.toFixed(1)}°`,
   },
@@ -56,6 +58,9 @@ const VARIABLES = {
     label: 'Precipitation',
     // The bundle works in kg m-2 s-1; mm/day is what anyone reading this wants.
     yLabel: 'Precipitation (mm/day)',
+    // Absolute, and through a nonlinear transform: there is no clean level in
+    // the reference period to subtract, so the timeseries stays absolute.
+    baselined: false,
     convert: (v) => v * SECONDS_PER_DAY,
     format: (v) => v.toFixed(1),
   },
@@ -72,6 +77,7 @@ const elements = {
   chartLegend: document.getElementById('chart-legend'),
   seasonalLegend: document.getElementById('seasonal-legend'),
   realizations: document.getElementById('realizations'),
+  baseline: document.getElementById('baseline'),
   chart: document.getElementById('chart'),
   copyLink: document.getElementById('copy-link'),
   downloadCsv: document.getElementById('download-csv'),
@@ -318,12 +324,17 @@ async function run() {
   const elapsed = performance.now() - started;
 
   const years = results[0].years;
+  const offset = spec.baselined
+    ? spec.convert(explorer.baselineOffset({ variable, location, baseline: elements.baseline.value }))
+    : 0;
   const runs = results.map((result, i) => ({
     scenario: scenarios[i],
-    series: result.series.map((series) => Float64Array.from(series, spec.convert)),
+    series: result.series.map((series) =>
+      subtract(Float64Array.from(series, spec.convert), offset)
+    ),
   }));
 
-  lastRun = { years, runs, variable, location };
+  lastRun = { years, runs, variable, location, baseline: baselineNote(variable) };
   syncUrl();
 
   elements.chartTitle.textContent = `${spec.label} at ${placeLabel(location)}`;
@@ -335,6 +346,26 @@ async function run() {
       `${placeLabel(location)} under ${listScenarios(scenarios)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
+}
+
+/** The y-axis label, naming the baseline when there is one. */
+function yLabel(variable) {
+  const spec = VARIABLES[variable];
+  if (!spec.baselined) return spec.yLabel;
+  return `Temperature change from ${BASELINES[elements.baseline.value].label} (°C)`;
+}
+
+/** What a run's numbers are measured from, for captions and the CSV. */
+function baselineNote(variable) {
+  if (!VARIABLES[variable].baselined) return 'absolute (no baseline)';
+  const { label } = BASELINES[elements.baseline.value];
+  return `change from ${label}, the forced-response mean under ${scenarioLabel(explorer.baselineScenario)}`;
+}
+
+/** Subtract a baseline in place, in display units. */
+function subtract(series, offset) {
+  for (let t = 0; t < series.length; t += 1) series[t] -= offset;
+  return series;
 }
 
 /** "A", "A and B", "A, B and C". */
@@ -353,14 +384,19 @@ async function runCustomRegion(request) {
   const runs = [];
   let years;
   try {
+    const mask = boxRegion(customBox);
+    const offset = spec.baselined
+      ? spec.convert(
+          await explorer.customBaselineOffset({ variable, mask, baseline: elements.baseline.value })
+        )
+      : 0;
     for (const scenario of selection) {
-      const result = await explorer.customForcedResponse({
-        variable,
-        scenario,
-        mask: boxRegion(customBox),
-      });
+      const result = await explorer.customForcedResponse({ variable, scenario, mask });
       years = result.years;
-      runs.push({ scenario, series: [Float64Array.from(result.forced, spec.convert)] });
+      runs.push({
+        scenario,
+        series: [subtract(Float64Array.from(result.forced, spec.convert), offset)],
+      });
     }
   } catch (error) {
     if (request === runRequest) setStatus(error.message, 'error');
@@ -368,7 +404,14 @@ async function runCustomRegion(request) {
   }
   if (request !== runRequest || !customBox) return;
 
-  lastRun = { years, runs, variable, location: describeBox(customBox), forcedOnly: true };
+  lastRun = {
+    years,
+    runs,
+    variable,
+    location: describeBox(customBox),
+    forcedOnly: true,
+    baseline: baselineNote(variable),
+  };
   syncUrl();
 
   elements.chartTitle.textContent = `${spec.label} over ${describeBox(customBox)}`;
@@ -394,7 +437,7 @@ function drawChart() {
       colour: selectedColour(scenario),
       series: series.map(annualMeans),
     })),
-    yLabel: spec.yLabel,
+    yLabel: yLabel(lastRun.variable),
     format: spec.format,
   });
 
@@ -497,6 +540,7 @@ function currentState() {
     scenarios: selection,
     compare,
     nRealizations: Number(elements.realizations.value),
+    baseline: elements.baseline.value,
     seed,
   };
 }
@@ -516,6 +560,7 @@ function syncUrl() {
 /** Apply state parsed from the URL to the controls. */
 function applyState(state) {
   elements.model.value = state.model;
+  elements.baseline.value = state.baseline;
   elements.variable.value = state.variable;
   if (explorer.locations.includes(state.location)) elements.location.value = state.location;
   selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
@@ -568,7 +613,8 @@ function attachActions() {
       bundle: explorer.bundles[lastRun.variable],
       variable: lastRun.variable,
       location: lastRun.location,
-      units: spec.yLabel,
+      units: yLabel(lastRun.variable),
+      baseline: lastRun.baseline,
       seed,
       url: toUrl(currentState()),
     });
@@ -584,7 +630,10 @@ function attachActions() {
       subtitle:
         `${explorer.bundles[lastRun.variable].attrs.cmip6_model} · ` +
         `${lastRun.runs.map((r) => scenarioLabel(r.scenario)).join(', ')} · ` +
-        `${lastRun.runs[0].series.length} realizations · ${WINDOW.start}–${WINDOW.end}`,
+        `${lastRun.runs[0].series.length} realizations · ${WINDOW.start}–${WINDOW.end}` +
+        (VARIABLES[lastRun.variable].baselined
+          ? ` · from ${BASELINES[elements.baseline.value].label}`
+          : ''),
     });
     download(`${stem()}.png`, blob);
     flash(elements.downloadPng, 'Chart saved');
@@ -643,14 +692,20 @@ async function loadMap() {
  * transformative in a desert, so an absolute map mostly shows where it already
  * rains.
  */
-function toMapUnits(field, variable) {
-  if (variable === 'tas') return Float64Array.from(field);
+function toMapUnits(field, variable, base) {
+  // Change from the baseline period: the forced response here, less its mean
+  // over the period. Both are relative to the same unforced state, so it
+  // cancels.
+  if (variable === 'tas') return Float64Array.from(field, (v, i) => v - base.mean[i]);
   return Float64Array.from(field, (v, i) => {
-    const baseline = prClimatology[i];
+    // The denominator is the baseline period's own precipitation. The
+    // climatology is the model's 2015 field; the forced response carries it
+    // back or forward to the period.
+    const level = prClimatology[i] + base.mean[i] - base.at2015[i];
     // Where there is essentially no rain, a percentage is meaningless rather
     // than large, so leave it blank instead of rendering a spurious extreme.
-    if (!Number.isFinite(baseline) || baseline <= 1e-9) return NaN;
-    return (v / baseline) * 100;
+    if (!Number.isFinite(level) || level <= 1e-9) return NaN;
+    return ((v - base.mean[i]) / level) * 100;
   });
 }
 
@@ -682,14 +737,16 @@ async function renderMap() {
   }
 
   const shown = compare ?? [selection[0]];
+  const baseline = elements.baseline.value;
   let fields;
   let grid;
   try {
+    const base = await explorer.baselineMap({ variable, baseline });
     fields = [];
     for (const scenario of shown) {
       const { field, lat, lon } = await explorer.forcedMap({ variable, scenario, year });
       grid = { lat, lon };
-      fields.push(toMapUnits(field, variable));
+      fields.push(toMapUnits(field, variable, base));
     }
   } catch (error) {
     setStatus(`Could not draw the map: ${error.message}`, 'error');
@@ -701,7 +758,7 @@ async function renderMap() {
   if (fields.length === 2) {
     difference = Float64Array.from(fields[1], (v, i) => v - fields[0][i]);
   }
-  lastMap = { ...grid, fields, difference, scenarios: shown, variable, year };
+  lastMap = { ...grid, fields, difference, scenarios: shown, variable, year, baseline };
 
   redrawMap();
   elements.mapTitle.textContent = compare
@@ -1046,7 +1103,7 @@ function redrawMap() {
     drawColourBar(canvas, {
       edges: scale.edges,
       colours: scale.colours,
-      label: `${noun} change in ${lastMap.year} (${units})`,
+      label: `${noun} change in ${lastMap.year} from ${BASELINES[lastMap.baseline].label} (${units})`,
     });
 
   const comparing = lastMap.fields.length === 2;

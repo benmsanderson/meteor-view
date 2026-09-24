@@ -173,6 +173,15 @@ and page; seeds still reproduce, but draw different realizations than before
 the spin-up change, so links made earlier show a different sample of the same
 ensemble.
 
+### Baselines — done
+
+Change from 1850–1900 (default) or 2005–2024, chosen in the controls and
+carried in links as `ref=recent`. Both are the forced-response mean over the
+period under CMIP7 Medium, shared by every scenario, so scenario differences
+are unchanged by the choice. Applies to temperature everywhere and to the
+precipitation maps; the precipitation timeseries stays absolute. Before this,
+"anomaly" silently meant change since 1750, the first year of the forcing.
+
 ## Things that would surprise you
 
 - **METEOR's trunk is `base`, not `main`.** `main` is a 2023 orphan with no
