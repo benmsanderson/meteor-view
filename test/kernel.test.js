@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { Bundle, GoldenFixture } from '../src/lib/bundle.js';
-import { designMatrix, generateEnsemble, simulateVar } from '../src/lib/kernel.js';
+import { designMatrix, generateEnsemble, simulateVar, spinUpMonths } from '../src/lib/kernel.js';
 import { normalGenerator } from '../src/lib/stats.js';
 
 const DATA = new URL('../data/', import.meta.url);
@@ -210,5 +210,62 @@ describe('designMatrix', () => {
     // The annual harmonic at month 12 is back where it was at month 0.
     expect(design[12 * 9 + 1]).toBeCloseTo(design[1], 12);
     expect(design[12 * 9 + 2]).toBeCloseTo(design[2], 12);
+  });
+});
+
+describe('VAR spin-up', () => {
+  const nModes = tas.nModes;
+  const lagOrder = tas.lagOrder;
+  const params = {
+    intercept: tas.get('varx_intercept'),
+    A: tas.get('varx_A'),
+    chol: tas.get('varx_residual_chol'),
+    nModes,
+    lagOrder,
+  };
+
+  it('is whole years, and far shorter than spinning up from 1750', () => {
+    const months = spinUpMonths(tas);
+    expect(months % 12).toBe(0);
+    expect(months).toBeGreaterThanOrEqual(120);
+    expect(months).toBeLessThan((2015 - 1750) * 12);
+  });
+
+  it('gives the same window as a spin-up from 1750, given the same draws', () => {
+    // Both runs see an identical innovation for every month of the window and
+    // of the short spin-up; the long run draws extra, unrelated innovations
+    // before that. What is left in the window is only the difference in
+    // initial state, which is what the spin-up exists to wash out.
+    const window = (2100 - 2015 + 1) * 12;
+    const short = spinUpMonths(tas);
+    const long = (2015 - 1750) * 12;
+    const draw = normalGenerator(11);
+    const shared = Float64Array.from({ length: (short + window) * nModes }, draw);
+    const extra = Float64Array.from({ length: (long - short) * nModes }, draw);
+    const from = (values) => {
+      let i = 0;
+      return () => values[i++];
+    };
+
+    const longRun = simulateVar({
+      ...params,
+      nTimes: long + window,
+      normal: from(Float64Array.from([...extra, ...shared])),
+    });
+    const shortRun = simulateVar({ ...params, nTimes: short + window, normal: from(shared) });
+
+    // The recursion draws nothing for its first `lagOrder` months, so line the
+    // two up by their draws, not by their first index.
+    let scale = 0;
+    let worst = 0;
+    for (let t = 0; t < window; t += 1) {
+      for (let k = 0; k < nModes; k += 1) {
+        const a = longRun[(long + t) * nModes + k];
+        const b = shortRun[(short + t) * nModes + k];
+        scale = Math.max(scale, Math.abs(a));
+        worst = Math.max(worst, Math.abs(a - b));
+      }
+    }
+    expect(worst / scale).toBeLessThan(1e-6);
   });
 });

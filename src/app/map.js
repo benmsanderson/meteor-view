@@ -41,6 +41,17 @@ export const CLASSES = {
     '#543005', '#8f5c1b', '#c48a3d', '#d9b688', '#e9d7c0', '#f8f8f8',
     '#c2dddb', '#8cc3be', '#449f97', '#1d6e64', '#003c30',
   ],
+  // A difference between two scenarios is signed and centred on zero, so here
+  // the AR7 diverging maps are sampled evenly and symmetrically: blue where
+  // scenario B is cooler than A, red where warmer.
+  'temperature-difference': [
+    '#053061', '#256293', '#4393c3', '#7eb4d5', '#bcd7e7', '#f9f8f8',
+    '#edc6c0', '#e29487', '#d6604d', '#9d2f36', '#67001f',
+  ],
+  'precipitation-difference': [
+    '#543005', '#8b5919', '#bf812d', '#d2a870', '#e6d1b5', '#f8f8f8',
+    '#b8d8d6', '#78b8b3', '#35978f', '#1a695f', '#003c30',
+  ],
 };
 
 /**
@@ -60,12 +71,20 @@ export const BIN_EDGES = {
   temperature: [-1, 0, 1, 2, 3, 4, 5, 6, 8, 10],
   // Percent change in precipitation, symmetric about zero.
   precipitation: [-40, -30, -20, -10, -5, 5, 10, 20, 30, 40],
+  // Differences between scenarios are smaller than changes from the
+  // baseline, so these are finer. SSP5-8.5 against SSP1-2.6 reaches about
+  // 4 °C in the global mean and more over land and the Arctic, which is why
+  // the outer classes run to 5.
+  'temperature-difference': [-5, -3, -2, -1, -0.5, 0.5, 1, 2, 3, 5],
+  // Percentage points of change: the difference of two percent changes, both
+  // relative to the same climatology.
+  'precipitation-difference': [-30, -20, -10, -5, -2, 2, 5, 10, 20, 30],
 };
 
 /**
  * A classed colour scale.
  *
- * @param {'temperature'|'precipitation'} variable
+ * @param {'temperature'|'precipitation'|'temperature-difference'|'precipitation-difference'} variable
  * @returns {{edges: number[], colours: string[], colour: (v: number) => string}}
  */
 export function classedScale(variable) {
@@ -144,7 +163,7 @@ export function projection(view, width, height) {
  * @param {number[][][]} options.coastlines rings of `[lon, lat]`
  * @param {string|null} options.highlight AR6 code to emphasise
  * @param {object|null} options.box `{south, north, west, east}` selection
- * @param {'temperature'|'precipitation'} options.variable which classes to use
+ * @param {string} options.variable which classes to use, a key of {@link CLASSES}
  * @param {object} options.view from {@link defaultView}
  */
 export function drawMap(
@@ -297,6 +316,30 @@ export function toLatLon(canvas, event, view = defaultView()) {
 }
 
 /**
+ * The field's value at a point: the gridbox it falls in.
+ *
+ * Nearest neighbour, because the map draws gridboxes and a readout should
+ * agree with the colour under the pointer rather than interpolate past it.
+ *
+ * @returns {number} NaN outside the field or where it is blank
+ */
+export function valueAt({ field, lat, lon }, point) {
+  const nearest = (axis, value, distance) => {
+    let best = 0;
+    for (let i = 1; i < axis.length; i += 1) {
+      if (distance(axis[i], value) < distance(axis[best], value)) best = i;
+    }
+    return best;
+  };
+  const i = nearest(lat, point.lat, (a, b) => Math.abs(a - b));
+  const j = nearest(lon, point.lon, (a, b) => {
+    const d = Math.abs(wrapLon(a) - wrapLon(b));
+    return Math.min(d, 360 - d);
+  });
+  return field[i * lon.length + j];
+}
+
+/**
  * The AR6 region containing a point, or null.
  *
  * Ray casting per ring. With 58 regions of a few dozen vertices each this is
@@ -379,9 +422,13 @@ export function drawColourBar(canvas, { edges, colours, label }) {
   context.font = '10px ui-sans-serif, system-ui, sans-serif';
   context.textBaseline = 'top';
   context.textAlign = 'center';
+  const last = edges.length - 1;
   for (let i = 0; i < edges.length; i += 1) {
     // Every edge on a short bar would collide; every other one reads fine.
-    if (edges.length > 8 && i % 2 === 1 && i !== edges.length - 1) continue;
+    // Counted outwards from both ends, so a symmetric scale is labelled
+    // symmetrically: -0.5 and 0.5, not -0.5 and 1.
+    const fromEnd = i <= last / 2 ? i : last - i;
+    if (edges.length > 8 && fromEnd % 2 === 1) continue;
     context.fillText(String(edges[i]), cap + i * blockWidth, barHeight + 3);
   }
 

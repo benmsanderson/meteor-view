@@ -11,7 +11,7 @@
  * worse is a bug in the port, not rounding.
  */
 
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { Bundle, GoldenFixture } from '../src/lib/bundle.js';
@@ -51,10 +51,30 @@ function maxRelative(actual, expected) {
   return worst;
 }
 
-describe.each([
-  ['tas', 'meteor_NorESM2-MM_tas_bundle_v1.nc', 'meteor_NorESM2-MM_tas_golden_ssp245_v1.nc'],
-  ['pr', 'meteor_NorESM2-MM_pr_bundle_v1.nc', 'meteor_NorESM2-MM_pr_golden_ssp245_v1.nc'],
-])('%s golden fixture', (variable, bundleFile, fixtureFile) => {
+/**
+ * Every model and variable with a fixture in `data/`.
+ *
+ * Only NorESM2-MM's are committed; the exporter writes one for each model it
+ * trains, so a fresh export is checked against METEOR here before its bundles
+ * are committed, without the fixtures themselves going into git.
+ */
+const FIXTURES = readdirSync(DATA)
+  .map((name) => name.match(/^meteor_(.+)_(tas|pr)_golden_ssp245_v1\.nc$/))
+  .filter(Boolean)
+  .map(([name, model, variable]) => [
+    `${model} ${variable}`,
+    variable,
+    `meteor_${model}_${variable}_bundle_v1.nc`,
+    name,
+  ]);
+
+it('finds the committed fixtures', () => {
+  expect(FIXTURES.map(([label]) => label)).toEqual(
+    expect.arrayContaining(['NorESM2-MM tas', 'NorESM2-MM pr'])
+  );
+});
+
+describe.each(FIXTURES)('%s golden fixture', (_label, variable, bundleFile, fixtureFile) => {
   const bundle = load(bundleFile, Bundle);
   const fixture = load(fixtureFile, GoldenFixture);
 

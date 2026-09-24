@@ -1,0 +1,11 @@
+{
+  "models": [
+    "NorESM2-MM",
+    "CanESM5",
+    "INM-CM5-0",
+    "IPSL-CM6A-LR",
+    "MIROC6",
+    "MPI-ESM1-2-LR",
+    "MRI-ESM2-0"
+  ]
+}

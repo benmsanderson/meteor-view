@@ -7,13 +7,23 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULTS, fromQuery, toQuery } from '../src/app/state.js';
+import { DEFAULTS, MAX_SCENARIOS, fromQuery, toQuery } from '../src/app/state.js';
 import { filenameStem, toCsv } from '../src/app/export.js';
-import { groupScenarios, scenarioFamily, scenarioLabel } from '../src/app/scenarios.js';
+import {
+  groupScenarios,
+  scenarioFamily,
+  scenarioLabel,
+  selectedColour,
+  sortScenarios,
+} from '../src/app/scenarios.js';
 
 const CONTEXT = {
   locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
-  scenarios: ['ssp126', 'ssp245', 'ssp585'],
+  scenarios: [
+    'ssp126', 'ssp245', 'ssp370', 'ssp585', 'ssp119', 'ssp434', 'ssp460',
+    'cmip7-low', 'cmip7-high',
+  ],
+  models: ['NorESM2-MM', 'CanESM5'],
 };
 
 describe('URL state', () => {
@@ -23,9 +33,11 @@ describe('URL state', () => {
 
   it('round-trips a full state', () => {
     const state = {
+      model: 'CanESM5',
       variable: 'pr',
       location: 'regional:NEU',
-      scenario: 'ssp585',
+      scenarios: ['ssp126', 'ssp370', 'ssp585'],
+      compare: ['ssp585', 'ssp126'],
       nRealizations: 50,
       seed: 12345,
     };
@@ -41,8 +53,56 @@ describe('URL state', () => {
   });
 
   it('falls back per field rather than failing whole', () => {
-    const parsed = fromQuery('?v=nonsense&loc=regional:NOWHERE&scn=ssp999&n=abc', CONTEXT);
+    const parsed = fromQuery(
+      '?m=HadGEM9&v=nonsense&loc=regional:NOWHERE&scn=ssp999&n=abc',
+      CONTEXT
+    );
     expect(parsed).toEqual(DEFAULTS);
+  });
+
+  it('reads a single-scenario link from before multi-selection', () => {
+    const parsed = fromQuery('?scn=ssp370', CONTEXT);
+    expect(parsed.scenarios).toEqual(['ssp370']);
+    expect(parsed.compare).toBeNull();
+  });
+
+  it('compares the first two selected unless told otherwise', () => {
+    expect(fromQuery('?scn=ssp126,ssp585', CONTEXT).compare).toEqual(['ssp126', 'ssp585']);
+    // And the default pair is not written out.
+    expect(
+      toQuery({ ...DEFAULTS, scenarios: ['ssp126', 'ssp585'], compare: ['ssp126', 'ssp585'] })
+    ).toBe('?scn=ssp126%2Cssp585');
+  });
+
+  it('rejects a comparison outside the selection, or of a scenario with itself', () => {
+    const base = '?scn=ssp126,ssp245,ssp585';
+    expect(fromQuery(`${base}&cmp=ssp126,ssp370`, CONTEXT).compare).toEqual(['ssp126', 'ssp245']);
+    expect(fromQuery(`${base}&cmp=ssp585,ssp585`, CONTEXT).compare).toEqual(['ssp126', 'ssp245']);
+    expect(fromQuery(`${base}&cmp=ssp585,ssp245`, CONTEXT).compare).toEqual(['ssp585', 'ssp245']);
+  });
+
+  it('drops unknown and repeated scenarios, and caps the selection', () => {
+    expect(fromQuery('?scn=ssp126,ssp999,ssp126,ssp585', CONTEXT).scenarios).toEqual([
+      'ssp126',
+      'ssp585',
+    ]);
+    const many = CONTEXT.scenarios.join(',');
+    expect(fromQuery(`?scn=${many}`, CONTEXT).scenarios).toHaveLength(MAX_SCENARIOS);
+    // Nothing valid falls back to the default rather than showing nothing.
+    expect(fromQuery('?scn=,ssp999', CONTEXT).scenarios).toEqual(DEFAULTS.scenarios);
+  });
+
+  it('names the model only when it is not the default', () => {
+    expect(toQuery({ ...DEFAULTS, model: 'CanESM5' })).toBe('?m=CanESM5');
+    expect(toQuery({ ...DEFAULTS, model: DEFAULTS.model })).toBe('');
+  });
+
+  it('accepts only models the site carries', () => {
+    // The model decides which files are fetched, so an unknown one must not
+    // reach a URL.
+    expect(fromQuery('?m=CanESM5', CONTEXT).model).toBe('CanESM5');
+    expect(fromQuery('?m=../../etc', CONTEXT).model).toBe(DEFAULTS.model);
+    expect(fromQuery('?m=CanESM5', { ...CONTEXT, models: [] }).model).toBe(DEFAULTS.model);
   });
 
   it('caps the realization count a link can demand', () => {
@@ -63,16 +123,19 @@ describe('CSV export', () => {
     schemaVersion: 1,
   };
 
+  const series = [
+    Float64Array.from({ length: 24 }, (_, i) => i / 3),
+    Float64Array.from({ length: 24 }, (_, i) => -i / 7),
+  ];
   const csv = toCsv({
     years: [2015, 2016],
-    series: [
-      Float64Array.from({ length: 24 }, (_, i) => i / 3),
-      Float64Array.from({ length: 24 }, (_, i) => -i / 7),
+    runs: [
+      { scenario: 'ssp245', series },
+      { scenario: 'cmip7-high', series: series.map((s) => s.map((v) => v + 1)) },
     ],
     bundle,
     variable: 'tas',
     location: 'global',
-    scenario: 'ssp245',
     units: 'Temperature anomaly (°C)',
     seed: 42,
     url: 'https://example.invalid/?v=tas',
@@ -89,21 +152,59 @@ describe('CSV export', () => {
     expect(csv).toContain('PCG64');
   });
 
-  it('has one row per month and one column per realization', () => {
-    expect(dataLines[0]).toBe('year,month,realization_01,realization_02');
-    expect(dataLines.length).toBe(1 + 24);
-    expect(dataLines[1].startsWith('2015,1,')).toBe(true);
-    expect(dataLines[12].startsWith('2015,12,')).toBe(true);
-    expect(dataLines[13].startsWith('2016,1,')).toBe(true);
+  it('has one row per scenario and month, one column per realization', () => {
+    expect(dataLines[0]).toBe('scenario,year,month,realization_01,realization_02');
+    expect(dataLines.length).toBe(1 + 2 * 24);
+    expect(dataLines[1].startsWith('ssp245,2015,1,')).toBe(true);
+    expect(dataLines[12].startsWith('ssp245,2015,12,')).toBe(true);
+    expect(dataLines[13].startsWith('ssp245,2016,1,')).toBe(true);
+    expect(dataLines[25].startsWith('cmip7-high,2015,1,')).toBe(true);
+  });
+
+  it('lists every scenario in the provenance', () => {
+    expect(csv).toContain('# scenarios: ssp245, cmip7-high');
   });
 
   it('round-trips values without visible loss', () => {
-    const third = Number(dataLines[2].split(',')[2]);
+    const third = Number(dataLines[2].split(',')[3]);
     expect(third).toBeCloseTo(1 / 3, 6);
   });
 });
 
+describe('scenario selection', () => {
+  it('orders a selection as the menu does, whatever order it was ticked in', () => {
+    expect(sortScenarios(['ssp585', 'cmip7-high', 'ssp126', 'cmip7-low'])).toEqual([
+      'cmip7-low',
+      'cmip7-high',
+      'ssp126',
+      'ssp585',
+    ]);
+  });
+
+  it('gives every scenario a colour of its own when selected', () => {
+    const all = [
+      'ssp119', 'ssp126', 'ssp245', 'ssp370', 'ssp434', 'ssp460', 'ssp534-over', 'ssp585',
+      'cmip7-very-low', 'cmip7-low', 'cmip7-low-to-negative', 'cmip7-medium-to-low',
+      'cmip7-medium', 'cmip7-high-to-low', 'cmip7-high',
+    ];
+    const colours = all.map((name) => selectedColour(name, 'grey'));
+    expect(colours).not.toContain('grey');
+    expect(new Set(colours).size).toBe(all.length);
+  });
+});
+
 describe('filenames', () => {
+  it('joins several scenarios', () => {
+    expect(
+      filenameStem({
+        cmip6Model: 'CanESM5',
+        variable: 'tas',
+        location: 'global',
+        scenario: ['ssp126', 'ssp585'],
+      })
+    ).toBe('meteor_CanESM5_tas_global_ssp126+ssp585');
+  });
+
   it('says what the file is without needing the metadata', () => {
     expect(
       filenameStem({

@@ -28,6 +28,11 @@
 
     <main>
       <form class="controls" id="controls">
+        <div class="control" hidden>
+          <label for="model">Model</label>
+          <select id="model"></select>
+        </div>
+
         <div class="control">
           <label for="variable">Variable</label>
           <select id="variable">
@@ -42,8 +47,13 @@
         </div>
 
         <div class="control">
-          <label for="scenario">Scenario</label>
-          <select id="scenario"></select>
+          <span class="control__label" id="scenario-label">Scenarios</span>
+          <details class="multiselect" id="scenario-picker">
+            <summary aria-labelledby="scenario-label scenario-summary">
+              <span id="scenario-summary">SSP2-4.5</span>
+            </summary>
+            <div class="multiselect__menu" id="scenario-list"></div>
+          </details>
         </div>
 
         <div class="control">
@@ -60,7 +70,7 @@
       <section class="panel">
         <div class="panel__header">
           <h2 id="chart-title">Annual means</h2>
-          <p class="legend">
+          <p class="legend" id="chart-legend">
             <span class="swatch swatch--median"></span> median
             <span class="swatch swatch--band"></span> 25–75%
             <span class="swatch swatch--wide"></span> 5–95%
@@ -91,7 +101,7 @@
           </p>
         </div>
         <p class="hint">
-          All fifteen scenarios, with the selected one picked out. The CMIP7
+          All fifteen scenarios, with the selected ones picked out. The CMIP7
           markers use the ScenarioMIP team's own colours; the CMIP6 SSPs are
           drawn in grey as the reference set behind them.
         </p>
@@ -108,23 +118,48 @@
           </p>
         </div>
         <p class="hint" id="map-hint">
-          Click a region to select it, or drag to define your own; scroll to
-          zoom, and hold shift to do whichever the other mode does. The map
+          Drag to pan and scroll to zoom; click a region to select it. To
+          draw your own region, switch to <em>Draw region</em> or hold shift
+          while dragging. The map
           shows the forced response — the signal the scenario drives — without
           internal variability, which is why it looks smooth where the
           timeseries does not. Precipitation is shown as percent change, the
           convention for maps, while the timeseries above stays in mm/day.
+          With two or more scenarios selected, pick any two to compare: both
+          maps and their difference share one year and one view.
         </p>
-        <canvas id="map"></canvas>
-        <canvas id="colourbar" height="46"></canvas>
+        <p class="map-compare" id="map-compare" hidden>
+          <label for="compare-a">Compare</label>
+          <select id="compare-a"></select>
+          <label for="compare-b">with</label>
+          <select id="compare-b"></select>
+        </p>
+        <div class="maps" id="maps" data-layout="single">
+          <figure class="map-cell">
+            <figcaption id="caption-a"></figcaption>
+            <canvas class="map" id="map"></canvas>
+            <canvas class="colourbar" id="colourbar"></canvas>
+          </figure>
+          <figure class="map-cell" data-compare-only>
+            <figcaption id="caption-b"></figcaption>
+            <canvas class="map" id="map-b"></canvas>
+            <canvas class="colourbar" id="colourbar-b"></canvas>
+          </figure>
+          <figure class="map-cell" data-compare-only>
+            <figcaption id="caption-diff"></figcaption>
+            <canvas class="map" id="map-diff"></canvas>
+            <canvas class="colourbar" id="colourbar-diff"></canvas>
+          </figure>
+          <div class="map-cell map-readout" id="map-readout" aria-live="polite"></div>
+        </div>
         <div class="actions">
           <button type="button" id="load-map">Load map (2 MB)</button>
           <div class="modes" id="map-modes" hidden role="group" aria-label="Map mode">
-            <button type="button" id="mode-select" data-mode="select" aria-pressed="true">
-              Select
-            </button>
-            <button type="button" id="mode-pan" data-mode="pan" aria-pressed="false">
+            <button type="button" id="mode-pan" data-mode="pan" aria-pressed="true">
               Pan
+            </button>
+            <button type="button" id="mode-select" data-mode="select" aria-pressed="false">
+              Draw region
             </button>
           </div>
           <button type="button" id="reset-view" hidden>Reset view</button>
@@ -135,9 +170,8 @@
       <section class="panel">
         <div class="panel__header">
           <h2>Seasonal cycle</h2>
-          <p class="legend">
-            <span class="swatch swatch--median"></span> 2015–2034
-            <span class="swatch swatch--warm"></span> 2081–2100
+          <p class="legend" id="seasonal-legend">
+            <span class="swatch swatch--dashed"></span> 2015–2034
           </p>
         </div>
         <canvas id="seasonal" height="220"></canvas>
@@ -164,9 +198,10 @@
           difference.
         </p>
         <p>
-          <strong>What it is not.</strong> One model, NorESM2-MM, so the spread you
-          see is internal variability — not model uncertainty, and not the full
-          uncertainty in a projection. Maps show the forced response only;
+          <strong>What it is not.</strong> One model at a time, so the spread you
+          see is that model's internal variability — not model uncertainty, and
+          not the full uncertainty in a projection. Switching models shows how
+          much they disagree; the band around any one of them does not. Maps show the forced response only;
           variability at a region you draw yourself would need a further 11 MB of
           EOF maps that this page does not load. Custom <em>emissions</em> need a
           simple climate model, which is not here either, so the scenarios on offer

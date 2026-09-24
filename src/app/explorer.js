@@ -6,12 +6,15 @@
  * pieces of that bookkeeping are not in the schema and were read out of
  * METEOR's own generation path:
  *
- * 1. **PCs are simulated over the full trajectory and then sliced** to the
- *    output window. METEOR generates from the pattern model's base year so the
- *    VAR spin-up resolves before the window opens, then slices on a January
- *    boundary. A client that instead starts the recursion at the window would
- *    open with PCs pinned at zero and ramping up out of nothing — plausible
- *    looking, and wrong for the first decades.
+ * 1. **PCs are spun up before the window and then sliced** to it. METEOR
+ *    generates from the pattern model's base year so the VAR spin-up
+ *    resolves before the window opens, then slices on a January boundary. A
+ *    client that instead starts the recursion at the window would open with
+ *    PCs pinned at zero and ramping up out of nothing — plausible looking,
+ *    and wrong for the first decades. This client spins up for as long as the
+ *    bundle's VAR measurably needs (see `spinUpMonths`) rather than from
+ *    1750, which is the same process in distribution at a quarter of the
+ *    cost.
  *
  * 2. **`t_glob` is the global mean of the variable's own forced response**, not
  *    of temperature. The noise model for a variable is trained against that
@@ -27,6 +30,7 @@ import {
   forcedResponse,
   generateEnsemble,
   scaleToWarmingPathway,
+  spinUpMonths,
 } from '../lib/kernel.js';
 import { normalGenerator } from '../lib/stats.js';
 
@@ -34,6 +38,34 @@ const MONTHS = 12;
 
 /** Output window. The `pr` transform parameters are fitted for these years. */
 export const WINDOW = { start: 2015, end: 2100 };
+
+/** The model the site shipped with, and what a link without `m=` means. */
+export const DEFAULT_MODEL = 'NorESM2-MM';
+
+/**
+ * The CMIP6 models with artifacts in `data/`, from its manifest.
+ *
+ * A missing or unreadable manifest falls back to the default model alone, so a
+ * checkout that predates it still loads.
+ *
+ * @param {string} base directory the data files are served from
+ * @returns {Promise<string[]>}
+ */
+export async function availableModels(base = 'data/') {
+  try {
+    const response = await fetch(`${base}models_v1.json`);
+    if (!response.ok) return [DEFAULT_MODEL];
+    const { models } = await response.json();
+    return Array.isArray(models) && models.length ? models : [DEFAULT_MODEL];
+  } catch {
+    return [DEFAULT_MODEL];
+  }
+}
+
+/** Filename of one model's artifact of a given kind. */
+export function artifactName(model, variable, kind) {
+  return `meteor_${model}_${variable}_${kind}_v1.nc`;
+}
 
 /**
  * Everything one run needs, loaded once.
@@ -49,6 +81,8 @@ export class Explorer {
   constructor(bundles, base = 'data/') {
     this.bundles = bundles;
     this.base = base;
+    /** Which model the bundles came from; every on-demand artifact must match. */
+    this.model = bundles.tas.attrs.cmip6_model;
     this.locations = bundles.tas.locations;
     this.scenarios = bundles.tas.scenarios;
     /** Lazily loaded 2 MB pattern artifacts, by variable. */
@@ -63,12 +97,13 @@ export class Explorer {
    * Load the bundles over HTTP.
    *
    * @param {string} base directory the data files are served from
+   * @param {string} [model] CMIP6 model whose bundles to load
    * @returns {Promise<Explorer>}
    */
-  static async load(base = 'data/') {
+  static async load(base = 'data/', model = DEFAULT_MODEL) {
     const { Bundle } = await import('../lib/bundle.js');
     const fetchBundle = async (variable) => {
-      const url = `${base}meteor_NorESM2-MM_${variable}_bundle_v1.nc`;
+      const url = `${base}${artifactName(model, variable, 'bundle')}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`could not load ${url}: ${response.status}`);
       return new Bundle(await response.arrayBuffer());
@@ -95,7 +130,7 @@ export class Explorer {
   async patterns(variable) {
     if (!this.patternArtifacts.has(variable)) {
       const { PatternArtifact } = await import('../lib/pattern.js');
-      const url = `${this.base}meteor_NorESM2-MM_${variable}_pattern_v1.nc`;
+      const url = `${this.base}${artifactName(this.model, variable, 'pattern')}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`could not load ${url}: ${response.status}`);
       this.patternArtifacts.set(variable, new PatternArtifact(await response.arrayBuffer()));
@@ -148,7 +183,7 @@ export class Explorer {
   async climatology() {
     if (!this.prClimatology) {
       const { Artifact } = await import('../lib/bundle.js');
-      const url = `${this.base}meteor_NorESM2-MM_pr_climatology_v1.nc`;
+      const url = `${this.base}${artifactName(this.model, 'pr', 'climatology')}`;
       const response = await fetch(url);
       if (!response.ok) throw new Error(`could not load ${url}`);
       const artifact = new Artifact(await response.arrayBuffer());
@@ -367,11 +402,15 @@ function generateEnsembleWindowed({
   nRealizations,
   normal,
 }) {
+  // Start the recursion only as far before the window as the VAR needs. The
+  // spin-up is a whole number of years, so the harmonics keep their phase.
+  const spinUp = Math.min(startMonth, spinUpMonths(bundle));
+  const from = startMonth - spinUp;
   const spunUp = generateEnsemble({
     bundle,
     location,
-    tGlob: tGlobFull,
-    forcedMonthly: forcedMonthlyFull,
+    tGlob: tGlobFull.subarray(from, endMonth),
+    forcedMonthly: forcedMonthlyFull.subarray(from, endMonth),
     nRealizations,
     normal,
     transform: false,
@@ -382,7 +421,7 @@ function generateEnsembleWindowed({
     anomaly: true,
   });
 
-  let windowed = spunUp.map((series) => series.slice(startMonth, endMonth));
+  let windowed = spunUp.map((series) => series.slice(spinUp));
 
   if (bundle.hasTransform) {
     // Steps 5 and 6, on the window alone.

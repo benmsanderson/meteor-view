@@ -2,3 +2,7 @@ node_modules/
 dist/
 .DS_Store
 scenario-work/
+# Golden fixtures are written for every model trained; only the default
+# model's are committed. The rest are checked locally by test/golden.test.js.
+data/meteor_*_golden_*_v1.nc
+!data/meteor_NorESM2-MM_*_golden_*_v1.nc

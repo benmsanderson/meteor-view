@@ -98,6 +98,10 @@ select mode:  drag = draw region,  shift-drag = pan
 pan mode:     drag = pan,          shift-drag = draw
 ```
 
+**Revised 2026-09-24: pan is the default mode**, at the user's request, with
+the select button relabelled *Draw region*. A plain click still selects an AR6
+region in either mode, so defaulting to pan does not hide region picking.
+
 **Fixed colour classes, from the AR7 colormaps.** Eleven classes sampled from
 the IPCC AR7 WGI diverging colormaps — the same source as the published
 figures, so a map from here sits beside them:
@@ -174,6 +178,27 @@ otherwise makes every export byte-different. A full re-export of unchanged
 inputs now produces no diff at all, which is what was quietly adding megabytes.
 
 ### 3. Compare two scenarios at once
+
+**Done 2026-09-24**, generalised to a selection of up to six. What was built,
+against the plan below:
+
+- Scenarios are **checkboxes** in a dropdown, grouped by generation.
+  `scn=a,b,c` in the URL, deduplicated and capped at six; an old `scn=ssp370`
+  link is a selection of one.
+- **Line plots**: one scenario keeps the full fan. Several get the 5–95% band
+  alone, thinly, with the median in full colour and named at its end, which
+  was the "thinner bands" option. Every scenario is run with the same seed.
+- **Colour follows the scenario**: the ScenarioMIP colours for CMIP7, and now
+  the AR6 colours for SSPs whenever one is selected (unselected SSPs stay grey
+  in the context figure).
+- **Maps**: one scenario, one map. Two or more, a 2×2 grid — A, B, B − A, and
+  a readout of all three under the pointer — with A and B chosen from the
+  selection (`cmp=a,b`), one year slider and one shared view. The difference
+  has its own zero-centred AR7 classes (±5 °C; ±30 percentage points for
+  precipitation) and is labelled as a forced-signal difference.
+- **CSV** gains a leading `scenario` column, one block of rows per scenario.
+
+The original plan follows.
 
 **Three to four days, and the most UI-heavy item here.**
 

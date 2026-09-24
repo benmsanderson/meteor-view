@@ -1,9 +1,10 @@
 /**
  * Wiring: controls to kernel to canvas.
  *
- * Everything runs on the main thread. A 100-member, 86-year run is a few
- * hundred milliseconds, which is quick enough that a worker would cost more in
- * complexity than it saves in responsiveness.
+ * Ensemble generation runs in a small pool of Web Workers (`runner.js`):
+ * about 10 ms per realization, so a six-scenario comparison at 100
+ * realizations would otherwise freeze the page for seconds. Everything else —
+ * maps, the context figure, drawing — is quick and stays on the main thread.
  */
 
 import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
@@ -17,8 +18,10 @@ import {
   projection,
   regionAt,
   toLatLon,
+  valueAt,
 } from './map.js';
-import { Explorer, WINDOW } from './explorer.js';
+import { Explorer, WINDOW, availableModels } from './explorer.js';
+import { EnsembleRunner } from './runner.js';
 import { placeLabel } from './places.js';
 import {
   groupScenarios,
@@ -26,8 +29,17 @@ import {
   scenarioFamily,
   scenarioLabel,
   scenarioShortLabel,
+  selectedColour,
+  sortScenarios,
 } from './scenarios.js';
-import { DEFAULT_SEED, fromQuery, toQuery, toUrl } from './state.js';
+import {
+  DEFAULT_SEED,
+  MAX_SCENARIOS,
+  defaultCompare,
+  fromQuery,
+  toQuery,
+  toUrl,
+} from './state.js';
 
 /** Seconds per year, for the precipitation unit conversion. */
 const SECONDS_PER_DAY = 86400;
@@ -51,9 +63,14 @@ const VARIABLES = {
 
 const elements = {
   controls: document.getElementById('controls'),
+  model: document.getElementById('model'),
   variable: document.getElementById('variable'),
   location: document.getElementById('location'),
-  scenario: document.getElementById('scenario'),
+  scenarioPicker: document.getElementById('scenario-picker'),
+  scenarioList: document.getElementById('scenario-list'),
+  scenarioSummary: document.getElementById('scenario-summary'),
+  chartLegend: document.getElementById('chart-legend'),
+  seasonalLegend: document.getElementById('seasonal-legend'),
   realizations: document.getElementById('realizations'),
   chart: document.getElementById('chart'),
   copyLink: document.getElementById('copy-link'),
@@ -66,6 +83,18 @@ const elements = {
   contextSeries: document.getElementById('context-series'),
   contextTitle: document.getElementById('context-title'),
   map: document.getElementById('map'),
+  mapB: document.getElementById('map-b'),
+  mapDiff: document.getElementById('map-diff'),
+  maps: document.getElementById('maps'),
+  captionA: document.getElementById('caption-a'),
+  captionB: document.getElementById('caption-b'),
+  captionDiff: document.getElementById('caption-diff'),
+  colourbarB: document.getElementById('colourbar-b'),
+  colourbarDiff: document.getElementById('colourbar-diff'),
+  mapReadout: document.getElementById('map-readout'),
+  mapCompare: document.getElementById('map-compare'),
+  compareA: document.getElementById('compare-a'),
+  compareB: document.getElementById('compare-b'),
   mapModes: document.getElementById('map-modes'),
   modeSelect: document.getElementById('mode-select'),
   modePan: document.getElementById('mode-pan'),
@@ -84,6 +113,12 @@ const elements = {
 
 /** @type {Explorer} */
 let explorer;
+/** Where the data files are served from. */
+let dataBase;
+/** Generates ensembles off the main thread. */
+let runner;
+/** Guards against an older, slower run landing after a newer one. */
+let runRequest = 0;
 let lastRun = null;
 /** Part of the shareable state: the same seed redraws the same realizations. */
 let seed = DEFAULT_SEED;
@@ -100,7 +135,11 @@ let coastlines = [];
 /** Gridded precipitation climatology, the percent-change denominator. */
 let prClimatology = null;
 /** Which gesture the plain drag performs; shift does the other. */
-let mapMode = 'select';
+let mapMode = 'pan';
+/** The selected scenarios, in menu order. Never empty. */
+let selection = ['ssp245'];
+/** The two scenarios the maps compare, or null with only one selected. */
+let compare = null;
 /** What part of the world the map shows. */
 let mapView = defaultView();
 
@@ -138,35 +177,107 @@ function populateControls() {
 
   // Grouped by generation, because the two are not interchangeable and the
   // menu is the only place that can say so before a comparison is made.
-  elements.scenario.replaceChildren();
+  elements.scenarioList.replaceChildren();
   for (const { family, names } of groupScenarios(explorer.scenarios)) {
-    const group = document.createElement('optgroup');
-    group.label = family;
+    const fieldset = document.createElement('fieldset');
+    const legend = document.createElement('legend');
+    legend.textContent = family;
+    fieldset.append(legend);
     for (const scenario of names) {
-      const option = document.createElement('option');
-      option.value = scenario;
-      option.textContent = scenarioLabel(scenario);
-      group.append(option);
+      const label = document.createElement('label');
+      const box = document.createElement('input');
+      box.type = 'checkbox';
+      box.value = scenario;
+      box.name = 'scenario';
+      const swatch = document.createElement('span');
+      swatch.className = 'multiselect__swatch';
+      swatch.style.background = selectedColour(scenario);
+      label.append(box, swatch, scenarioLabel(scenario));
+      fieldset.append(label);
     }
-    elements.scenario.append(group);
+    elements.scenarioList.append(fieldset);
   }
-  elements.scenario.value = explorer.scenarios.includes('ssp245')
-    ? 'ssp245'
-    : explorer.scenarios[0];
+  const note = document.createElement('p');
+  note.className = 'multiselect__note';
+  note.textContent = `Up to ${MAX_SCENARIOS} at once.`;
+  elements.scenarioList.append(note);
+}
+
+/** Every scenario checkbox. */
+function scenarioBoxes() {
+  return [...elements.scenarioList.querySelectorAll('input[name="scenario"]')];
 }
 
 /**
- * Run the emulator and redraw.
+ * Make the checkboxes, the summary and the compare menus show `selection`.
+ *
+ * Unticked boxes are disabled at the cap rather than the tick being refused
+ * after the fact, so the limit is visible before anyone runs into it.
+ */
+function showSelection() {
+  const full = selection.length >= MAX_SCENARIOS;
+  for (const box of scenarioBoxes()) {
+    box.checked = selection.includes(box.value);
+    box.disabled = full && !box.checked;
+    box.closest('label').dataset.disabled = String(box.disabled);
+  }
+  elements.scenarioSummary.textContent =
+    selection.length === 1
+      ? scenarioLabel(selection[0])
+      : `${scenarioShortLabel(selection[0])} + ${selection.length - 1} more`;
+  elements.scenarioPicker.title = selection.map(scenarioLabel).join(', ');
+
+  if (!compare || !compare.every((name) => selection.includes(name))) {
+    compare = defaultCompare(selection);
+  }
+  elements.mapCompare.hidden = !compare;
+  elements.maps.dataset.layout = compare ? 'compare' : 'single';
+  for (const [menu, chosen] of [
+    [elements.compareA, compare?.[0]],
+    [elements.compareB, compare?.[1]],
+  ]) {
+    menu.replaceChildren(
+      ...selection.map((name) => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = scenarioLabel(name);
+        return option;
+      })
+    );
+    if (chosen) menu.value = chosen;
+  }
+}
+
+/** Read the ticked boxes into `selection`, keeping at least one. */
+function readSelection(changed) {
+  const ticked = sortScenarios(scenarioBoxes().filter((b) => b.checked).map((b) => b.value));
+  // Unticking the last scenario would leave nothing to show, so it stays.
+  if (ticked.length === 0) {
+    changed.checked = true;
+    return false;
+  }
+  selection = ticked.slice(0, MAX_SCENARIOS);
+  return true;
+}
+
+/**
+ * Run the emulator for every selected scenario and redraw.
+ *
+ * Every scenario is run with the same seed, so realization k of one and of
+ * another are driven by the same random draws: the difference between two
+ * ensembles is then the forced difference plus as little sampling noise as
+ * the method allows.
  *
  * A custom region takes a different path: the 2 MB pattern artifact gives its
  * forced response, but internal variability would need the EOF maps from the
  * 11 MB noise artifact, which is not loaded. So a drawn region shows the signal
  * without the spread, and says so rather than implying the spread is zero.
  */
-function run() {
+async function run() {
   if (!explorer) return;
+  const request = ++runRequest;
   if (customBox) {
-    runCustomRegion();
+    runCustomRegion(request);
     return;
   }
 
@@ -174,82 +285,94 @@ function run() {
   const spec = VARIABLES[variable];
   const location = elements.location.value;
   const nRealizations = Number(elements.realizations.value);
+  const scenarios = [...selection];
+  const model = explorer.model;
 
   const started = performance.now();
-  let result;
+  let done = 0;
+  const progress = () => {
+    if (scenarios.length > 1 && request === runRequest) {
+      setStatus(`Generating ${done} of ${scenarios.length} scenarios…`);
+    }
+  };
+  progress();
+
+  let results;
   try {
-    result = explorer.run({
-      variable,
-      location,
-      scenario: elements.scenario.value,
-      nRealizations,
-      seed,
-    });
+    // Every scenario at once: the pool spreads them over its workers.
+    results = await Promise.all(
+      scenarios.map((scenario) =>
+        runner.run(model, { variable, location, scenario, nRealizations, seed }).then((r) => {
+          done += 1;
+          progress();
+          return r;
+        })
+      )
+    );
   } catch (error) {
-    setStatus(error.message, 'error');
+    if (request === runRequest) setStatus(error.message, 'error');
     return;
   }
+  // Something newer was asked for while this ran; its result is what to show.
+  if (request !== runRequest) return;
   const elapsed = performance.now() - started;
 
-  const converted = result.series.map((series) =>
-    Float64Array.from(series, spec.convert)
-  );
-  lastRun = { ...result, converted, variable, location, scenario: elements.scenario.value };
+  const years = results[0].years;
+  const runs = results.map((result, i) => ({
+    scenario: scenarios[i],
+    series: result.series.map((series) => Float64Array.from(series, spec.convert)),
+  }));
+
+  lastRun = { years, runs, variable, location };
   syncUrl();
 
   elements.chartTitle.textContent = `${spec.label} at ${placeLabel(location)}`;
-  drawFanChart(elements.chart, {
-    x: result.years,
-    series: converted.map(annualMeans),
-    yLabel: spec.yLabel,
-    format: spec.format,
-  });
+  drawChart();
   drawSeasonalPanel();
 
   setStatus(
     `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
-      `${placeLabel(location)} under ${scenarioLabel(elements.scenario.value)}, ` +
+      `${placeLabel(location)} under ${listScenarios(scenarios)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
 }
 
+/** "A", "A and B", "A, B and C". */
+function listScenarios(names) {
+  const labels = names.map(scenarioLabel);
+  if (labels.length === 1) return labels[0];
+  return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
+}
+
 /** The forced response for a drawn region, with no ensemble behind it. */
-async function runCustomRegion() {
+async function runCustomRegion(request) {
   const variable = elements.variable.value;
   const spec = VARIABLES[variable];
   const { boxRegion } = await import('../lib/pattern.js');
 
-  let result;
+  const runs = [];
+  let years;
   try {
-    result = await explorer.customForcedResponse({
-      variable,
-      scenario: elements.scenario.value,
-      mask: boxRegion(customBox),
-    });
+    for (const scenario of selection) {
+      const result = await explorer.customForcedResponse({
+        variable,
+        scenario,
+        mask: boxRegion(customBox),
+      });
+      years = result.years;
+      runs.push({ scenario, series: [Float64Array.from(result.forced, spec.convert)] });
+    }
   } catch (error) {
-    setStatus(error.message, 'error');
+    if (request === runRequest) setStatus(error.message, 'error');
     return;
   }
+  if (request !== runRequest || !customBox) return;
 
-  const forced = Float64Array.from(result.forced, spec.convert);
-  lastRun = {
-    years: result.years,
-    series: [forced],
-    converted: [forced],
-    variable,
-    location: describeBox(customBox),
-    scenario: elements.scenario.value,
-    forcedOnly: true,
-  };
+  lastRun = { years, runs, variable, location: describeBox(customBox), forcedOnly: true };
   syncUrl();
 
   elements.chartTitle.textContent = `${spec.label} over ${describeBox(customBox)}`;
-  drawFanChart(elements.chart, {
-    x: result.years,
-    series: [forced],
-    yLabel: spec.yLabel,
-    format: spec.format,
-  });
+  drawChart();
   drawSeasonalPanel();
 
   setStatus(
@@ -258,6 +381,43 @@ async function runCustomRegion() {
       `11 MB noise artifact, which this page does not load. Pick a listed ` +
       `place for the full spread.`
   );
+}
+
+/** The fan chart and its legend, from the last run. */
+function drawChart() {
+  if (!lastRun) return;
+  const spec = VARIABLES[lastRun.variable];
+  drawFanChart(elements.chart, {
+    x: lastRun.years,
+    groups: lastRun.runs.map(({ scenario, series }) => ({
+      label: scenarioShortLabel(scenario),
+      colour: selectedColour(scenario),
+      series: series.map(annualMeans),
+    })),
+    yLabel: spec.yLabel,
+    format: spec.format,
+  });
+
+  // The legend says what the marks are; which scenario is which is named on
+  // the chart itself when there are several.
+  const colour = selectedColour(lastRun.runs[0].scenario);
+  const swatch = (kind, text) => {
+    const span = document.createElement('span');
+    span.className = `swatch swatch--${kind}`;
+    span.style.background = colour;
+    return [span, ` ${text} `];
+  };
+  if (lastRun.forcedOnly) {
+    elements.chartLegend.textContent = 'Forced response, no ensemble';
+  } else if (lastRun.runs.length === 1) {
+    elements.chartLegend.replaceChildren(
+      ...swatch('median', 'median'),
+      ...swatch('band', '25–75%'),
+      ...swatch('wide', '5–95%')
+    );
+  } else {
+    elements.chartLegend.textContent = 'Median (line) and 5–95% (band) per scenario';
+  }
 }
 
 /** A human-readable description of a box. */
@@ -280,16 +440,16 @@ function drawSeasonalPanel() {
   }
   elements.seasonal.closest('.panel').hidden = false;
   const spec = VARIABLES[lastRun.variable];
-  const months = lastRun.converted[0].length;
 
-  const climatology = (fromYear, toYear) => {
+  const climatology = (ensemble, fromYear, toYear) => {
+    const months = ensemble[0].length;
     const out = new Float64Array(12);
     const from = (fromYear - WINDOW.start) * 12;
     const to = Math.min((toYear - WINDOW.start + 1) * 12, months);
     for (let m = 0; m < 12; m += 1) {
       let sum = 0;
       let count = 0;
-      for (const series of lastRun.converted) {
+      for (const series of ensemble) {
         for (let t = from + m; t < to; t += 12) {
           sum += series[t];
           count += 1;
@@ -301,18 +461,41 @@ function drawSeasonalPanel() {
   };
 
   drawSeasonal(elements.seasonal, {
-    early: climatology(2015, 2034),
-    late: climatology(2081, 2100),
+    // The first scenario's, as the baseline: by 2015-2034 the scenarios have
+    // barely begun to diverge.
+    early: climatology(lastRun.runs[0].series, 2015, 2034),
+    late: lastRun.runs.map(({ scenario, series }) => ({
+      colour: selectedColour(scenario),
+      values: climatology(series, 2081, 2100),
+    })),
     format: spec.format,
   });
+
+  // Built from text nodes, not markup: the labels are ours, but there is no
+  // reason to parse them as HTML.
+  const swatch = (className, colour) => {
+    const span = document.createElement('span');
+    span.className = `swatch ${className}`;
+    if (colour) span.style.background = colour;
+    return span;
+  };
+  const items = [swatch('swatch--dashed'), ' 2015–2034 '];
+  for (const { scenario } of lastRun.runs) {
+    const label = lastRun.runs.length === 1 ? '2081–2100' : scenarioShortLabel(scenario);
+    items.push(swatch('swatch--line', selectedColour(scenario)), ` ${label} `);
+  }
+  if (lastRun.runs.length > 1) items.push('(2081–2100)');
+  elements.seasonalLegend.replaceChildren(...items);
 }
 
 /** The current control state, as the URL records it. */
 function currentState() {
   return {
+    model: elements.model.value,
     variable: elements.variable.value,
     location: elements.location.value,
-    scenario: elements.scenario.value,
+    scenarios: selection,
+    compare,
     nRealizations: Number(elements.realizations.value),
     seed,
   };
@@ -332,9 +515,13 @@ function syncUrl() {
 
 /** Apply state parsed from the URL to the controls. */
 function applyState(state) {
+  elements.model.value = state.model;
   elements.variable.value = state.variable;
   if (explorer.locations.includes(state.location)) elements.location.value = state.location;
-  if (explorer.scenarios.includes(state.scenario)) elements.scenario.value = state.scenario;
+  selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
+  if (!selection.length) selection = [explorer.scenarios.includes('ssp245') ? 'ssp245' : explorer.scenarios[0]];
+  compare = state.compare;
+  showSelection();
   elements.realizations.value = String(state.nRealizations);
   seed = state.seed;
 
@@ -377,11 +564,10 @@ function attachActions() {
     const spec = VARIABLES[lastRun.variable];
     const csv = toCsv({
       years: lastRun.years,
-      series: lastRun.converted,
+      runs: lastRun.runs,
       bundle: explorer.bundles[lastRun.variable],
       variable: lastRun.variable,
       location: lastRun.location,
-      scenario: lastRun.scenario,
       units: spec.yLabel,
       seed,
       url: toUrl(currentState()),
@@ -397,8 +583,8 @@ function attachActions() {
       title: `${spec.label} at ${placeLabel(lastRun.location)}`,
       subtitle:
         `${explorer.bundles[lastRun.variable].attrs.cmip6_model} · ` +
-        `${scenarioLabel(lastRun.scenario)} · ` +
-        `${lastRun.converted.length} realizations · ${WINDOW.start}–${WINDOW.end}`,
+        `${lastRun.runs.map((r) => scenarioLabel(r.scenario)).join(', ')} · ` +
+        `${lastRun.runs[0].series.length} realizations · ${WINDOW.start}–${WINDOW.end}`,
     });
     download(`${stem()}.png`, blob);
     flash(elements.downloadPng, 'Chart saved');
@@ -417,7 +603,7 @@ function stem() {
     cmip6Model: explorer.bundles[lastRun.variable].attrs.cmip6_model,
     variable: lastRun.variable,
     location: lastRun.location,
-    scenario: lastRun.scenario,
+    scenario: lastRun.runs.map((r) => r.scenario),
   });
 }
 
@@ -439,7 +625,7 @@ async function loadMap() {
     elements.mapPanel.dataset.map = 'ready';
     elements.loadMap.hidden = true;
     elements.mapModes.hidden = false;
-    setMapMode('select');
+    setMapMode(mapMode);
     await renderMap();
   } catch (error) {
     setStatus(`Could not load the map: ${error.message}`, 'error');
@@ -468,9 +654,25 @@ function toMapUnits(field, variable) {
   });
 }
 
-/** Compute and draw the forced-response map for the selected year. */
+/** Every map canvas, in grid order. */
+function mapCanvases() {
+  return [elements.map, elements.mapB, elements.mapDiff];
+}
+
+/** Guards against an older, slower render landing after a newer one. */
+let mapRequest = 0;
+
+/**
+ * Compute and draw the forced-response maps for the selected year.
+ *
+ * One scenario selected, one map. Two or more, the pair chosen in the
+ * compare menus, each on the same scale, and their difference B − A on its
+ * own zero-centred scale. The difference is taken in map units, so for
+ * precipitation it is in percentage points of the same climatology.
+ */
 async function renderMap() {
   if (elements.mapPanel.dataset.map !== 'ready') return;
+  const request = ++mapRequest;
 
   const variable = elements.variable.value;
   const year = Number(elements.mapYear.value);
@@ -479,17 +681,32 @@ async function renderMap() {
     prClimatology = await explorer.climatology();
   }
 
-  const { field, lat, lon } = await explorer.forcedMap({
-    variable,
-    scenario: elements.scenario.value,
-    year,
-  });
+  const shown = compare ?? [selection[0]];
+  let fields;
+  let grid;
+  try {
+    fields = [];
+    for (const scenario of shown) {
+      const { field, lat, lon } = await explorer.forcedMap({ variable, scenario, year });
+      grid = { lat, lon };
+      fields.push(toMapUnits(field, variable));
+    }
+  } catch (error) {
+    setStatus(`Could not draw the map: ${error.message}`, 'error');
+    return;
+  }
+  if (request !== mapRequest) return;
 
-  const converted = toMapUnits(field, variable);
-  lastMap = { field: converted, lat, lon, variable, year };
+  let difference = null;
+  if (fields.length === 2) {
+    difference = Float64Array.from(fields[1], (v, i) => v - fields[0][i]);
+  }
+  lastMap = { ...grid, fields, difference, scenarios: shown, variable, year };
 
   redrawMap();
-  elements.mapTitle.textContent = `Forced response, ${year}`;
+  elements.mapTitle.textContent = compare
+    ? `Forced response, ${year}: two scenarios and their difference`
+    : `Forced response, ${year}`;
 }
 
 /** Switch which gesture a plain drag performs. */
@@ -497,10 +714,36 @@ function setMapMode(mode) {
   mapMode = mode;
   elements.modeSelect.setAttribute('aria-pressed', String(mode === 'select'));
   elements.modePan.setAttribute('aria-pressed', String(mode === 'pan'));
-  elements.map.style.cursor = mode === 'pan' ? 'grab' : 'crosshair';
+  for (const canvas of mapCanvases()) {
+    canvas.style.cursor = mode === 'pan' ? 'grab' : 'crosshair';
+  }
 }
 
-/** Selecting a region, drawing one, panning and zooming. */
+/** Show the view-reset button whenever the view is not the whole world. */
+function showResetView() {
+  elements.resetView.hidden =
+    mapView.zoom === 1 && mapView.centreLat === 0 && mapView.centreLon === 0;
+}
+
+/** Select the AR6 region under a point, if the bundle carries it. */
+function selectRegionAt(point) {
+  const region = regionAt(outlines, point);
+  if (!region) return;
+  const spec = `regional:${region.code}`;
+  if (!explorer.locations.includes(spec)) return;
+  customBox = null;
+  elements.clearBox.hidden = true;
+  elements.location.value = spec;
+  run();
+  redrawMap();
+}
+
+/**
+ * Selecting a region, drawing one, panning and zooming.
+ *
+ * Every map listens, and every gesture changes the one shared view or
+ * selection, so the three maps in a comparison always show the same place.
+ */
 function attachMap() {
   elements.loadMap.addEventListener('click', loadMap);
   elements.modeSelect.addEventListener('click', () => setMapMode('select'));
@@ -508,6 +751,7 @@ function attachMap() {
 
   elements.resetView.addEventListener('click', () => {
     mapView = defaultView();
+    showResetView();
     redrawMap();
   });
 
@@ -523,117 +767,157 @@ function attachMap() {
     redrawMap();
   });
 
-  // Wheel zooms about the pointer, so the feature under the cursor stays put
-  // — anchoring on the centre instead makes zooming in on anything a chase.
-  elements.map.addEventListener(
-    'wheel',
-    (event) => {
-      if (elements.mapPanel.dataset.map !== 'ready') return;
-      event.preventDefault();
-      const before = toLatLon(elements.map, event, mapView);
-      const factor = Math.exp(-event.deltaY * 0.0015);
-      const zoomed = clampView({ ...mapView, zoom: mapView.zoom * factor });
-      const after = toLatLon(elements.map, event, zoomed);
-      mapView = clampView({
-        zoom: zoomed.zoom,
-        centreLat: zoomed.centreLat + (before.lat - after.lat),
-        centreLon: zoomed.centreLon + (before.lon - after.lon),
-      });
-      elements.resetView.hidden = mapView.zoom === 1;
-      redrawMap();
-    },
-    { passive: false }
-  );
-
   let gesture = null;
 
-  elements.map.addEventListener('pointerdown', (event) => {
-    if (elements.mapPanel.dataset.map !== 'ready') return;
-    // Shift does whichever the active mode does not, so either gesture is
-    // always one key away without leaving the mode you prefer.
-    const panning = event.shiftKey ? mapMode === 'select' : mapMode === 'pan';
-    gesture = {
-      panning,
-      from: toLatLon(elements.map, event, mapView),
-      startView: { ...mapView },
-      startX: event.clientX,
-      startY: event.clientY,
-      moved: false,
-    };
-    capture(elements.map, event);
-    if (panning) elements.map.style.cursor = 'grabbing';
-  });
+  for (const canvas of mapCanvases()) {
+    // Wheel zooms about the pointer, so the feature under the cursor stays
+    // put — anchoring on the centre instead makes zooming in on anything a
+    // chase.
+    canvas.addEventListener(
+      'wheel',
+      (event) => {
+        if (elements.mapPanel.dataset.map !== 'ready') return;
+        event.preventDefault();
+        const before = toLatLon(canvas, event, mapView);
+        const factor = Math.exp(-event.deltaY * 0.0015);
+        const zoomed = clampView({ ...mapView, zoom: mapView.zoom * factor });
+        const after = toLatLon(canvas, event, zoomed);
+        mapView = clampView({
+          zoom: zoomed.zoom,
+          centreLat: zoomed.centreLat + (before.lat - after.lat),
+          centreLon: zoomed.centreLon + (before.lon - after.lon),
+        });
+        showResetView();
+        redrawMap();
+      },
+      { passive: false }
+    );
 
-  elements.map.addEventListener('pointermove', (event) => {
-    if (!gesture) return;
+    canvas.addEventListener('pointerdown', (event) => {
+      if (elements.mapPanel.dataset.map !== 'ready') return;
+      // Shift does whichever the active mode does not, so either gesture is
+      // always one key away without leaving the mode you prefer.
+      const panning = event.shiftKey ? mapMode === 'select' : mapMode === 'pan';
+      gesture = {
+        canvas,
+        panning,
+        from: toLatLon(canvas, event, mapView),
+        startView: { ...mapView },
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+      };
+      capture(canvas, event);
+      if (panning) canvas.style.cursor = 'grabbing';
+    });
 
-    if (gesture.panning) {
-      const rect = elements.map.getBoundingClientRect();
-      const height = Math.round(rect.width / 2);
-      const project = projection(gesture.startView, rect.width, height);
-      const scaleY = height / rect.height;
-      mapView = clampView({
-        zoom: gesture.startView.zoom,
-        centreLat:
-          gesture.startView.centreLat +
-          (event.clientY - gesture.startY) * scaleY * project.degreesPerPixelY,
-        centreLon:
-          gesture.startView.centreLon -
-          (event.clientX - gesture.startX) * project.degreesPerPixelX,
-      });
+    canvas.addEventListener('pointermove', (event) => {
+      if (!gesture) {
+        showReadout(toLatLon(canvas, event, mapView));
+        return;
+      }
+      if (gesture.canvas !== canvas) return;
+
+      // A click and a tiny drag are the same gesture to a human, so neither
+      // a pan nor a box starts until the pointer has moved a few pixels.
+      const distance = Math.hypot(event.clientX - gesture.startX, event.clientY - gesture.startY);
+      if (!gesture.moved && distance < 4) return;
       gesture.moved = true;
-      elements.resetView.hidden = mapView.zoom === 1 && mapView.centreLat === 0;
+
+      if (gesture.panning) {
+        const rect = canvas.getBoundingClientRect();
+        const height = Math.round(rect.width / 2);
+        const project = projection(gesture.startView, rect.width, height);
+        const scaleY = height / rect.height;
+        mapView = clampView({
+          zoom: gesture.startView.zoom,
+          centreLat:
+            gesture.startView.centreLat +
+            (event.clientY - gesture.startY) * scaleY * project.degreesPerPixelY,
+          centreLon:
+            gesture.startView.centreLon -
+            (event.clientX - gesture.startX) * project.degreesPerPixelX,
+        });
+        showResetView();
+        redrawMap();
+        return;
+      }
+
+      customBox = boxFrom(gesture.from, toLatLon(canvas, event, mapView));
       redrawMap();
-      return;
-    }
+    });
 
-    const to = toLatLon(elements.map, event, mapView);
-    // A click and a tiny drag are the same gesture to a human, so only treat
-    // it as a box once it is big enough to have been meant. In degrees of the
-    // current view, so the threshold stays a few pixels however far in we are.
-    const threshold = 2 / mapView.zoom;
-    if (
-      Math.abs(to.lat - gesture.from.lat) < threshold &&
-      Math.abs(to.lon - gesture.from.lon) < threshold
-    ) {
-      return;
-    }
-    gesture.moved = true;
-    customBox = boxFrom(gesture.from, to);
-    redrawMap();
-  });
+    canvas.addEventListener('pointerup', (event) => {
+      if (!gesture || gesture.canvas !== canvas) return;
+      const { panning, moved } = gesture;
+      const to = toLatLon(canvas, event, mapView);
+      gesture = null;
+      setMapMode(mapMode);
 
-  const finish = (event) => {
-    if (!gesture) return;
-    const { panning, moved } = gesture;
-    const to = toLatLon(elements.map, event, mapView);
-    gesture = null;
-    setMapMode(mapMode);
-
-    if (panning) return;
-
-    if (moved) {
+      // A plain click selects the AR6 region under the pointer, whichever
+      // mode is active: pan is the default, and region picking should not
+      // need a mode switch to discover.
+      if (!moved) {
+        selectRegionAt(to);
+        return;
+      }
+      if (panning) return;
       elements.clearBox.hidden = false;
       run();
-      return;
-    }
+    });
 
-    // A plain click selects the AR6 region under the pointer.
-    const region = regionAt(outlines, to);
-    if (!region) return;
-    const spec = `regional:${region.code}`;
-    if (!explorer.locations.includes(spec)) return;
-    customBox = null;
-    elements.clearBox.hidden = true;
-    elements.location.value = spec;
-    run();
-    redrawMap();
-  };
-  elements.map.addEventListener('pointerup', finish);
-  elements.map.addEventListener('pointercancel', () => {
-    gesture = null;
-    setMapMode(mapMode);
-  });
+    canvas.addEventListener('pointercancel', () => {
+      gesture = null;
+      setMapMode(mapMode);
+    });
+
+    canvas.addEventListener('pointerleave', () => {
+      if (!gesture) showReadout(null);
+    });
+  }
+}
+
+/** Units for a map value, for the readout. */
+function mapValueText(value, variable, difference = false) {
+  if (!Number.isFinite(value)) return '—';
+  const sign = value > 0 ? '+' : value < 0 ? '−' : '';
+  const magnitude = Math.abs(value);
+  if (variable === 'tas') return `${sign}${magnitude.toFixed(1)} °C`;
+  return `${sign}${magnitude.toFixed(0)}${difference ? ' pts' : ' %'}`;
+}
+
+/**
+ * What the maps show under the pointer.
+ *
+ * In a comparison it reads all three at once, which is the point of having
+ * them side by side: the colours say roughly, this says exactly.
+ */
+function showReadout(point) {
+  if (!lastMap) return;
+  const prompt = compare ? 'Point at any map to read all three.' : '';
+  if (!point) {
+    elements.mapReadout.textContent = prompt;
+    return;
+  }
+  const ns = `${Math.abs(point.lat).toFixed(0)}°${point.lat >= 0 ? 'N' : 'S'}`;
+  const ew = `${Math.abs(point.lon).toFixed(0)}°${point.lon >= 0 ? 'E' : 'W'}`;
+  const read = (field) => valueAt({ field, lat: lastMap.lat, lon: lastMap.lon }, point);
+  const rows = lastMap.fields.map((field, i) => [
+    scenarioLabel(lastMap.scenarios[i]),
+    mapValueText(read(field), lastMap.variable),
+  ]);
+  if (lastMap.difference) {
+    rows.push(['Difference', mapValueText(read(lastMap.difference), lastMap.variable, true)]);
+  }
+  const list = document.createElement('dl');
+  for (const [term, value] of rows) {
+    const dt = document.createElement('dt');
+    dt.textContent = term;
+    const dd = document.createElement('dd');
+    dd.textContent = value;
+    list.append(dt, dd);
+  }
+  elements.mapReadout.replaceChildren(`${ns} ${ew}`, list);
 }
 
 /**
@@ -678,7 +962,7 @@ const CONTEXT_SERIES = {
 async function renderContext() {
   const which = elements.contextSeries.value;
   const spec = CONTEXT_SERIES[which];
-  const selected = elements.scenario.value;
+  const selected = selection;
   const neutral = getComputedStyle(document.documentElement)
     .getPropertyValue('--muted')
     .trim() || '#64748b';
@@ -712,6 +996,7 @@ async function renderContext() {
       ...s,
       label: scenarioShortLabel(s.name),
       colour: scenarioColour(s.name, neutral),
+      selectedColour: selectedColour(s.name, neutral),
       // The CMIP7 markers are the subject and get named; the SSPs are the
       // reference set behind them and would only crowd the margin.
       labelled: scenarioFamily(s.name) === 'CMIP7 ScenarioMIP',
@@ -721,56 +1006,166 @@ async function renderContext() {
     yLabel: spec.label,
     format: spec.format,
   });
-  elements.contextTitle.textContent = `Scenario context — ${scenarioLabel(selected)}`;
+  elements.contextTitle.textContent =
+    selected.length === 1
+      ? `Scenario context — ${scenarioLabel(selected[0])}`
+      : `Scenario context — ${selected.length} scenarios`;
 }
 
-/** Redraw the map from the last field, without recomputing it. */
+/** A caption: the scenario's colour, then its name. */
+function caption(element, text, colour = null) {
+  element.replaceChildren();
+  if (colour) {
+    const swatch = document.createElement('span');
+    swatch.className = 'map-caption__swatch';
+    swatch.style.background = colour;
+    element.append(swatch);
+  }
+  element.append(text);
+}
+
+/** Redraw the maps from the last fields, without recomputing them. */
 function redrawMap() {
   if (!lastMap || elements.mapPanel.dataset.map !== 'ready') return;
   const kind = lastMap.variable === 'tas' ? 'temperature' : 'precipitation';
-
-  drawMap(elements.map, {
-    field: lastMap.field,
+  const shared = {
     lat: lastMap.lat,
     lon: lastMap.lon,
     regions: outlines,
     coastlines,
-    highlight: elements.location.value.startsWith('regional:')
+    highlight: elements.location.value.startsWith('regional:') && !customBox
       ? elements.location.value.slice('regional:'.length)
       : null,
     box: customBox,
-    variable: kind,
     view: mapView,
-  });
-
+  };
+  const units = lastMap.variable === 'tas' ? '°C' : '%';
+  const noun = lastMap.variable === 'tas' ? 'Temperature' : 'Precipitation';
   const scale = classedScale(kind);
-  drawColourBar(elements.colourbar, {
-    edges: scale.edges,
-    colours: scale.colours,
-    label:
-      lastMap.variable === 'tas'
-        ? `Temperature change in ${lastMap.year} (°C)`
-        : `Precipitation change in ${lastMap.year} (%)`,
-  });
+  const bar = (canvas) =>
+    drawColourBar(canvas, {
+      edges: scale.edges,
+      colours: scale.colours,
+      label: `${noun} change in ${lastMap.year} (${units})`,
+    });
+
+  const comparing = lastMap.fields.length === 2;
+  elements.maps.dataset.layout = comparing ? 'compare' : 'single';
+
+  drawMap(elements.map, { ...shared, field: lastMap.fields[0], variable: kind });
+  bar(elements.colourbar);
+  const [a, b] = lastMap.scenarios;
+  caption(elements.captionA, comparing ? `A: ${scenarioLabel(a)}` : '', comparing ? selectedColour(a) : null);
+
+  if (comparing) {
+    drawMap(elements.mapB, { ...shared, field: lastMap.fields[1], variable: kind });
+    bar(elements.colourbarB);
+    caption(elements.captionB, `B: ${scenarioLabel(b)}`, selectedColour(b));
+
+    const differenceKind = `${kind}-difference`;
+    drawMap(elements.mapDiff, { ...shared, field: lastMap.difference, variable: differenceKind });
+    const differenceScale = classedScale(differenceKind);
+    drawColourBar(elements.colourbarDiff, {
+      edges: differenceScale.edges,
+      colours: differenceScale.colours,
+      label:
+        lastMap.variable === 'tas'
+          ? `B − A in ${lastMap.year} (°C)`
+          : `B − A in ${lastMap.year} (percentage points)`,
+    });
+    // A difference of forced responses carries no internal variability, so
+    // it is the signal the scenarios separate by, not a "will differ by".
+    caption(
+      elements.captionDiff,
+      `B − A: ${scenarioShortLabel(b)} minus ${scenarioShortLabel(a)}, forced signal only`
+    );
+  }
+  showReadout(null);
 }
 
 /** Redraw everything from the last run, without regenerating it. */
 function redraw() {
   redrawMap();
   renderContext();
-  if (!lastRun) return;
-  const spec = VARIABLES[lastRun.variable];
-  drawFanChart(elements.chart, {
-    x: lastRun.years,
-    series: lastRun.converted.map(annualMeans),
-    yLabel: spec.yLabel,
-    format: spec.format,
-  });
+  drawChart();
   drawSeasonalPanel();
 }
 
+/**
+ * Load another model's bundles and redraw everything from them.
+ *
+ * Locations and scenarios are the same for every model the exporter writes,
+ * but the grid is not, so everything cached from the previous model's pattern
+ * artifact — the climatology, the drawn map — goes with it. Outlines,
+ * coastlines and emissions do not depend on the model and are carried over.
+ */
+async function switchModel(model) {
+  const previous = explorer;
+  elements.model.disabled = true;
+  setStatus(`Loading ${model}…`);
+  try {
+    explorer = await Explorer.load(dataBase, model);
+  } catch (error) {
+    setStatus(`Could not load ${model}: ${error.message}`, 'error');
+    elements.model.value = previous.model;
+    elements.model.disabled = false;
+    return;
+  }
+  explorer.regionOutlines = previous.regionOutlines;
+  explorer.coastlineRings = previous.coastlineRings;
+  explorer.scenarioEmissions = previous.scenarioEmissions;
+  prClimatology = null;
+  lastMap = null;
+  elements.model.disabled = false;
+
+  showProvenance();
+  run();
+  renderContext();
+  renderMap();
+}
+
 function attachControls() {
+  // The compare menus pick which two of the selection the maps show. Choosing
+  // the scenario already in the other slot swaps the two rather than
+  // comparing a scenario with itself.
+  for (const [menu, slot] of [[elements.compareA, 0], [elements.compareB, 1]]) {
+    menu.addEventListener('change', () => {
+      const next = [...compare];
+      const other = 1 - slot;
+      if (menu.value === next[other]) next[other] = next[slot];
+      next[slot] = menu.value;
+      compare = next;
+      showSelection();
+      syncUrl();
+      renderMap();
+    });
+  }
+
+  // The scenario list is a dropdown, so close it on a click elsewhere, as a
+  // native select would.
+  document.addEventListener('click', (event) => {
+    if (!elements.scenarioPicker.contains(event.target)) elements.scenarioPicker.open = false;
+  });
+  elements.scenarioPicker.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      elements.scenarioPicker.open = false;
+      elements.scenarioPicker.querySelector('summary').focus();
+    }
+  });
+
   elements.controls.addEventListener('change', (event) => {
+    if (event.target === elements.model) {
+      switchModel(elements.model.value);
+      return;
+    }
+    if (event.target.name === 'scenario') {
+      if (!readSelection(event.target)) return;
+      showSelection();
+      run();
+      renderContext();
+      renderMap();
+      return;
+    }
     // Choosing a listed place supersedes a region drawn on the map.
     if (event.target === elements.location && customBox) {
       customBox = null;
@@ -793,21 +1188,61 @@ function attachControls() {
   });
   observer.observe(elements.chart);
   observer.observe(elements.seasonal);
-  observer.observe(elements.map);
+  for (const canvas of mapCanvases()) observer.observe(canvas);
   observer.observe(elements.context);
 }
 
+/** Which model, trained how, from which version of METEOR. */
+function showProvenance() {
+  const bundle = explorer.bundles.tas;
+  elements.provenance.textContent =
+    `Bundle: ${bundle.attrs.cmip6_model}, trained on ${bundle.attrs.training_scenario}, ` +
+    `METEOR ${bundle.attrs.meteor_version}, schema v${bundle.schemaVersion}. ` +
+    `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
+}
+
+/** One entry per model with artifacts on the site. */
+function populateModels(models) {
+  for (const model of models) {
+    const option = document.createElement('option');
+    option.value = model;
+    option.textContent = model;
+    elements.model.append(option);
+  }
+  // A single model is not a choice, so do not present it as one.
+  elements.model.closest('.control').hidden = models.length < 2;
+}
+
 async function start() {
+  // An absolute path from the configured base, rather than a relative one:
+  // on Pages the page may be served with or without a trailing slash, and a
+  // relative URL resolves differently in each case.
+  dataBase = `${import.meta.env.BASE_URL}data/`;
+  const models = await availableModels(dataBase);
+  runner = new EnsembleRunner({
+    loadExplorer: (model) => Explorer.load(dataBase, model),
+    createWorker: () => {
+      // Written out in full so Vite recognises and bundles the worker.
+      const worker = new Worker(new URL('./ensemble-worker.js', import.meta.url), {
+        type: 'module',
+      });
+      worker.postMessage({ type: 'init', base: new URL(dataBase, window.location.href).href });
+      return worker;
+    },
+  });
+
+  // The model decides which bundles to fetch, so it is read from the link
+  // before anything else; the rest is validated once the bundles say what
+  // locations and scenarios exist.
+  const { model } = fromQuery(window.location.search, { models });
   try {
-    // An absolute path from the configured base, rather than a relative one:
-    // on Pages the page may be served with or without a trailing slash, and a
-    // relative URL resolves differently in each case.
-    explorer = await Explorer.load(`${import.meta.env.BASE_URL}data/`);
+    explorer = await Explorer.load(dataBase, model);
   } catch (error) {
     setStatus(`Could not load the emulator bundles: ${error.message}`, 'error');
     return;
   }
 
+  populateModels(models);
   populateControls();
 
   // Apply the shared link before the first run, so a link opens on what it
@@ -816,6 +1251,7 @@ async function start() {
     fromQuery(window.location.search, {
       locations: explorer.locations,
       scenarios: explorer.scenarios,
+      models,
     })
   );
 
@@ -825,11 +1261,7 @@ async function start() {
   elements.contextSeries.addEventListener('change', renderContext);
   elements.mapPanel.dataset.map = 'idle';
 
-  const bundle = explorer.bundles.tas;
-  elements.provenance.textContent =
-    `Bundle: ${bundle.attrs.cmip6_model}, trained on ${bundle.attrs.training_scenario}, ` +
-    `METEOR ${bundle.attrs.meteor_version}, schema v${bundle.schemaVersion}. ` +
-    `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
+  showProvenance();
 
   run();
   renderContext();
