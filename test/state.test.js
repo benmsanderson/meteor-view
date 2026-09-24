@@ -40,6 +40,7 @@ describe('URL state', () => {
       compare: ['ssp585', 'ssp126'],
       nRealizations: 50,
       seed: 12345,
+      baseline: 'recent',
     };
     expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
   });
@@ -58,6 +59,12 @@ describe('URL state', () => {
       CONTEXT
     );
     expect(parsed).toEqual(DEFAULTS);
+  });
+
+  it('accepts only the baselines the page offers', () => {
+    expect(fromQuery('?ref=recent', CONTEXT).baseline).toBe('recent');
+    expect(fromQuery('?ref=1750', CONTEXT).baseline).toBe(DEFAULTS.baseline);
+    expect(toQuery({ ...DEFAULTS, baseline: 'pi' })).toBe('');
   });
 
   it('reads a single-scenario link from before multi-selection', () => {

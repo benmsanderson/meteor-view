@@ -39,6 +39,40 @@ const MONTHS = 12;
 /** Output window. The `pr` transform parameters are fitted for these years. */
 export const WINDOW = { start: 2015, end: 2100 };
 
+/**
+ * The reference periods change can be measured from.
+ *
+ * Pre-industrial is the IPCC convention, and what warming levels like 1.5 °C
+ * are defined against. Recent history answers "how much more than now?" —
+ * and removes the part of the spread between models that each inherited from
+ * its own historical warming, which is worth saying wherever it is shown.
+ *
+ * Both are means of the *forced* response over the period, so a baseline is a
+ * property of the model and the place, not of any one realization.
+ */
+export const BASELINES = {
+  pi: { label: '1850–1900', from: 1850, to: 1900 },
+  recent: { label: '2005–2024', from: 2005, to: 2024 },
+};
+
+/**
+ * Which scenario a baseline is taken from.
+ *
+ * One shared scenario, so every scenario shifts by the same amount and the
+ * difference between any two is untouched by the choice of baseline. History
+ * is identical in all of them to 2014; 2015-2024 differs by at most 0.04 °C in
+ * the global mean. CMIP7 Medium, falling back to SSP2-4.5 in a build without
+ * the CMIP7 scenarios.
+ */
+export const BASELINE_SCENARIOS = ['cmip7-medium', 'ssp245'];
+
+/** Mean of an annual series, starting at `yearStart`, over `[from, to]`. */
+function periodMean(series, yearStart, from, to) {
+  let sum = 0;
+  for (let year = from; year <= to; year += 1) sum += series[year - yearStart];
+  return sum / (to - from + 1);
+}
+
 /** The model the site shipped with, and what a link without `m=` means. */
 export const DEFAULT_MODEL = 'NorESM2-MM';
 
@@ -91,6 +125,84 @@ export class Explorer {
     this.scenarioEmissions = null;
     this.coastlineRings = null;
     this.prClimatology = null;
+    /** Baseline offsets and fields, which never change for a loaded model. */
+    this.baselineCache = new Map();
+  }
+
+  /** The scenario baselines are taken from. */
+  get baselineScenario() {
+    return BASELINE_SCENARIOS.find((name) => this.scenarios.includes(name)) ?? this.scenarios[0];
+  }
+
+  /**
+   * The forced response at a listed location, averaged over a baseline period.
+   *
+   * Subtracted from a run to express it as change from that period.
+   *
+   * @param {object} options
+   * @param {'tas'|'pr'} options.variable
+   * @param {string} options.location
+   * @param {keyof BASELINES} options.baseline
+   * @returns {number} in the bundle's units
+   */
+  baselineOffset({ variable, location, baseline }) {
+    const key = `offset:${variable}:${location}:${baseline}`;
+    if (!this.baselineCache.has(key)) {
+      const bundle = this.bundles[variable];
+      const forced = forcedResponse(bundle, location, bundle.forcing(this.baselineScenario));
+      const { from, to } = BASELINES[baseline];
+      this.baselineCache.set(key, periodMean(forced, bundle.forcingYearStart, from, to));
+    }
+    return this.baselineCache.get(key);
+  }
+
+  /** As {@link baselineOffset}, for a drawn region. Not cached: masks vary. */
+  async customBaselineOffset({ variable, mask, baseline }) {
+    const forced = await this.customForcedFull({
+      variable,
+      scenario: this.baselineScenario,
+      mask,
+    });
+    const { from, to } = BASELINES[baseline];
+    return periodMean(forced, this.bundles[variable].forcingYearStart, from, to);
+  }
+
+  /**
+   * The forced-response map averaged over a baseline period, and the map for
+   * the first year of the precipitation climatology.
+   *
+   * The average of maps is the map of the averaged PCs, since the map is
+   * linear in them, so this costs one convolution and one projection rather
+   * than one per year.
+   *
+   * @returns {Promise<{mean: Float64Array, at2015: Float64Array}>}
+   */
+  async baselineMap({ variable, baseline }) {
+    const key = `map:${variable}:${baseline}`;
+    if (!this.baselineCache.has(key)) {
+      const artifact = await this.patterns(variable);
+      const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
+      const bundle = this.bundles[variable];
+      const { pcs } = stepResponsePcs(
+        patternKernel(artifact),
+        bundle.forcing(this.baselineScenario)
+      );
+      const stride = artifact.dims.exp * artifact.nModes;
+      const rows = (from, to) => {
+        const mean = new Float64Array(stride);
+        for (let year = from; year <= to; year += 1) {
+          const offset = (year - bundle.forcingYearStart) * stride;
+          for (let i = 0; i < stride; i += 1) mean[i] += pcs[offset + i];
+        }
+        return mean.map((v) => v / (to - from + 1));
+      };
+      const { from, to } = BASELINES[baseline];
+      this.baselineCache.set(key, {
+        mean: artifact.map(rows(from, to)),
+        at2015: artifact.map(rows(2015, 2015)),
+      });
+    }
+    return this.baselineCache.get(key);
   }
 
   /**
@@ -236,6 +348,21 @@ export class Explorer {
    * — so this returns the forced response alone, and says so.
    */
   async customForcedResponse({ variable, scenario, mask, pathway = null }) {
+    let annual = await this.customForcedFull({ variable, scenario, mask });
+    if (pathway) {
+      annual = scaleToWarmingPathway(annual, this.globalWarming(scenario), pathway);
+    }
+    const bundle = this.bundles[variable];
+    const start = WINDOW.start - bundle.forcingYearStart;
+    const nYears = WINDOW.end - WINDOW.start + 1;
+    return {
+      years: this.windowYears(),
+      forced: annual.slice(start, start + nYears),
+    };
+  }
+
+  /** The forced response over a mask, annual, over the full forcing axis. */
+  async customForcedFull({ variable, scenario, mask }) {
     const artifact = await this.patterns(variable);
     const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
     const bundle = this.bundles[variable];
@@ -249,7 +376,7 @@ export class Explorer {
 
     const nExp = artifact.dims.exp;
     const nModes = artifact.nModes;
-    let annual = new Float64Array(nTimes);
+    const annual = new Float64Array(nTimes);
     for (let t = 0; t < nTimes; t += 1) {
       let acc = 0;
       for (let e = 0; e < nExp; e += 1) {
@@ -259,17 +386,7 @@ export class Explorer {
       }
       annual[t] = acc;
     }
-
-    if (pathway) {
-      annual = scaleToWarmingPathway(annual, this.globalWarming(scenario), pathway);
-    }
-
-    const start = WINDOW.start - bundle.forcingYearStart;
-    const nYears = WINDOW.end - WINDOW.start + 1;
-    return {
-      years: this.windowYears(),
-      forced: annual.slice(start, start + nYears),
-    };
+    return annual;
   }
 
   /**

@@ -57,6 +57,17 @@
         </div>
 
         <div class="control">
+          <label for="baseline">Change from</label>
+          <select
+            id="baseline"
+            title="Recent history removes the part of the spread between models that each inherited from its own historical warming."
+          >
+            <option value="pi">1850–1900</option>
+            <option value="recent">2005–2024</option>
+          </select>
+        </div>
+
+        <div class="control">
           <label for="realizations">Realizations</label>
           <select id="realizations">
             <option value="10">10</option>
@@ -196,6 +207,20 @@
           forcing from its own MAGICC assessment instead would have put a
           0.74 W/m² model difference inside what looks like a scenario
           difference.
+        </p>
+        <p>
+          <strong>Baselines.</strong> Temperature, and the maps, are shown as
+          change from a reference period: 1850–1900, the pre-industrial
+          convention warming levels are defined against, or 2005–2024, recent
+          history. Either is the model's own forced response averaged over the
+          period under CMIP7 Medium, and every scenario shares it, so the
+          difference between two scenarios does not depend on the choice.
+          Measuring from recent history removes the part of the spread between
+          models that each inherited from its own historical warming — the
+          models here warmed by between 0.7 and 1.6 °C from 1850–1900 to
+          2005–2024 — so switching baselines is a quick way to see how much of
+          their disagreement about the future is disagreement about the past.
+          The precipitation timeseries stays in absolute mm/day.
         </p>
         <p>
           <strong>What it is not.</strong> One model at a time, so the spread you

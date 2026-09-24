@@ -7,10 +7,21 @@
  */
 
 /** Comment lines, so pandas can skip them with `comment='#'`. */
-function provenanceLines({ bundle, variable, location, scenarios, units, url, nRealizations, seed }) {
+function provenanceLines({
+  bundle,
+  variable,
+  location,
+  scenarios,
+  units,
+  url,
+  nRealizations,
+  seed,
+  baseline = 'absolute (no baseline)',
+}) {
   return [
     `# METEOR emulator output, generated in the browser by meteor-view`,
     `# variable: ${variable} (${units})`,
+    `# baseline: ${baseline}`,
     `# location: ${location}`,
     `# scenarios: ${scenarios.join(', ')}`,
     `# realizations: ${nRealizations}, seed: ${seed}`,

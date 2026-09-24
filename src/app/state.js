@@ -39,6 +39,7 @@ export const DEFAULTS = {
   compare: null,
   nRealizations: 20,
   seed: DEFAULT_SEED,
+  baseline: 'pi',
 };
 
 /**
@@ -63,6 +64,7 @@ export function toQuery(state) {
     params.set('n', String(state.nRealizations));
   }
   if (state.seed !== DEFAULTS.seed) params.set('seed', String(state.seed));
+  if (state.baseline !== DEFAULTS.baseline) params.set('ref', state.baseline);
 
   const query = params.toString();
   return query ? `?${query}` : '';
@@ -88,6 +90,9 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
 
   const model = params.get('m');
   if (model && models.includes(model)) state.model = model;
+
+  const baseline = params.get('ref');
+  if (baseline === 'pi' || baseline === 'recent') state.baseline = baseline;
 
   const variable = params.get('v');
   if (variable === 'tas' || variable === 'pr') state.variable = variable;
