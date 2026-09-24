@@ -10,6 +10,7 @@
 import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
 import {
+  boxFromDrag,
   clampView,
   classedScale,
   defaultView,
@@ -900,7 +901,15 @@ function attachMap() {
         return;
       }
 
-      customBox = boxFrom(gesture.from, toLatLon(canvas, event, mapView));
+      // Eastward extent from how far the pointer moved, so a drag across the
+      // antimeridian is the strip drawn rather than the rest of the world.
+      const rect = canvas.getBoundingClientRect();
+      const { degreesPerPixelX } = projection(mapView, rect.width, Math.round(rect.width / 2));
+      customBox = boxFromDrag(
+        gesture.from,
+        toLatLon(canvas, event, mapView).lat,
+        (event.clientX - gesture.startX) * degreesPerPixelX
+      );
       redrawMap();
     });
 
@@ -990,16 +999,6 @@ function capture(element, event) {
   } catch {
     // No active pointer with that id: synthetic events, or a stale id.
   }
-}
-
-/** A normalised box from two corners. */
-function boxFrom(a, b) {
-  return {
-    south: Math.min(a.lat, b.lat),
-    north: Math.max(a.lat, b.lat),
-    west: Math.min(a.lon, b.lon),
-    east: Math.max(a.lon, b.lon),
-  };
 }
 
 /** Units and formatting for each series the context panel can show. */
