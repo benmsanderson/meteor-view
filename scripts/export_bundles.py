@@ -24,6 +24,7 @@ for this repository -- exactly ``base`` plus those three PRs. It supplies the
 
 import json
 import os
+import shutil
 import sys
 import tempfile
 
@@ -170,6 +171,70 @@ def export_plot_emissions(scenario_inputs_by_name, path):
     return path
 
 
+def unchanged(path, dataset):
+    """
+    Whether `path` already holds these numbers.
+
+    Compares the data variables and ignores the attributes, because every
+    export stamps a fresh `created` and so differs byte for byte even when
+    nothing has changed. Without this, re-exporting to pick up a one-line
+    change in a bundle rewrites the 2 MB pattern artifacts too -- and git keeps
+    every copy for ever. Four copies of each accumulated in a single day before
+    anyone noticed.
+    """
+    if not os.path.exists(path):
+        return False
+    try:
+        with xr.open_dataset(path) as existing:
+            if set(existing.data_vars) != set(dataset.data_vars):
+                return False
+            for name, values in dataset.data_vars.items():
+                left = np.asarray(existing[name].values)
+                right = np.asarray(values.values)
+                if left.shape != right.shape:
+                    return False
+                # equal_nan only applies to floats; bundles also carry strings
+                # for location kinds and experiment names.
+                floats = left.dtype.kind == "f" and right.dtype.kind == "f"
+                if not np.array_equal(left, right, equal_nan=floats):
+                    return False
+    except (OSError, ValueError):
+        return False
+    return True
+
+
+def write_if_changed(dataset, path, netcdf_format="NETCDF3_64BIT"):
+    """Write a dataset, unless the file already holds the same numbers."""
+    if unchanged(path, dataset):
+        print(f"unchanged {path}  ({os.path.getsize(path)/1e6:.2f} MB, left alone)")
+        return False
+    dataset.to_netcdf(path, format=netcdf_format)
+    print(f"wrote {path}  {os.path.getsize(path)/1e6:.2f} MB")
+    return True
+
+
+def produce(path, writer):
+    """
+    Run an exporter, and keep its output only if the numbers changed.
+
+    The METEOR exporters write straight to a path and stamp a fresh `created`
+    every time, so a re-export to pick up one changed bundle also rewrites
+    everything else byte-differently. This writes somewhere else first and
+    moves the result into place only when it says something new.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        candidate = os.path.join(tmp, os.path.basename(path))
+        writer(candidate)
+        with xr.open_dataset(candidate) as produced:
+            same = unchanged(path, produced.load())
+        if same:
+            print(f"unchanged {path}  ({os.path.getsize(path)/1024:.0f} KB, left alone)")
+            return False
+        shutil.move(candidate, path)
+    print(f"wrote {path}  {os.path.getsize(path)/1024:.0f} KB")
+    return True
+
+
 def export_pr_climatology(field, path):
     """
     Write the gridded precipitation baseline the percent-change map divides by.
@@ -197,8 +262,7 @@ def export_pr_climatology(field, path):
             "window_start": WINDOW[0],
         },
     )
-    dataset.to_netcdf(path, format="NETCDF3_64BIT")
-    print(f"wrote {path}  {os.path.getsize(path)/1024:.0f} KB")
+    write_if_changed(dataset, path)
 
 
 def locations():
@@ -233,20 +297,22 @@ def main():
             export_pr_climatology(baseline, os.path.join(OUT, f"meteor_{MODEL}_pr_climatology_v1.nc"))
 
         path = os.path.join(OUT, f"meteor_{MODEL}_{var}_bundle_v1.nc")
-        export_timeseries_bundle(
-            noise,
-            pattern,
+        produce(
             path,
-            locs,
-            variable=var,
-            cmip6_model=MODEL,
-            training_scenario="ssp245",
-            transform_reference=ref,
-            transform_window=WINDOW if ref is not None else None,
-            scenarios=scenarios,
-            source_url="https://github.com/benmsanderson/meteor-view",
+            lambda target: export_timeseries_bundle(
+                noise,
+                pattern,
+                target,
+                locs,
+                variable=var,
+                cmip6_model=MODEL,
+                training_scenario="ssp245",
+                transform_reference=ref,
+                transform_window=WINDOW if ref is not None else None,
+                scenarios=scenarios,
+                source_url="https://github.com/benmsanderson/meteor-view",
+            ),
         )
-        print(f"wrote {path}  {os.path.getsize(path)/1024:.1f} KB")
 
         # Golden fixture: a fixture carries every location of the bundle it is
         # built from, so build it from a 4-location sub-bundle rather than the
@@ -271,9 +337,9 @@ def main():
             forcing = forcing_from_bundle(sub_bundle, "ssp245")
             t_glob = np.linspace(0.0, 3.0, 480)
             fix = os.path.join(OUT, f"meteor_{MODEL}_{var}_golden_ssp245_v1.nc")
-            export_golden_fixture(
+            produce(fix, lambda target: export_golden_fixture(
                 sub,
-                fix,
+                target,
                 noise,
                 t_glob,
                 seed=0,
@@ -290,8 +356,7 @@ def main():
                 # century. It does not change any stored value -- year_0 only
                 # labels the axis -- but a reader would be misled.
                 year_0=int(sub_bundle.attrs["forcing_year_start"]),
-            )
-        print(f"wrote {fix}  {os.path.getsize(fix)/1024:.1f} KB")
+            ))
 
         # The map tier: the pattern-scaling artifact carries the spatial
         # patterns the bundle deliberately leaves out, so a client can
@@ -313,10 +378,7 @@ def main():
                 dtype=np.float32,
                 source_url="https://github.com/benmsanderson/meteor-view",
             )
-            xr.open_dataset(hdf5).load().to_netcdf(
-                pattern_path, format="NETCDF3_64BIT"
-            )
-        print(f"wrote {pattern_path}  {os.path.getsize(pattern_path)/1e6:.2f} MB")
+            write_if_changed(xr.open_dataset(hdf5).load(), pattern_path)
 
     emissions_path = os.path.join(OUT, "scenario_emissions_v1.json")
     export_plot_emissions(scenarios, emissions_path)

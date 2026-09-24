@@ -2,6 +2,25 @@
 
 Two kinds of file live here, and the distinction matters.
 
+## Where each file lives
+
+Settled 2026-09-24, and the split matters once there is more than one model:
+
+- **Committed here** — bundles, region outlines, coastlines, scenario
+  emissions, the `pr` climatology. About 575 KB per model, small enough that
+  the default view stays instant and works offline.
+- **Zenodo, fetched at build time** — the 2 MB pattern artifacts. The Pages
+  workflow will download them into `dist/`, so visitors still get them
+  same-origin with no third party in the path of a page load, while git stays
+  free of multi-megabyte binaries it would keep for ever.
+- **Zenodo, fetched in the browser on demand** — the 11 MB noise artifacts, if
+  that tier ships. Too heavy to bake into every deploy for a feature most
+  visits never use, and Zenodo permits cross-origin fetches.
+
+Pending the deposit, everything is still committed. `scripts/export_bundles.py`
+now rewrites a file only when its numbers change, so re-exporting does not
+quietly add another copy of each artifact to history.
+
 ## Committed: emulator artifacts
 
 `meteor_*_bundle_v1.nc`, `meteor_*_pattern_v1.nc`, `meteor_*_golden_*.nc`

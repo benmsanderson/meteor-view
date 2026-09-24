@@ -122,40 +122,54 @@ precipitation climatology. It is available at export time — the first-year mea
 field that `_load_transform_reference` already computes for the gamma fit — and
 costs about 220 KB at float32, fetched alongside the pattern artifact.
 
-### 2. Other ESMs, and settle where data lives
+### 2. Other ESMs, and where the data lives
 
-**A day of client work per batch, plus training; the storage decision is the
-real content.**
+**Storage decided 2026-09-24. Training is the remaining work.**
 
-Better news than expected on feasibility. METEOR needs only **piControl,
+Feasibility is better than expected. METEOR needs only **piControl,
 abrupt-4xCO2, historical and one SSP** — `sulxanom`, the aerosol axis, is not a
 separate experiment but the scenario run reused
 (`cmip6_meteor_data_getter.py`: `training_data["sulxanom"] = training_data[scenario_train]`).
-Those are among the most widely available CMIP6 experiments, so the binding
-constraint is download and fit time on your machine, not which models ran an
-exotic perturbation.
+Those are among the most widely available CMIP6 experiments, so the constraint
+is download and fit time on your machine, not which models ran an exotic
+perturbation. The client side is nearly free: a bundle records its own
+`cmip6_model` and the loader already keys off it.
 
-The client side is nearly free: a bundle records its own `cmip6_model` and the
-loader already keys off it. What needs deciding is storage, because this is
-what forces it:
+#### Storage: tiered, fetched at build
 
-| per model | committed today |
-|---|---:|
-| `tas` + `pr` bundles | ~355 KB |
-| `tas` + `pr` pattern artifacts | 4 MB |
-| noise artifacts, if the 11 MB tier ever ships | 23 MB |
+| Where | What | Per model |
+|---|---|---:|
+| **git** | bundles, region outlines, coastlines, scenario emissions, `pr` climatology | ~575 KB |
+| **Zenodo → fetched at build, served from the site** | pattern artifacts | 4 MB |
+| **Zenodo → fetched in the browser on demand** | noise artifacts, if that tier ships | 22.6 MB |
 
-Five models is 20 MB of pattern artifacts before the noise tier is considered,
-and git keeps every version of each forever. The tiered answer from the open
-decisions below is the one to take: keep the small bundles committed so the
-default view stays instant and offline, and fetch the multi-megabyte artifacts
-from a Zenodo deposit on demand. That also gives the artifacts a DOI, which
-they should have anyway.
+The reasoning, and the evidence that settled it. A day of re-exports had already
+left **19 MB of git history for a 4.7 MB site**, including four copies of each
+1.9 MB pattern artifact: netCDF float arrays are high-entropy, so every version
+is stored essentially whole, for ever. At ~4.6 MB per model plus the same again
+per re-export, ten models is untenable.
 
-Worth settling in the same breath: whether the model picker offers models
-individually, shows across-model spread, or both. The second is what turns the
-tool from "one model's variability" into something that represents projection
-uncertainty honestly.
+Fetching everything live from Zenodo was the obvious alternative and is
+rejected: Zenodo is an archive, not a CDN, and it would put a third party in
+the path of every visitor's first paint. Fetching at *build* time instead keeps
+the repository small **and** leaves the runtime experience unchanged, since the
+files are served from the site like any other asset. Zenodo does send
+`access-control-allow-origin: *` — checked — so the browser-side fetch stays
+available for the noise tier, which is too heavy to bake into every deploy for
+a feature most visits never use.
+
+Git LFS was considered and rejected: GitHub's free tier is 1 GB of storage and
+1 GB of bandwidth a month, and a Pages build pulling artifacts on every deploy
+would exhaust that quickly. It trades a size problem for a quota problem.
+
+**Blocked on the deposit**, which is blocked on the METEOR PRs merging — an
+artifact should trace to merged code before it gets a permanent identifier —
+and on an explicit go-ahead, since a DOI cannot be retracted.
+
+**Done in the meantime:** the export script now writes a file only when its
+numbers change, comparing data variables and ignoring the `created` stamp that
+otherwise makes every export byte-different. A full re-export of unchanged
+inputs now produces no diff at all, which is what was quietly adding megabytes.
 
 ### 3. Compare two scenarios at once
 
