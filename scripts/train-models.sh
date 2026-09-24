@@ -44,6 +44,21 @@ fi
 
 mkdir -p "$OUT" "$LOG_DIR" "$METEOR_CACHE"
 
+# Bundles built without the converted ScenarioMIP emissions carry the eight
+# SSPs and none of the seven CMIP7 markers -- quietly, because a clone without
+# the release must still produce a valid bundle. Easy to train a batch
+# overnight and find half the scenarios missing, so say so up front.
+if [ -z "$(ls scenario-work/*_em_RCMIP.txt 2>/dev/null)" ]; then
+  cat >&2 <<'WARNING'
+WARNING: no converted CMIP7 emissions in scenario-work/.
+         Bundles will carry the 8 CMIP6 SSPs only, not the 7 CMIP7 markers.
+         To include them, download the ScenarioMIP release and run:
+           python scripts/convert_scenariomip.py <release.xlsx>
+         See data/README.md. Continuing in 5 seconds.
+WARNING
+  sleep 5
+fi
+
 printf 'METEOR      %s\ncache       %s\noutput      %s\nmodels      %s\n\n' \
   "$METEOR_SRC" "$METEOR_CACHE" "$OUT" "$*"
 

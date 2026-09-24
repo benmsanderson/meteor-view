@@ -25,7 +25,8 @@ what the port had to infer that the schema did not state — the most useful
 feedback METEOR can get from this exercise, because it is what the next port
 would also get stuck on.
 
-What is left is in [`03-roadmap.md`](03-roadmap.md), which supersedes the work
+Current state and next steps are in [`04-status.md`](04-status.md); what is
+left overall is in [`03-roadmap.md`](03-roadmap.md), which supersedes the work
 breakdown in §3 below — that section is kept as the original plan, not as a
 current to-do list.
 

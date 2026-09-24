@@ -1,7 +1,9 @@
 # Roadmap
 
 Where meteor-view goes next. [`00-development-plan.md`](00-development-plan.md)
-records *why* the architecture is what it is; this records what is left.
+records *why* the architecture is what it is, [`04-status.md`](04-status.md)
+records where things have got to and how to run the next step, and this records
+what is left.
 
 Effort figures are rough and are mine, not measured. Sizes are measured.
 
