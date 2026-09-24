@@ -113,6 +113,88 @@ greenhouse-gas axis and an aerosol axis (`co2x4`, `sulxanom`), which is exactly
 the split this file already provides, assessed by MAGICC. Per-experiment forcing
 can be built from the ERF columns directly, skipping our own SCM run.
 
+#### How METEOR splits a scenario's forcing — verified, not assumed
+
+METEOR's pattern model has two response axes, and `compute_scenario_forcing`
+feeds them by running CICERO-SCM and splitting its components. Read from
+`scm_forcer_engine.run_and_return_per_forcer_results` and then confirmed
+numerically on ssp245:
+
+```
+sulxanom = SO2 + SO4_IND                    (exact, 0.0e+00)
+co2x4    = Total_forcing - sulxanom         (1.8e-15, float noise)
+```
+
+Two details that a reasonable guess gets wrong:
+
+* **BC and OC belong on the CO2 axis, not the aerosol one.** `bc_oc_to_co2` is
+  true by default, on the argument that CO2 timescales suit carbonaceous
+  aerosols better than sulphate ones. So the aerosol axis is *sulphate only* —
+  direct plus indirect — and mapping CMIP7's whole `ERF|Aerosols` group onto
+  `sulxanom` would be wrong.
+* **METEOR's forcing is anthropogenic-only.** CICERO returns no solar or
+  volcanic component, so the CMIP7 equivalent is `ERF|Anthropogenic`, not the
+  `ERF` total.
+
+Which gives the mapping, if ERF is used directly:
+
+| METEOR axis | CICERO today | CMIP7 ERF equivalent |
+|---|---|---|
+| `sulxanom` | `SO2 + SO4_IND` | `ERF\|Aerosols\|Direct Effect\|SOx` + `ERF\|Aerosols\|Indirect Effect` |
+| `co2x4` | `Total - sulxanom` | `ERF\|Anthropogenic` − the above |
+
+#### But the two SCMs disagree, and that decides the route
+
+Comparing METEOR's own ssp245 forcing against MAGICC's Medium–SSP2:
+
+| W/m² | METEOR (CICERO) | MAGICC | |
+|---|---:|---:|---|
+| 2020 anthropogenic total | 3.430 | 2.694 | **0.74 apart** |
+| 2020 sulphate axis | −0.781 | −0.958 | |
+| 2100 anthropogenic total | 5.113 | 5.305 | |
+| 2100 sulphate axis | −0.286 | −0.498 | |
+
+MAGICC's 2.69 W/m² for 2020 is close to AR6's assessed present-day forcing;
+CICERO's is higher. Either is defensible on its own, but **mixing them is not**:
+a user comparing SSP245 against Medium–SSP2 in the same interface would see a
+difference that is partly scenario and partly simple climate model, with
+nothing on screen to say which.
+
+#### The file does contain emissions
+
+Correcting an earlier note in this document: the release carries 55
+`Harmonized and Infilled|Emissions|*` species as well as the climate
+assessment. An earlier scan missed them by only printing MAGICC-suffixed
+variables. That makes it possible to drive METEOR's own CICERO-SCM with CMIP7
+emissions and stay consistent with the existing SSP bundles.
+
+Conversion to METEOR's RCMIP format is real but bounded work:
+
+* **Years.** The release covers 2000–2100; METEOR's forcing axis starts at
+  1750. Splice onto the historical part of an existing SSP emissions file —
+  the CMIP7 emissions are harmonized *to* that history, so the overlap should
+  be close, and the splice is worth checking rather than assuming.
+* **Units.** Per species: Mt CO2 → Pg C, kt N2O → Tg N, Mt SO2 → Tg S,
+  Mt NO2 → Mt N, and so on.
+* **Gaps.** METEOR wants `HCFC-123`, which the release does not carry, and
+  wants biomass-burning BC/OC split from total BC/OC, which it also does not.
+  It carries species METEOR cannot ingest (NF3, SO2F2, cC4F8, CH2Cl2, CHCl3,
+  CH3Cl, several PFCs), whose forcing would simply be lost.
+
+#### Three routes
+
+| | Cost | Consistent with the SSPs? | Regional pattern |
+|---|---|---|---|
+| **A** GSAT as pathway presets | Hours | GSAT matches MAGICC, forcing does not | Base scenario's, rescaled — wrong where aerosols differ |
+| **B** MAGICC ERF onto the two axes | ~A day | **No** — CICERO vs MAGICC, 0.74 W/m² apart in 2020 | Correct, from this scenario's own aerosol/GHG mix |
+| **C** CICERO on CMIP7 emissions | Days | **Yes** | Correct |
+
+C is the one that leaves the tool honest when both scenario families sit in the
+same menu, and it reuses `compute_scenario_forcing` unchanged. B is a
+worthwhile cross-check on the way: if a CICERO run on CMIP7 emissions lands
+near MAGICC's ERF, the conversion is probably right, and where it does not is
+itself worth knowing.
+
 #### The wrinkle a browser tool has and FLEX does not
 
 FLEX is a pipeline: the person running it downloads the data themselves, so
