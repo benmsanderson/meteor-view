@@ -14,7 +14,10 @@ is given and four validate the maths as well as sixty-seven do.
 
 Usage::
 
-    PYTHONPATH=<meteor>/src python scripts/export_bundles.py data/
+    PYTHONPATH=<meteor>/src python scripts/export_bundles.py data/ [MODEL]
+
+The model defaults to NorESM2-MM, or $METEOR_MODEL. The trained cache is
+looked for in $METEOR_CACHE.
 
 Re-export from METEOR's ``base`` branch once #104, #102 and #101 have merged.
 These were built from ``integration/meteor-view``, METEOR's development branch
@@ -44,9 +47,13 @@ from meteor.timeseries_bundle import (
     load_timeseries_bundle,
 )
 
-CACHE = "/Users/bensan/GitHub/METEOR/cache"
+CACHE = os.environ.get("METEOR_CACHE", "/Users/bensan/GitHub/METEOR/cache")
 OUT = sys.argv[1] if len(sys.argv) > 1 else "."
-MODEL = "NorESM2-MM"
+
+#: CMIP6 model to export. One model per run: training dominates the cost and
+#: fails independently, so a batch is a loop over invocations rather than one
+#: long process that loses everything at the last model.
+MODEL = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("METEOR_MODEL", "NorESM2-MM")
 WINDOW = (2015, 2100)
 #: CMIP6 SSPs, shipped with METEOR.
 SSP_SCENARIOS = [
