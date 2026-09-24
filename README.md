@@ -106,10 +106,23 @@ The exporter depends on `series_transformed` and `locations=`, both added by
 
 **Load map** fetches the 2 MB pattern artifact for the variable in view — never
 on first load, since most visits do not need it — and draws the forced response
-on the model's own 192×288 grid. The year slider moves through 2015–2100.
+on the model's own grid. The year slider moves through 2015–2100.
 
-The map is also the region picker. **Click** an AR6 region to select it.
-**Drag** to define a region of your own, anywhere, at any size.
+The map is also the region picker. **Drag** pans and the wheel zooms.
+**Click** an AR6 region to select it. **Draw region** mode, or shift-drag,
+defines a region of your own, anywhere, at any size.
+
+## Comparing scenarios
+
+Tick up to six scenarios. The timeseries overlays them — each scenario's
+median and 5–95% band in its own colour, named at the end of its line — run
+with the same seed, so the realizations are paired across scenarios.
+
+With two or more ticked, the map becomes four panels: two scenarios chosen
+from the selection (A and B), their difference B − A on its own zero-centred
+scale, and a readout of all three under the pointer. One year slider and one
+view drive all three maps. The difference is of forced responses, so it is
+the signal the scenarios separate by, with no internal variability in it.
 
 A drawn region shows the **forced response only**: the signal the scenario
 drives, with no ensemble around it. That is not a simplification but a limit of
@@ -127,15 +140,15 @@ Every control — including the RNG seed — lives in the URL, so a view is a
 link:
 
 ```
-?v=pr&loc=regional%3ASAS&scn=ssp370&n=50
+?v=pr&loc=regional%3ASAS&scn=ssp126,ssp370,cmip7-high&cmp=ssp126,cmip7-high&n=50
 ```
 
 **Copy link to this view** puts that on the clipboard. Opening it reproduces
 the chart *exactly*, down to the individual realizations, because the seed
 travels with it.
 
-**Download CSV** gives one row per month and one column per realization, with
-the provenance — model, scenario, METEOR version, and the link that regenerates
+**Download CSV** gives one row per scenario and month, one column per
+realization, with the provenance — model, scenarios, METEOR version, and the link that regenerates
 it — as `#` comment lines that `pandas.read_csv(..., comment='#')` will skip.
 
 **Download chart** writes a PNG with an opaque background, a title and that

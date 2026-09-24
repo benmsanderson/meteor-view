@@ -52,18 +52,62 @@ export const CMIP7_COLOURS = {
 };
 
 /**
- * The colour to draw a scenario in.
+ * The IPCC AR6 colours for the CMIP6 SSPs, as vendored from pyam.
+ *
+ * Used whenever an SSP is *selected*, since several selected scenarios need
+ * telling apart. In the context figure the unselected SSPs stay grey, as the
+ * reference set behind the CMIP7 markers.
+ *
+ * Two pairs sit close across generations — SSP5-8.5 and High are both dark
+ * red, SSP1-2.6 and Very Low both dark blue — which is faithful to both
+ * palettes and reflects that the scenarios are similar. Every multi-scenario
+ * chart names its lines, so colour is never the only cue.
+ */
+export const SSP_COLOURS = {
+  ssp119: '#00a9cf',
+  ssp126: '#003466',
+  ssp245: '#f69320',
+  ssp370: '#df0000',
+  ssp434: '#2274ae',
+  ssp460: '#b0724e',
+  'ssp534-over': '#92397a',
+  ssp585: '#980002',
+};
+
+/**
+ * The colour to draw a scenario in, in the context figure.
  *
  * The CMIP6 SSPs deliberately have no colour of their own here: they are drawn
  * in a neutral grey so the CMIP7 set reads as the subject and the SSPs as the
- * reference behind it. AR6 has a standard SSP palette and this could use it
- * instead — that is a presentation choice, not a constraint.
+ * reference behind it.
  *
  * @param {string} name
  * @param {string} neutral colour for anything without one of its own
  */
 export function scenarioColour(name, neutral) {
   return CMIP7_COLOURS[name] ?? neutral;
+}
+
+/**
+ * The colour a *selected* scenario is drawn in, everywhere.
+ *
+ * Every scenario has one, from its own generation's official palette, and it
+ * follows the scenario rather than its position in the selection, so adding a
+ * scenario never repaints the ones already shown.
+ */
+export function selectedColour(name, neutral = '#64748b') {
+  return CMIP7_COLOURS[name] ?? SSP_COLOURS[name] ?? neutral;
+}
+
+/**
+ * Put scenarios in menu order: CMIP7 first, then the SSPs, each by forcing.
+ *
+ * A selection is kept in this order whatever order it was ticked in, so a
+ * link, a legend and a CSV all list the same scenarios the same way.
+ */
+export function sortScenarios(names) {
+  const order = groupScenarios(names).flatMap(({ names: group }) => group);
+  return [...names].sort((a, b) => order.indexOf(a) - order.indexOf(b));
 }
 
 /** Which generation a scenario belongs to. */

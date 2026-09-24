@@ -7,12 +7,12 @@
  */
 
 /** Comment lines, so pandas can skip them with `comment='#'`. */
-function provenanceLines({ bundle, variable, location, scenario, units, url, nRealizations, seed }) {
+function provenanceLines({ bundle, variable, location, scenarios, units, url, nRealizations, seed }) {
   return [
     `# METEOR emulator output, generated in the browser by meteor-view`,
     `# variable: ${variable} (${units})`,
     `# location: ${location}`,
-    `# scenario: ${scenario}`,
+    `# scenarios: ${scenarios.join(', ')}`,
     `# realizations: ${nRealizations}, seed: ${seed}`,
     `# cmip6_model: ${bundle.attrs.cmip6_model}`,
     `# training_scenario: ${bundle.attrs.training_scenario}`,
@@ -28,27 +28,41 @@ function provenanceLines({ bundle, variable, location, scenario, units, url, nRe
 }
 
 /**
- * The ensemble as CSV: one row per month, one column per realization.
+ * The ensembles as CSV: one row per scenario and month, one column per
+ * realization.
+ *
+ * Long in scenario rather than wide, so the file has the same columns however
+ * many scenarios were selected, and `df.groupby('scenario')` is all it takes
+ * to split it. Every scenario shares the seed, so realization_01 of one and of
+ * another were driven by the same random draws.
  *
  * @param {object} options
  * @param {number[]} options.years
- * @param {Float64Array[]} options.series monthly, in display units
+ * @param {Array<{scenario: string, series: Float64Array[]}>} options.runs
+ *   monthly, in display units
  * @returns {string}
  */
-export function toCsv({ years, series, ...provenance }) {
-  const lines = provenanceLines({ ...provenance, nRealizations: series.length });
+export function toCsv({ years, runs, ...provenance }) {
+  const nRealizations = runs[0].series.length;
+  const lines = provenanceLines({
+    ...provenance,
+    scenarios: runs.map((run) => run.scenario),
+    nRealizations,
+  });
 
-  const header = ['year', 'month'];
-  for (let r = 0; r < series.length; r += 1) {
+  const header = ['scenario', 'year', 'month'];
+  for (let r = 0; r < nRealizations; r += 1) {
     header.push(`realization_${String(r + 1).padStart(2, '0')}`);
   }
   lines.push(header.join(','));
 
-  const months = series[0].length;
-  for (let t = 0; t < months; t += 1) {
-    const row = [years[Math.floor(t / 12)], (t % 12) + 1];
-    for (const s of series) row.push(formatValue(s[t]));
-    lines.push(row.join(','));
+  for (const { scenario, series } of runs) {
+    const months = series[0].length;
+    for (let t = 0; t < months; t += 1) {
+      const row = [scenario, years[Math.floor(t / 12)], (t % 12) + 1];
+      for (const s of series) row.push(formatValue(s[t]));
+      lines.push(row.join(','));
+    }
   }
   return `${lines.join('\n')}\n`;
 }
@@ -129,8 +143,15 @@ export function chartToPng(canvas, { title, subtitle }) {
   return new Promise((resolve) => out.toBlob(resolve, 'image/png'));
 }
 
-/** A filename stem that says what the file is without needing the metadata. */
+/**
+ * A filename stem that says what the file is without needing the metadata.
+ *
+ * @param {object} options
+ * @param {string|string[]} options.scenario one scenario or several, joined
+ *   with `+`
+ */
 export function filenameStem({ cmip6Model, variable, location, scenario }) {
   const place = location.replace(/^regional:/, '').replace(/^point:/, '').replace(/[^\w.-]+/g, '_');
-  return `meteor_${cmip6Model}_${variable}_${place}_${scenario}`;
+  const scenarios = [scenario].flat().join('+');
+  return `meteor_${cmip6Model}_${variable}_${place}_${scenarios}`;
 }

@@ -89,32 +89,52 @@ function niceStep(range, targetTicks) {
 }
 
 /**
- * Draw an ensemble fan chart.
+ * Draw one or more ensembles as fan charts.
+ *
+ * One ensemble gets the full treatment: a 5-95 and a 25-75 band, the
+ * realizations while there are few enough to read, and the median over them.
+ * Several ensembles overlaid would turn two translucent bands of each into
+ * mud, so each is drawn as its 5-95 band alone, thinly, with its median in
+ * full colour and its name at the right-hand end. The 25-75 band and the
+ * realizations drop out; the median and the outer range are what a comparison
+ * reads.
  *
  * @param {HTMLCanvasElement} canvas
  * @param {object} options
  * @param {number[]} options.x x values (years)
- * @param {Float64Array[]} options.series one annual series per realization
+ * @param {Array<{label: string, colour: string, series: Float64Array[]}>}
+ *   options.groups one per scenario, each one annual series per realization
  * @param {string} options.yLabel
  * @param {(value: number) => string} options.format tick formatter
  */
-export function drawFanChart(canvas, { x, series, yLabel, format }) {
+export function drawFanChart(canvas, { x, groups, yLabel, format }) {
   const { context, width, height } = prepare(canvas);
-  const pad = { top: 12, right: 14, bottom: 34, left: 62 };
+  const several = groups.length > 1;
+  // Room for the end labels when there are several lines to name.
+  const pad = { top: 12, right: several ? 118 : 14, bottom: 34, left: 62 };
   const plotWidth = width - pad.left - pad.right;
   const plotHeight = height - pad.top - pad.bottom;
   if (plotWidth <= 0 || plotHeight <= 0) return;
 
-  const bands = quantiles(series, [0.05, 0.25, 0.5, 0.75, 0.95]);
-  const [p05, p25, p50, p75, p95] = bands;
+  const fans = groups.map((group) => {
+    const [p05, p25, p50, p75, p95] = quantiles(group.series, [0.05, 0.25, 0.5, 0.75, 0.95]);
+    return { ...group, p05, p25, p50, p75, p95 };
+  });
 
+  // Scaled to what is drawn: every realization when one ensemble is shown
+  // with its realizations, the outer bands otherwise.
   let low = Infinity;
   let high = -Infinity;
-  for (const s of series) {
-    for (const v of s) {
+  const extend = (values) => {
+    for (const v of values) {
       if (v < low) low = v;
       if (v > high) high = v;
     }
+  };
+  for (const fan of fans) {
+    if (!several && fan.series.length <= 24) fan.series.forEach(extend);
+    extend(fan.p05);
+    extend(fan.p95);
   }
   const span = high - low || 1;
   low -= span * 0.05;
@@ -125,7 +145,7 @@ export function drawFanChart(canvas, { x, series, yLabel, format }) {
 
   const grid = themeColor('--grid', '#e2e8f0');
   const text = themeColor('--muted', '#64748b');
-  const accent = themeColor('--accent', '#2563eb');
+  const ink = themeColor('--fg', '#0f172a');
 
   // Axes and grid.
   context.font = AXIS_FONT;
@@ -134,6 +154,7 @@ export function drawFanChart(canvas, { x, series, yLabel, format }) {
   context.lineWidth = 1;
 
   const yStep = niceStep(high - low, 5);
+  const yFormat = tickFormat(format, yStep);
   context.textAlign = 'right';
   context.textBaseline = 'middle';
   for (let v = Math.ceil(low / yStep) * yStep; v <= high; v += yStep) {
@@ -142,7 +163,7 @@ export function drawFanChart(canvas, { x, series, yLabel, format }) {
     context.moveTo(pad.left, y);
     context.lineTo(pad.left + plotWidth, y);
     context.stroke();
-    context.fillText(format(v), pad.left - 8, y);
+    context.fillText(yFormat(v), pad.left - 8, y);
   }
 
   const xStep = niceStep(x[x.length - 1] - x[0], 6);
@@ -154,38 +175,46 @@ export function drawFanChart(canvas, { x, series, yLabel, format }) {
     context.fillText(String(year), sx(i), pad.top + plotHeight + 8);
   }
 
-  // Spread first, so the median and the realizations sit over it.
-  const band = (lower, upper, alpha) => {
+  const band = (lower, upper, colour, alpha) => {
     context.beginPath();
     for (let i = 0; i < x.length; i += 1) context.lineTo(sx(i), sy(upper[i]));
     for (let i = x.length - 1; i >= 0; i -= 1) context.lineTo(sx(i), sy(lower[i]));
     context.closePath();
-    context.fillStyle = accent;
+    context.fillStyle = colour;
     context.globalAlpha = alpha;
     context.fill();
     context.globalAlpha = 1;
   };
-  band(p05, p95, 0.16);
-  band(p25, p75, 0.26);
-
-  // Individual realizations, only while they are still legible.
-  if (series.length <= 24) {
-    context.strokeStyle = accent;
-    context.globalAlpha = 0.3;
-    context.lineWidth = 0.8;
-    for (const s of series) {
-      context.beginPath();
-      for (let i = 0; i < x.length; i += 1) context.lineTo(sx(i), sy(s[i]));
-      context.stroke();
-    }
+  const line = (values, colour, lineWidth, alpha = 1) => {
+    context.strokeStyle = colour;
+    context.lineWidth = lineWidth;
+    context.globalAlpha = alpha;
+    context.beginPath();
+    for (let i = 0; i < x.length; i += 1) context.lineTo(sx(i), sy(values[i]));
+    context.stroke();
     context.globalAlpha = 1;
-  }
+  };
 
-  context.strokeStyle = accent;
-  context.lineWidth = 2;
-  context.beginPath();
-  for (let i = 0; i < x.length; i += 1) context.lineTo(sx(i), sy(p50[i]));
-  context.stroke();
+  if (several) {
+    // Every band before any median, so no median is buried under another
+    // scenario's band.
+    for (const fan of fans) band(fan.p05, fan.p95, fan.colour, 0.13);
+    for (const fan of fans) {
+      line(fan.p05, fan.colour, 0.8, 0.45);
+      line(fan.p95, fan.colour, 0.8, 0.45);
+    }
+    for (const fan of fans) line(fan.p50, fan.colour, 2);
+  } else {
+    const [fan] = fans;
+    // Spread first, so the median and the realizations sit over it.
+    band(fan.p05, fan.p95, fan.colour, 0.16);
+    band(fan.p25, fan.p75, fan.colour, 0.26);
+    // Individual realizations, only while they are still legible.
+    if (fan.series.length <= 24) {
+      for (const s of fan.series) line(s, fan.colour, 0.8, 0.3);
+    }
+    line(fan.p50, fan.colour, 2);
+  }
 
   // Axis frame.
   context.strokeStyle = grid;
@@ -195,6 +224,30 @@ export function drawFanChart(canvas, { x, series, yLabel, format }) {
   context.lineTo(pad.left + 0.5, pad.top + plotHeight + 0.5);
   context.lineTo(pad.left + plotWidth, pad.top + plotHeight + 0.5);
   context.stroke();
+
+  // Name each median at its end: colour alone is not enough to tell six lines
+  // apart, least of all for a reader with a colour-vision deficiency. Text in
+  // ink, with a short stroke of the line's colour beside it.
+  if (several) {
+    const ends = fans
+      .map((fan) => ({ label: fan.label, colour: fan.colour, y: sy(fan.p50[x.length - 1]) }))
+      .sort((a, b) => a.y - b.y);
+    spreadLabels(ends, pad.top + 6, pad.top + plotHeight, 14);
+    context.font = AXIS_FONT;
+    context.textAlign = 'left';
+    context.textBaseline = 'middle';
+    for (const end of ends) {
+      const x0 = pad.left + plotWidth + 6;
+      context.strokeStyle = end.colour;
+      context.lineWidth = 3;
+      context.beginPath();
+      context.moveTo(x0, end.y);
+      context.lineTo(x0 + 10, end.y);
+      context.stroke();
+      context.fillStyle = ink;
+      context.fillText(end.label, x0 + 14, end.y);
+    }
+  }
 
   context.save();
   context.translate(14, pad.top + plotHeight / 2);
@@ -207,15 +260,47 @@ export function drawFanChart(canvas, { x, series, yLabel, format }) {
 }
 
 /**
+ * Nudge vertically sorted labels apart, then back inside `[top, bottom]`.
+ *
+ * @param {Array<{y: number}>} ends sorted by `y`, adjusted in place
+ */
+function spreadLabels(ends, top, bottom, gap) {
+  for (let i = 1; i < ends.length; i += 1) {
+    if (ends[i].y - ends[i - 1].y < gap) ends[i].y = ends[i - 1].y + gap;
+  }
+  const overflow = ends.length ? ends[ends.length - 1].y - bottom : 0;
+  if (overflow > 0) for (const end of ends) end.y -= overflow;
+  for (const end of ends) end.y = Math.min(Math.max(end.y, top), bottom);
+}
+
+/**
+ * A tick formatter with enough decimals for the step.
+ *
+ * The variable's own formatter rounds to one decimal, which is right for a
+ * value and wrong for an axis: precipitation ticks 0.05 apart would all read
+ * "3.0".
+ */
+function tickFormat(format, step) {
+  const decimals = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  if (decimals <= 1) return format;
+  return (v) => v.toFixed(decimals);
+}
+
+/**
  * Draw the monthly climatology for an early and a late period.
  *
  * Monthly output is the reason to run METEOR rather than an annual emulator,
  * so the change in the shape of the seasonal cycle is worth its own panel.
  *
+ * With several scenarios, the early period is drawn once — the scenarios have
+ * barely diverged by then — and the late period once per scenario, in its
+ * colour.
+ *
  * @param {HTMLCanvasElement} canvas
  * @param {object} options
  * @param {Float64Array} options.early twelve values
- * @param {Float64Array} options.late twelve values
+ * @param {Array<{colour: string, values: Float64Array}>} options.late twelve
+ *   values per scenario
  * @param {(value: number) => string} options.format
  */
 export function drawSeasonal(canvas, { early, late, format }) {
@@ -225,8 +310,9 @@ export function drawSeasonal(canvas, { early, late, format }) {
   const plotHeight = height - pad.top - pad.bottom;
   if (plotWidth <= 0 || plotHeight <= 0) return;
 
-  let low = Math.min(...early, ...late);
-  let high = Math.max(...early, ...late);
+  const all = [...early, ...late.flatMap((l) => [...l.values])];
+  let low = Math.min(...all);
+  let high = Math.max(...all);
   const span = high - low || 1;
   low -= span * 0.12;
   high += span * 0.12;
@@ -236,8 +322,6 @@ export function drawSeasonal(canvas, { early, late, format }) {
 
   const grid = themeColor('--grid', '#e2e8f0');
   const text = themeColor('--muted', '#64748b');
-  const accent = themeColor('--accent', '#2563eb');
-  const warm = themeColor('--warm', '#dc2626');
 
   context.font = AXIS_FONT;
   context.strokeStyle = grid;
@@ -246,13 +330,14 @@ export function drawSeasonal(canvas, { early, late, format }) {
   context.textBaseline = 'middle';
 
   const yStep = niceStep(high - low, 4);
+  const yFormat = tickFormat(format, yStep);
   for (let v = Math.ceil(low / yStep) * yStep; v <= high; v += yStep) {
     const y = Math.round(sy(v)) + 0.5;
     context.beginPath();
     context.moveTo(pad.left, y);
     context.lineTo(pad.left + plotWidth, y);
     context.stroke();
-    context.fillText(format(v), pad.left - 8, y);
+    context.fillText(yFormat(v), pad.left - 8, y);
   }
 
   context.textAlign = 'center';
@@ -262,15 +347,19 @@ export function drawSeasonal(canvas, { early, late, format }) {
     context.fillText(label, sx(m), pad.top + plotHeight + 7);
   });
 
-  const line = (values, color) => {
+  const line = (values, color, dash = []) => {
     context.strokeStyle = color;
     context.lineWidth = 2;
+    context.setLineDash(dash);
     context.beginPath();
     for (let m = 0; m < 12; m += 1) context.lineTo(sx(m), sy(values[m]));
     context.stroke();
+    context.setLineDash([]);
   };
-  line(early, accent);
-  line(late, warm);
+  // The early period in ink and dashed, so it reads as the baseline rather
+  // than as one more scenario.
+  line(early, text, [5, 4]);
+  for (const { colour, values } of late) line(values, colour);
 }
 
 /**
@@ -285,7 +374,7 @@ export function drawSeasonal(canvas, { early, late, format }) {
  * @param {object} options
  * @param {Array<{name: string, label: string, colour: string, years: number[],
  *   values: ArrayLike<number>}>} options.scenarios
- * @param {string} options.selected the scenario to pick out
+ * @param {string[]} options.selected the scenarios to pick out
  * @param {[number, number]} options.range first and last year to draw
  * @param {string} options.yLabel
  * @param {(v: number) => string} [options.format] y tick formatter
@@ -358,7 +447,7 @@ export function drawScenarioContext(
   }
 
   const line = (scenario, emphasis) => {
-    context.strokeStyle = emphasis ? scenario.colour : scenario.colour;
+    context.strokeStyle = emphasis ? scenario.selectedColour ?? scenario.colour : scenario.colour;
     context.globalAlpha = emphasis ? 1 : 0.42;
     context.lineWidth = emphasis ? 2.6 : 1.1;
     context.beginPath();
@@ -378,16 +467,16 @@ export function drawScenarioContext(
     context.globalAlpha = 1;
   };
 
-  // Unselected first, so the highlighted one is never drawn under another.
-  for (const s of scenarios) if (s.name !== selected) line(s, false);
-  const chosen = scenarios.find((s) => s.name === selected);
-  if (chosen) line(chosen, true);
+  // Unselected first, so a highlighted one is never drawn under another.
+  const picked = new Set(selected);
+  for (const s of scenarios) if (!picked.has(s.name)) line(s, false);
+  for (const s of scenarios) if (picked.has(s.name)) line(s, true);
 
   // Labels at the right-hand end, for the scenarios that asked for one.
   // Naming all fifteen is unreadable at this height, and the greyed reference
   // set does not need naming — the selected one always does.
   const ends = scenarios
-    .filter((s) => s.labelled || s.name === selected)
+    .filter((s) => s.labelled || picked.has(s.name))
     .map((s) => {
       let last = null;
       for (let i = 0; i < s.years.length; i += 1) {
@@ -399,22 +488,14 @@ export function drawScenarioContext(
 
   // Spread where they collide, then pull the whole run back inside the plot if
   // it overflowed the bottom: otherwise the lowest labels land off the canvas.
-  const minimumGap = 13;
-  for (let i = 1; i < ends.length; i += 1) {
-    if (ends[i].y - ends[i - 1].y < minimumGap) ends[i].y = ends[i - 1].y + minimumGap;
-  }
-  const overflow = ends.length ? ends[ends.length - 1].y - (pad.top + plotHeight) : 0;
-  if (overflow > 0) for (const end of ends) end.y -= overflow;
-  for (const end of ends) {
-    end.y = Math.min(Math.max(end.y, pad.top + 6), pad.top + plotHeight);
-  }
+  spreadLabels(ends, pad.top + 6, pad.top + plotHeight, 13);
 
   context.textAlign = 'left';
   context.textBaseline = 'middle';
   for (const end of ends) {
-    const emphasis = end.name === selected;
+    const emphasis = picked.has(end.name);
     context.font = emphasis ? `600 ${12}px ui-sans-serif, system-ui, sans-serif` : AXIS_FONT;
-    context.fillStyle = end.colour;
+    context.fillStyle = emphasis ? end.selectedColour ?? end.colour : end.colour;
     context.globalAlpha = emphasis ? 1 : 0.65;
     context.fillText(end.label, pad.left + plotWidth + 8, end.y);
     context.globalAlpha = 1;

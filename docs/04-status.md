@@ -155,10 +155,13 @@ show models individually, show across-model spread, or both — the second is
 what turns "one model's internal variability" into something that represents
 projection uncertainty honestly.
 
-### 3. Compare two scenarios at once
+### 3. Compare two scenarios at once — done
 
-Fully specified in [`03-roadmap.md`](03-roadmap.md#3-compare-two-scenarios-at-once).
-It wants the map work done first, which it now is.
+Built as multi-selection with a two-scenario map comparison; see
+[`03-roadmap.md`](03-roadmap.md#3-compare-two-scenarios-at-once) for what was
+built against the plan. Several scenarios at 100 realizations take a few
+seconds on the main thread, the first place a worker might start to earn its
+keep.
 
 ## Things that would surprise you
 
