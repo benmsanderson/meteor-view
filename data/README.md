@@ -17,6 +17,12 @@ Settled 2026-09-24, and the split matters once there is more than one model:
   that tier ships. Too heavy to bake into every deploy for a feature most
   visits never use, and Zenodo permits cross-origin fetches.
 
+**This split is for a handful of models.** At the full list of about forty it
+stops working — Zenodo allows 100 files per record — and the revised plan is
+in [`docs/00-development-plan.md`](../docs/00-development-plan.md) §6: git
+keeps NorESM2-MM only, and every other model is fetched from one zip per model
+at build.
+
 Pending the deposit, everything is still committed. `scripts/export_bundles.py`
 now rewrites a file only when its numbers change, so re-exporting does not
 quietly add another copy of each artifact to history.
