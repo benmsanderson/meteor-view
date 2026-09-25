@@ -159,6 +159,11 @@ button:focus-visible {
 canvas {
   display: block;
   width: 100%;
+}
+
+/* The maps handle their own gestures; setMapMode relaxes this to pan-y in pan
+   mode so the page still scrolls. The charts leave touch to the browser. */
+.map {
   touch-action: none;
 }
 

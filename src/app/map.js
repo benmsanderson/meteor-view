@@ -287,14 +287,41 @@ export function drawMap(
     context.strokeStyle = '#facc15';
     const top = project.y(box.north);
     const bottom = project.y(box.south);
+    // From the west edge, eastward by the box's own width: the east edge's
+    // longitude alone cannot say which way round the box goes.
+    const boxWidth = (box.east - box.west) / project.degreesPerPixelX;
     for (const shift of [-worldWidth, 0, worldWidth]) {
       const left = project.x(box.west) + shift;
-      const right = project.x(box.east) + shift;
-      if (right >= left) context.strokeRect(left, top, right - left, bottom - top);
+      context.strokeRect(left, top, boxWidth, bottom - top);
     }
     context.setLineDash([]);
   }
   context.restore();
+}
+
+/**
+ * The box a drag defines.
+ *
+ * Longitude is ambiguous on a globe: 170°E and 170°W bound both a 20° strip
+ * of the Pacific and the 340° remainder. What resolves it is which way the
+ * pointer moved, so the eastward extent comes from the drag's horizontal
+ * distance, not from its end points. The box is returned with `west` in
+ * [-180, 180) and `east` up to 360° beyond it — past 180 when it crosses the
+ * antimeridian.
+ *
+ * @param {{lat: number, lon: number}} from where the drag started
+ * @param {number} toLat latitude where it is now
+ * @param {number} deltaLon degrees moved east (negative for west)
+ */
+export function boxFromDrag(from, toLat, deltaLon) {
+  const span = Math.min(Math.abs(deltaLon), 360);
+  const west = wrapLon(deltaLon >= 0 ? from.lon : from.lon - span);
+  return {
+    south: Math.min(from.lat, toLat),
+    north: Math.max(from.lat, toLat),
+    west,
+    east: west + span,
+  };
 }
 
 /**

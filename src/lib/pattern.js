@@ -234,13 +234,17 @@ export function patternKernel(artifact, field = 0) {
 /**
  * A rectangular lat/lon region predicate.
  *
- * Longitudes are normalised to the artifact's own convention (0–360 for
- * NorESM2-MM), so a user can say -74 and mean the same place as 286.
+ * The box runs *eastward* from `west` to `east`. Longitudes are normalised to
+ * the artifact's own convention (0–360 for NorESM2-MM), so a user can say -74
+ * and mean the same place as 286; a box crossing the antimeridian is written
+ * either with `east` beyond 180 or with `east < west`, and a box spanning 360°
+ * or more selects every longitude rather than collapsing to one meridian.
  *
  * @returns {(lat: number, lon: number) => boolean}
  */
 export function boxRegion({ south, north, west, east }) {
   const wrap = (x) => ((x % 360) + 360) % 360;
+  if (east - west >= 360) return (lat) => lat >= south && lat <= north;
   const w = wrap(west);
   const e = wrap(east);
   return (lat, lon) => {

@@ -32,7 +32,8 @@ current to-do list.
 
 Immediately outstanding: the three METEOR PRs are unmerged, so the bundles here
 were exported from the integration branch and will need re-exporting from
-`base` once they land. The Zenodo deposit is still pending, deliberately.
+`base` once they land. The Zenodo deposit is still pending, deliberately: it
+waits for the expanded model set and for the checklist in §6.
 
 This document exists so the reasoning does not have to be re-derived. Facts
 below were verified against `benmsanderson/METEOR` at commit `f6dc3d1` on
@@ -182,8 +183,17 @@ until the bundle schema exists:
   climate assessment, particularly for scenarios most ESMs have not run yet
   (CMIP7). Not climate modellers, who will clone the repo; not the general
   public. See [`03-roadmap.md`](03-roadmap.md). The CMIP7 source is
-  `10.5281/zenodo.19825038`, which is **embargoed pre-release data**: nothing
-  derived from it may be published until the early access period ends.
+  `10.5281/zenodo.19825038`, which was noted here as **embargoed pre-release
+  data**: nothing derived from it to be published until the early access
+  period ends. *Re-checked 2026-09-25, to be confirmed:* the record is open
+  access (v0.2, published 2026-04-15, no embargo date), and the
+  [licence](https://scenariomip.apps.ece.iiasa.ac.at/license) it points to
+  permits sharing adapted material "for scientific research, science
+  communication or policy consultancy, including … online visualization
+  tools", with attribution and without reproducing substantial portions. If
+  the early-access restriction came from somewhere other than the record,
+  that source still governs. Attribution has been added to the page footer;
+  see §6.
 - **Gridded maps — the claim below was wrong.** "Reconstructing 100
   realizations × 3012 months × 55k gridpoints is not a client-side operation"
   is true and irrelevant: a map view never asks for that. Measured, a
@@ -241,7 +251,84 @@ Verified in `src/meteor/` at `f6dc3d1`:
 (288×192 = 55,296 gridpoints) would be ~8.8 MB per variable at 40 modes in
 float32. Measure a real export rather than trusting this.
 
-## 6. Resuming
+## 6. Data storage for the full model list — discussed 2026-09-24
+
+**Decided:** one DOI, deposited once, carrying the expanded model set, and
+only after the outstanding issues below are cleared. Seven models are in the
+repository now; about 40 CMIP6 models carry the four experiments METEOR needs.
+
+**Sizes, measured on the seven and extrapolated to forty:**
+
+| Tier | Per model | At 40 models |
+|---|---|---|
+| Bundles (`tas` + `pr`) and `pr` climatology | 0.4–0.6 MB | ~20 MB |
+| Pattern artifacts (`tas` + `pr`) | 0.6–4 MB, averaging 2.1 | 90–150 MB |
+| Noise artifacts, if that tier ships | ~22 MB | ~900 MB |
+
+**The limits that shape it.** GitHub Pages sites may be at most 1 GB, with a
+soft 100 GB a month of bandwidth. Zenodo records take 50 GB and **at most 100
+files**, and Zenodo's advice beyond that is to zip. Forty models at five files
+each is 200, so the split settled in `data/README.md` — bundles in git,
+patterns on Zenodo as loose files — stops working at about twenty models.
+
+**The plan:**
+
+1. **Git keeps NorESM2-MM only**, since the tests and a fresh clone need one
+   model to work without a download. Every other model's bundles move to
+   Zenodo too; otherwise each re-export adds ~20 MB of history git keeps for
+   ever, and at least one is due, from `base` once the METEOR PRs merge.
+2. **One zip per model in the deposit**: 40 files, well inside the cap, and a
+   new record version whenever models are added or re-exported.
+3. **Fetched at build, cached by record version.** A
+   `scripts/fetch-artifacts` script unpacks the record into `data/`
+   (gitignored); the Pages workflow runs it behind `actions/cache` keyed on the
+   version, so an ordinary deploy downloads nothing and visitors are still
+   served from the same site. Developers run the same script for every model
+   locally.
+4. **The model manifest is generated from the files present**, so a clone
+   without the download shows NorESM2-MM alone rather than broken entries.
+5. **Noise artifacts, if they ship,** go in a separate record, fetched by the
+   browser on demand; ~900 MB would not fit the Pages limit. Zenodo's
+   fair-use policy objects to splitting one dataset across records to evade
+   the size limit; a separate record for a separate tier seems within it, but
+   ask them.
+
+**Git history:** ~35 MB of pattern artifacts from the seven models are
+already in history. Taking them out of `HEAD` does not shrink it; rewriting
+the default branch would. Not worth it at this size — revisit only if the
+repository becomes unwieldy.
+
+**Training the remainder:** 3–7 minutes per model in a 4-core, 15 GB cloud
+container, 10.5 GB peak, so the rest is about three hours. ~2 GB of CMIP6
+download per model: delete each model's cache after export, since
+re-training costs minutes. The high-resolution models (EC-Earth3,
+CNRM-CM6-1-HR, MPI-ESM1-2-HR) may exceed 15 GB; run them last or on a larger
+machine.
+
+### Before the DOI: outstanding issues
+
+- [ ] METEOR #104, #102, #101 merged, then everything re-exported from
+      `base` — so the deposit traces to merged code.
+- [ ] CMIP7 data terms confirmed (§4): the embargo note against the open
+      record and its licence.
+- [x] CMIP7 attribution on the page, as the licence requires. Added
+      2026-09-25.
+- [ ] CMIP6 data citations: each model's data citation (the CMIP6 terms of
+      use require citing the data used) in the deposit metadata and on the
+      page.
+- [ ] The storage pipeline above built and proven end to end with the seven
+      models, before anything is deposited.
+- [ ] The remaining ~33 models trained, once, from `base`, straight into the
+      deposit.
+- [ ] The model menu grouped for forty entries — by modelling centre or by
+      climate sensitivity.
+- [x] Drawn regions across the date line. Fixed in #4.
+- [x] Map zoom on phones: pinch and double-tap. Fixed in #4.
+- [ ] Missing `favicon.ico` (a 404 on every visit; harmless).
+- [ ] Announcing the site — removing `robots.txt` and the `noindex` tag — once
+      the above is done.
+
+## 7. Resuming
 
 Read this file, then `01-unblock-meteor-export.md`. If the METEOR branch has
 not been done yet, that prompt is the next action and it needs a session with

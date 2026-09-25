@@ -10,6 +10,7 @@
 import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
 import {
+  boxFromDrag,
   clampView,
   classedScale,
   defaultView,
@@ -773,6 +774,10 @@ function setMapMode(mode) {
   elements.modePan.setAttribute('aria-pressed', String(mode === 'pan'));
   for (const canvas of mapCanvases()) {
     canvas.style.cursor = mode === 'pan' ? 'grab' : 'crosshair';
+    // In pan mode a vertical swipe scrolls the page, so three stacked maps on
+    // a phone do not trap it; horizontal drags, pinches and taps stay with the
+    // map. Drawing a region needs every direction, so it takes them all.
+    canvas.style.touchAction = mode === 'pan' ? 'pan-y' : 'none';
   }
 }
 
@@ -825,6 +830,29 @@ function attachMap() {
   });
 
   let gesture = null;
+  // Every pointer down on a map, so a second finger can turn a drag into a
+  // pinch. Touch only ever has more than one.
+  const pointers = new Map();
+  let pinch = null;
+  // After a pinch, the finger left on the glass must not become a pan or a
+  // tap: nothing more happens until every finger is up.
+  let settling = false;
+  // A tap waits briefly to see whether it is the first half of a double-tap,
+  // so double-tapping to zoom does not also select the region underneath.
+  let pendingTap = null;
+
+  const pinchSpan = () => {
+    const [a, b] = [...pointers.values()];
+    return {
+      distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+      mid: { clientX: (a.clientX + b.clientX) / 2, clientY: (a.clientY + b.clientY) / 2 },
+    };
+  };
+
+  const endGestures = () => {
+    gesture = null;
+    setMapMode(mapMode);
+  };
 
   for (const canvas of mapCanvases()) {
     // Wheel zooms about the pointer, so the feature under the cursor stays
@@ -835,15 +863,8 @@ function attachMap() {
       (event) => {
         if (elements.mapPanel.dataset.map !== 'ready') return;
         event.preventDefault();
-        const before = toLatLon(canvas, event, mapView);
         const factor = Math.exp(-event.deltaY * 0.0015);
-        const zoomed = clampView({ ...mapView, zoom: mapView.zoom * factor });
-        const after = toLatLon(canvas, event, zoomed);
-        mapView = clampView({
-          zoom: zoomed.zoom,
-          centreLat: zoomed.centreLat + (before.lat - after.lat),
-          centreLon: zoomed.centreLon + (before.lon - after.lon),
-        });
+        mapView = viewAbout(canvas, mapView, mapView.zoom * factor, event);
         showResetView();
         redrawMap();
       },
@@ -852,6 +873,21 @@ function attachMap() {
 
     canvas.addEventListener('pointerdown', (event) => {
       if (elements.mapPanel.dataset.map !== 'ready') return;
+      pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      capture(canvas, event);
+
+      if (pointers.size === 2) {
+        // A second finger: whatever the first was doing becomes a pinch. A box
+        // it had started drawing is put back as it was.
+        if (gesture && !gesture.panning) customBox = gesture.boxBefore;
+        gesture = null;
+        const { distance, mid } = pinchSpan();
+        pinch = { canvas, startView: { ...mapView }, distance, mid };
+        settling = true;
+        return;
+      }
+      if (pointers.size > 2 || settling) return;
+
       // Shift does whichever the active mode does not, so either gesture is
       // always one key away without leaving the mode you prefer.
       const panning = event.shiftKey ? mapMode === 'select' : mapMode === 'pan';
@@ -863,14 +899,31 @@ function attachMap() {
         startX: event.clientX,
         startY: event.clientY,
         moved: false,
+        boxBefore: customBox,
       };
-      capture(canvas, event);
       if (panning) canvas.style.cursor = 'grabbing';
     });
 
     canvas.addEventListener('pointermove', (event) => {
+      if (pointers.has(event.pointerId)) {
+        pointers.set(event.pointerId, { clientX: event.clientX, clientY: event.clientY });
+      }
+
+      if (pinch) {
+        if (pointers.size < 2 || pinch.canvas !== canvas) return;
+        // Zoom by how far the fingers have spread, about the point that was
+        // between them, and pan with their midpoint: two fingers move the
+        // map any way at once.
+        const { distance, mid } = pinchSpan();
+        const zoom = pinch.startView.zoom * (distance / Math.max(pinch.distance, 1));
+        mapView = viewAbout(canvas, pinch.startView, zoom, pinch.mid, mid);
+        showResetView();
+        redrawMap();
+        return;
+      }
+
       if (!gesture) {
-        showReadout(toLatLon(canvas, event, mapView));
+        if (event.pointerType === 'mouse') showReadout(toLatLon(canvas, event, mapView));
         return;
       }
       if (gesture.canvas !== canvas) return;
@@ -900,38 +953,118 @@ function attachMap() {
         return;
       }
 
-      customBox = boxFrom(gesture.from, toLatLon(canvas, event, mapView));
+      // Eastward extent from how far the pointer moved, so a drag across the
+      // antimeridian is the strip drawn rather than the rest of the world.
+      const rect = canvas.getBoundingClientRect();
+      const { degreesPerPixelX } = projection(mapView, rect.width, Math.round(rect.width / 2));
+      customBox = boxFromDrag(
+        gesture.from,
+        toLatLon(canvas, event, mapView).lat,
+        (event.clientX - gesture.startX) * degreesPerPixelX
+      );
       redrawMap();
     });
 
-    canvas.addEventListener('pointerup', (event) => {
-      if (!gesture || gesture.canvas !== canvas) return;
-      const { panning, moved } = gesture;
-      const to = toLatLon(canvas, event, mapView);
-      gesture = null;
-      setMapMode(mapMode);
+    const release = (event) => {
+      pointers.delete(event.pointerId);
+      if (pinch && pointers.size < 2) pinch = null;
+      if (settling) {
+        if (pointers.size === 0) settling = false;
+        endGestures();
+        return false;
+      }
+      return true;
+    };
 
-      // A plain click selects the AR6 region under the pointer, whichever
-      // mode is active: pan is the default, and region picking should not
-      // need a mode switch to discover.
-      if (!moved) {
-        selectRegionAt(to);
+    canvas.addEventListener('pointerup', (event) => {
+      const active = gesture && gesture.canvas === canvas ? gesture : null;
+      if (!release(event) || !active) return;
+      const { panning, moved } = active;
+      endGestures();
+
+      if (moved) {
+        if (panning) return;
+        elements.clearBox.hidden = false;
+        run();
         return;
       }
-      if (panning) return;
-      elements.clearBox.hidden = false;
-      run();
+
+      // A second tap close by, soon after the first, zooms in about it. The
+      // first tap's region selection is cancelled rather than applied.
+      const now = performance.now();
+      if (
+        pendingTap &&
+        pendingTap.canvas === canvas &&
+        now - pendingTap.time < DOUBLE_TAP_MS &&
+        Math.hypot(event.clientX - pendingTap.clientX, event.clientY - pendingTap.clientY) < 30
+      ) {
+        clearTimeout(pendingTap.timer);
+        pendingTap = null;
+        mapView = viewAbout(canvas, mapView, mapView.zoom * 2, event);
+        showResetView();
+        redrawMap();
+        return;
+      }
+
+      // A plain tap or click selects the AR6 region under it, whichever mode
+      // is active: pan is the default, and region picking should not need a
+      // mode switch to discover. On touch, where there is no hover, it also
+      // reads the values there.
+      if (pendingTap) clearTimeout(pendingTap.timer);
+      const to = toLatLon(canvas, event, mapView);
+      const touch = event.pointerType !== 'mouse';
+      pendingTap = {
+        canvas,
+        time: now,
+        clientX: event.clientX,
+        clientY: event.clientY,
+        timer: setTimeout(() => {
+          pendingTap = null;
+          selectRegionAt(to);
+          if (touch) showReadout(to);
+        }, DOUBLE_TAP_MS),
+      };
     });
 
-    canvas.addEventListener('pointercancel', () => {
-      gesture = null;
-      setMapMode(mapMode);
+    canvas.addEventListener('pointercancel', (event) => {
+      // The browser took the gesture, usually a vertical swipe scrolling the
+      // page. Put back any box a drag had started.
+      if (gesture && !gesture.panning && gesture.moved) {
+        customBox = gesture.boxBefore;
+        redrawMap();
+      }
+      release(event);
+      endGestures();
     });
 
-    canvas.addEventListener('pointerleave', () => {
-      if (!gesture) showReadout(null);
+    canvas.addEventListener('pointerleave', (event) => {
+      if (!gesture && event.pointerType === 'mouse') showReadout(null);
     });
   }
+}
+
+/** How long a tap waits to see whether a second makes it a double-tap. */
+const DOUBLE_TAP_MS = 250;
+
+/**
+ * A view at a new zoom that keeps one geographic point under the pointer.
+ *
+ * The point under `from` in `base` lands under `to` in the result, so the same
+ * function zooms about the cursor (`to` omitted) and pinches, where the
+ * fingers' midpoint also moves and carries the map with it.
+ *
+ * @param {{clientX: number, clientY: number}} from
+ * @param {{clientX: number, clientY: number}} [to]
+ */
+function viewAbout(canvas, base, zoom, from, to = from) {
+  const anchor = toLatLon(canvas, from, base);
+  const zoomed = clampView({ ...base, zoom });
+  const after = toLatLon(canvas, to, zoomed);
+  return clampView({
+    zoom: zoomed.zoom,
+    centreLat: zoomed.centreLat + (anchor.lat - after.lat),
+    centreLon: zoomed.centreLon + (anchor.lon - after.lon),
+  });
 }
 
 /** Units for a map value, for the readout. */
@@ -990,16 +1123,6 @@ function capture(element, event) {
   } catch {
     // No active pointer with that id: synthetic events, or a stale id.
   }
-}
-
-/** A normalised box from two corners. */
-function boxFrom(a, b) {
-  return {
-    south: Math.min(a.lat, b.lat),
-    north: Math.max(a.lat, b.lat),
-    west: Math.min(a.lon, b.lon),
-    east: Math.max(a.lon, b.lon),
-  };
 }
 
 /** Units and formatting for each series the context panel can show. */
