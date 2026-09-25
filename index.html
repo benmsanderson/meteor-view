@@ -28,9 +28,22 @@
 
     <main>
       <form class="controls" id="controls">
-        <div class="control" hidden>
-          <label for="model">Model</label>
-          <select id="model"></select>
+        <div class="control">
+          <label for="compare-by">Compare</label>
+          <select id="compare-by">
+            <option value="scenarios">Scenarios</option>
+            <option value="models">Models</option>
+          </select>
+        </div>
+
+        <div class="control">
+          <span class="control__label" id="model-label">Models</span>
+          <details class="multiselect" id="model-picker">
+            <summary aria-labelledby="model-label model-summary">
+              <span id="model-summary">NorESM2-MM</span>
+            </summary>
+            <div class="multiselect__menu" id="model-list"></div>
+          </details>
         </div>
 
         <div class="control">
@@ -224,10 +237,13 @@
           The precipitation timeseries stays in absolute mm/day.
         </p>
         <p>
-          <strong>What it is not.</strong> One model at a time, so the spread you
-          see is that model's internal variability — not model uncertainty, and
-          not the full uncertainty in a projection. Switching models shows how
-          much they disagree; the band around any one of them does not. Maps show the forced response only;
+          <strong>What it is not.</strong> The band around any one model is that
+          model's internal variability — not model uncertainty, and not the
+          full uncertainty in a projection. Compare models to see how much they
+          disagree; with the 2005–2024 baseline, that is disagreement about the
+          future rather than about the past. The difference between two models'
+          maps is taken on the first model's grid, the second interpolated onto
+          it. Maps show the forced response only;
           variability at a region you draw yourself would need a further 11 MB of
           EOF maps that this page does not load. Custom <em>emissions</em> need a
           simple climate model, which is not here either, so the scenarios on offer

@@ -298,9 +298,10 @@ function tickFormat(format, step) {
  *
  * @param {HTMLCanvasElement} canvas
  * @param {object} options
- * @param {Float64Array} options.early twelve values
+ * @param {Float64Array|Array<{colour: string, values: Float64Array}>} options.early
+ *   twelve values, or twelve per series when each has its own present day
  * @param {Array<{colour: string, values: Float64Array}>} options.late twelve
- *   values per scenario
+ *   values per series
  * @param {(value: number) => string} options.format
  */
 export function drawSeasonal(canvas, { early, late, format }) {
@@ -310,7 +311,11 @@ export function drawSeasonal(canvas, { early, late, format }) {
   const plotHeight = height - pad.top - pad.bottom;
   if (plotWidth <= 0 || plotHeight <= 0) return;
 
-  const all = [...early, ...late.flatMap((l) => [...l.values])];
+  const earlies = early instanceof Float64Array ? null : early;
+  const all = [
+    ...(earlies ? earlies.flatMap((e) => [...e.values]) : early),
+    ...late.flatMap((l) => [...l.values]),
+  ];
   let low = Math.min(...all);
   let high = Math.max(...all);
   const span = high - low || 1;
@@ -329,7 +334,7 @@ export function drawSeasonal(canvas, { early, late, format }) {
   context.textAlign = 'right';
   context.textBaseline = 'middle';
 
-  const yStep = niceStep(high - low, 4);
+  const yStep = niceStep(high - low, 6);
   const yFormat = tickFormat(format, yStep);
   for (let v = Math.ceil(low / yStep) * yStep; v <= high; v += yStep) {
     const y = Math.round(sy(v)) + 0.5;
@@ -356,9 +361,10 @@ export function drawSeasonal(canvas, { early, late, format }) {
     context.stroke();
     context.setLineDash([]);
   };
-  // The early period in ink and dashed, so it reads as the baseline rather
-  // than as one more scenario.
-  line(early, text, [5, 4]);
+  // The early period dashed, so it reads as the baseline rather than as one
+  // more series: in ink when shared, in each series' colour when not.
+  if (earlies) for (const { colour, values } of earlies) line(values, colour, [5, 4]);
+  else line(early, text, [5, 4]);
   for (const { colour, values } of late) line(values, colour);
 }
 

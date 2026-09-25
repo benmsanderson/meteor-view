@@ -14,9 +14,12 @@
  * The model is part of that state too: the same scenario under a different
  * model is a different claim, so a link that dropped it would be ambiguous.
  *
- * Several scenarios can be selected at once, `scn=ssp126,ssp585`, and with two
- * or more the maps compare a pair of them, `cmp=ssp126,ssp585`. A link from
- * before multi-selection, `scn=ssp370`, is simply a selection of one.
+ * A view compares either scenarios or models, never both at once. Comparing
+ * scenarios (the default), several can be selected, `scn=ssp126,ssp585`, under
+ * one model. Comparing models, `by=models`, several models, `m=NorESM2-MM,
+ * CanESM5`, run one scenario. With two or more, the maps compare a pair of
+ * whichever is being compared, `cmp=a,b`. Links from before any of this —
+ * `scn=ssp370`, `m=CanESM5` — are selections of one.
  */
 
 /**
@@ -28,11 +31,15 @@
  */
 export const MAX_SCENARIOS = 6;
 
+/** Most models a view can compare, for the same reasons. */
+export const MAX_MODELS = 6;
+
 /** Fixed default seed, so a link without one is still reproducible. */
 export const DEFAULT_SEED = 20260921;
 
 export const DEFAULTS = {
-  model: 'NorESM2-MM',
+  compareBy: 'scenarios',
+  models: ['NorESM2-MM'],
   variable: 'tas',
   location: 'global',
   scenarios: ['ssp245'],
@@ -50,14 +57,16 @@ export const DEFAULTS = {
  */
 export function toQuery(state) {
   const params = new URLSearchParams();
-  if (state.model !== DEFAULTS.model) params.set('m', state.model);
+  if (state.compareBy !== DEFAULTS.compareBy) params.set('by', state.compareBy);
+  if (state.models.join(',') !== DEFAULTS.models.join(',')) params.set('m', state.models.join(','));
   if (state.variable !== DEFAULTS.variable) params.set('v', state.variable);
   if (state.location !== DEFAULTS.location) params.set('loc', state.location);
   if (state.scenarios.join(',') !== DEFAULTS.scenarios.join(',')) {
     params.set('scn', state.scenarios.join(','));
   }
   // Only when it is not what the page would choose anyway.
-  if (state.compare && state.compare.join(',') !== defaultCompare(state.scenarios)?.join(',')) {
+  const compared = state.compareBy === 'models' ? state.models : state.scenarios;
+  if (state.compare && state.compare.join(',') !== defaultCompare(compared)?.join(',')) {
     params.set('cmp', state.compare.join(','));
   }
   if (state.nRealizations !== DEFAULTS.nRealizations) {
@@ -88,8 +97,18 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   const params = new URLSearchParams(search);
   const state = { ...DEFAULTS };
 
-  const model = params.get('m');
-  if (model && models.includes(model)) state.model = model;
+  // Unknown names dropped, duplicates dropped, capped; an empty result falls
+  // back to the default rather than showing nothing.
+  const list = (name, valid, cap) =>
+    (params.get(name) ?? '')
+      .split(',')
+      .filter((item, i, all) => valid.includes(item) && all.indexOf(item) === i)
+      .slice(0, cap);
+
+  if (params.get('by') === 'models') state.compareBy = 'models';
+
+  const requestedModels = list('m', models, MAX_MODELS);
+  if (requestedModels.length) state.models = requestedModels;
 
   const baseline = params.get('ref');
   if (baseline === 'pi' || baseline === 'recent') state.baseline = baseline;
@@ -100,21 +119,17 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   const location = params.get('loc');
   if (location && locations.includes(location)) state.location = location;
 
-  // Unknown names dropped, duplicates dropped, capped; an empty result falls
-  // back to the default rather than showing nothing.
-  const requested = (params.get('scn') ?? '')
-    .split(',')
-    .filter((name, i, all) => scenarios.includes(name) && all.indexOf(name) === i)
-    .slice(0, MAX_SCENARIOS);
+  const requested = list('scn', scenarios, MAX_SCENARIOS);
   if (requested.length) state.scenarios = requested;
 
-  state.compare = defaultCompare(state.scenarios);
+  // Only what is being compared can be many; the other is a single choice.
+  if (state.compareBy === 'models') state.scenarios = state.scenarios.slice(0, 1);
+  else state.models = state.models.slice(0, 1);
+
+  const compared = state.compareBy === 'models' ? state.models : state.scenarios;
+  state.compare = defaultCompare(compared);
   const pair = (params.get('cmp') ?? '').split(',');
-  if (
-    pair.length === 2 &&
-    pair[0] !== pair[1] &&
-    pair.every((name) => state.scenarios.includes(name))
-  ) {
+  if (pair.length === 2 && pair[0] !== pair[1] && pair.every((name) => compared.includes(name))) {
     state.compare = pair;
   }
 
@@ -141,11 +156,11 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
  * The pair the maps compare when nothing says otherwise: the first two
  * selected. Null with fewer than two, when there is nothing to compare.
  *
- * @param {string[]} scenarios
+ * @param {string[]} items the scenarios or models being compared
  * @returns {[string, string]|null}
  */
-export function defaultCompare(scenarios) {
-  return scenarios.length >= 2 ? [scenarios[0], scenarios[1]] : null;
+export function defaultCompare(items) {
+  return items.length >= 2 ? [items[0], items[1]] : null;
 }
 
 /**

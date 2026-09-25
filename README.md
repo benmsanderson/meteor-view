@@ -134,6 +134,24 @@ Validated against METEOR's own gridded prediction: maps agree to 1e-6 relative,
 and a box drawn over the Sahara lands within 10% of the AR6 region it
 approximates. Two complete maps reconstruct in about 27 ms.
 
+## Comparing models
+
+**Compare: Models** switches what is compared. Tick up to six models, which
+all run one scenario; each gets a colour of its own for as long as it stays
+selected. The chart, seasonal panel, maps and CSV then answer per model, and
+the maps compare any two of them, as for scenarios.
+
+Two models rarely share a grid, so the difference map puts B onto A's grid by
+bilinear interpolation before subtracting, and says so in its caption. The
+readout reads A and B each on its own grid, so its difference can differ from
+B minus A as read by the interpolation, typically by a tenth of a degree.
+
+Each model is measured from its own baseline. From 1850–1900 the differences
+include how differently the models warmed over the historical period; from
+2005–2024 that part drops out, leaving their disagreement about the future.
+The seasonal panel shows each model's own present-day climate as well as its
+future one, since their absolute climates differ by degrees.
+
 ## Baselines
 
 Temperature, and both maps, are change from a reference period you choose:
@@ -197,10 +215,10 @@ interface until then — is the most important thing left.
   exposes it.
 - **Precipitation is 2015–2100 only**, the window its distribution transform was
   fitted for. Another window needs a re-export on the METEOR side.
-- **Seven models, one at a time.** NorESM2-MM, CanESM5, INM-CM5-0,
-  IPSL-CM6A-LR, MIROC6, MPI-ESM1-2-LR and MRI-ESM2-0, each trained on ssp245.
-  The spread shown is one model's internal variability; across-model spread
-  is not drawn yet.
+- **Seven models.** NorESM2-MM, CanESM5, INM-CM5-0, IPSL-CM6A-LR, MIROC6,
+  MPI-ESM1-2-LR and MRI-ESM2-0, each trained on ssp245. Up to six can be
+  compared side by side; each band is one model's internal variability, and
+  no combined across-model spread is drawn.
 - **Two scenario generations, not interchangeable.** The eight CMIP6 SSPs and
   the seven CMIP7 ScenarioMIP markers were built years apart against different
   vintages of history. Both are driven through the same simple climate model

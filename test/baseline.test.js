@@ -100,3 +100,19 @@ describe('baselines', () => {
     expect(worst / scale).toBeLessThan(1e-9);
   });
 });
+
+describe('absolute values', () => {
+  it('turn a temperature run into temperatures a reader would recognise', () => {
+    const at = (location) => explorer.absoluteOffset({ variable: 'tas', location });
+    // The unforced annual-mean level: a global mean near 14 °C, the Sahara
+    // hot and East Antarctica far below freezing.
+    expect(at('global')).toBeGreaterThan(12);
+    expect(at('global')).toBeLessThan(16);
+    expect(at('regional:SAH')).toBeGreaterThan(20);
+    expect(at('regional:EAN')).toBeLessThan(-20);
+  });
+
+  it('leave precipitation alone, which is absolute already', () => {
+    expect(explorer.absoluteOffset({ variable: 'pr', location: 'global' })).toBe(0);
+  });
+});
