@@ -774,10 +774,25 @@ function setMapMode(mode) {
   elements.modePan.setAttribute('aria-pressed', String(mode === 'pan'));
   for (const canvas of mapCanvases()) {
     canvas.style.cursor = mode === 'pan' ? 'grab' : 'crosshair';
-    // In pan mode a vertical swipe scrolls the page, so three stacked maps on
-    // a phone do not trap it; horizontal drags, pinches and taps stay with the
-    // map. Drawing a region needs every direction, so it takes them all.
-    canvas.style.touchAction = mode === 'pan' ? 'pan-y' : 'none';
+  }
+  updateTouchAction();
+}
+
+/**
+ * Who gets a one-finger swipe on a map: the map, or the page.
+ *
+ * Zoomed in, the map, in every direction: a browser commits a touch to
+ * scrolling or not from its first few pixels, so sharing vertical swipes with
+ * the page made dragging a zoomed map a coin toss. At the whole-world view
+ * there is nowhere to pan vertically, so a vertical swipe is left to scroll
+ * the page instead — which is what keeps three stacked maps on a phone from
+ * trapping it. Drawing a region needs every direction whatever the zoom.
+ * Pinches and taps stay with the map throughout.
+ */
+function updateTouchAction() {
+  const own = mapMode === 'select' || mapView.zoom > 1;
+  for (const canvas of mapCanvases()) {
+    canvas.style.touchAction = own ? 'none' : 'pan-y';
   }
 }
 
@@ -785,6 +800,8 @@ function setMapMode(mode) {
 function showResetView() {
   elements.resetView.hidden =
     mapView.zoom === 1 && mapView.centreLat === 0 && mapView.centreLon === 0;
+  // Every view change comes through here, so the touch rules follow the zoom.
+  updateTouchAction();
 }
 
 /** Select the AR6 region under a point, if the bundle carries it. */
