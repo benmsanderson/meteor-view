@@ -329,7 +329,7 @@ export function drawSeasonal(canvas, { early, late, format }) {
   context.textAlign = 'right';
   context.textBaseline = 'middle';
 
-  const yStep = niceStep(high - low, 4);
+  const yStep = niceStep(high - low, 6);
   const yFormat = tickFormat(format, yStep);
   for (let v = Math.ceil(low / yStep) * yStep; v <= high; v += yStep) {
     const y = Math.round(sy(v)) + 0.5;

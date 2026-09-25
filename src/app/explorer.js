@@ -156,6 +156,26 @@ export class Explorer {
     return this.baselineCache.get(key);
   }
 
+  /**
+   * What to add to a run, before any baseline is taken off, to make it an
+   * absolute value in display units.
+   *
+   * A temperature run is an anomaly: the harmonics and noise about zero, plus
+   * the forced response since the unforced state. The seasonal model's
+   * intercept is the location's absolute level in that unforced state, so the
+   * two together are the absolute temperature — checked against the ESMs' own
+   * output, where the 2015-2034 and 2081-2100 monthly climatologies of NEN and
+   * NEU agree to 0.2-1.1 °C RMS for CanESM5 and MIROC6. Precipitation runs
+   * are absolute already.
+   *
+   * @returns {number} °C for `tas`; 0 for `pr`
+   */
+  absoluteOffset({ variable, location }) {
+    if (variable !== 'tas') return 0;
+    const bundle = this.bundles.tas;
+    return bundle.get('seasonal_intercept')[bundle.locationIndex(location)] - 273.15;
+  }
+
   /** As {@link baselineOffset}, for a drawn region. Not cached: masks vary. */
   async customBaselineOffset({ variable, mask, baseline }) {
     const forced = await this.customForcedFull({

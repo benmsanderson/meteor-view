@@ -328,11 +328,15 @@ async function run() {
   const offset = spec.baselined
     ? spec.convert(explorer.baselineOffset({ variable, location, baseline: elements.baseline.value }))
     : 0;
+  // What turns a baselined series back into an absolute one, for the
+  // seasonal panel, which shows absolute values.
+  const toAbsolute = offset + explorer.absoluteOffset({ variable, location });
   const runs = results.map((result, i) => ({
     scenario: scenarios[i],
     series: result.series.map((series) =>
       subtract(Float64Array.from(series, spec.convert), offset)
     ),
+    toAbsolute,
   }));
 
   lastRun = { years, runs, variable, location, baseline: baselineNote(variable) };
@@ -485,7 +489,10 @@ function drawSeasonalPanel() {
   elements.seasonal.closest('.panel').hidden = false;
   const spec = VARIABLES[lastRun.variable];
 
-  const climatology = (ensemble, fromYear, toYear) => {
+  // Absolute values, not change: a seasonal cycle reads as temperatures a
+  // reader knows — "-10 °C in January" — while a change from a baseline puts
+  // winter tens of degrees "below" a period that was never that cold.
+  const climatology = (ensemble, fromYear, toYear, shift) => {
     const months = ensemble[0].length;
     const out = new Float64Array(12);
     const from = (fromYear - WINDOW.start) * 12;
@@ -499,7 +506,7 @@ function drawSeasonalPanel() {
           count += 1;
         }
       }
-      out[m] = sum / count;
+      out[m] = sum / count + shift;
     }
     return out;
   };
@@ -507,10 +514,10 @@ function drawSeasonalPanel() {
   drawSeasonal(elements.seasonal, {
     // The first scenario's, as the baseline: by 2015-2034 the scenarios have
     // barely begun to diverge.
-    early: climatology(lastRun.runs[0].series, 2015, 2034),
-    late: lastRun.runs.map(({ scenario, series }) => ({
+    early: climatology(lastRun.runs[0].series, 2015, 2034, lastRun.runs[0].toAbsolute),
+    late: lastRun.runs.map(({ scenario, series, toAbsolute }) => ({
       colour: selectedColour(scenario),
-      values: climatology(series, 2081, 2100),
+      values: climatology(series, 2081, 2100, toAbsolute),
     })),
     format: spec.format,
   });
@@ -529,6 +536,8 @@ function drawSeasonalPanel() {
     items.push(swatch('swatch--line', selectedColour(scenario)), ` ${label} `);
   }
   if (lastRun.runs.length > 1) items.push('(2081–2100)');
+  // Says so, because the chart above is a change and this is not.
+  items.push(lastRun.variable === 'tas' ? ' · absolute, °C' : ' · absolute, mm/day');
   elements.seasonalLegend.replaceChildren(...items);
 }
 
