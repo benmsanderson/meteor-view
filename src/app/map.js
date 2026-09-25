@@ -343,6 +343,76 @@ export function toLatLon(canvas, event, view = defaultView()) {
 }
 
 /**
+ * A field interpolated onto another grid, bilinearly.
+ *
+ * For differencing two models, whose grids differ: the difference has to be
+ * taken somewhere, and B on A's grid keeps A's gridboxes honest. Bilinear
+ * rather than conservative, which is right for a smooth forced-response field
+ * and would not be for a noisy one. Longitude wraps; latitude beyond the
+ * source grid's outermost rows takes the nearest row. NaN in any of the four
+ * surrounding points gives NaN, so blanks (no rain to take a percentage of)
+ * stay blank rather than being smeared into their neighbours.
+ *
+ * @param {{field: ArrayLike<number>, lat: ArrayLike<number>, lon: ArrayLike<number>}} source
+ *   row-major `(lat, lon)`, latitude ascending, longitude ascending in [0, 360)
+ * @param {ArrayLike<number>} lat target latitudes
+ * @param {ArrayLike<number>} lon target longitudes
+ * @returns {Float64Array} row-major `(lat.length, lon.length)`
+ */
+export function regrid(source, lat, lon) {
+  const nLat = source.lat.length;
+  const nLon = source.lon.length;
+  const wrap360 = (x) => ((x % 360) + 360) % 360;
+
+  // Fractional index along an ascending axis, clamped at the ends.
+  const latIndex = (value) => {
+    if (value <= source.lat[0]) return 0;
+    if (value >= source.lat[nLat - 1]) return nLat - 1;
+    let i = 0;
+    while (source.lat[i + 1] < value) i += 1;
+    return i + (value - source.lat[i]) / (source.lat[i + 1] - source.lat[i]);
+  };
+  // Along longitude, periodic: the gap after the last column wraps to the first.
+  const lonIndex = (value) => {
+    const x = wrap360(value);
+    const first = wrap360(source.lon[0]);
+    let j = nLon - 1;
+    for (let k = 0; k < nLon; k += 1) {
+      if (wrap360(source.lon[k] - first) <= wrap360(x - first)) j = k;
+      else break;
+    }
+    const next = (j + 1) % nLon;
+    const span = wrap360(source.lon[next] - source.lon[j]) || 360;
+    return j + wrap360(x - source.lon[j]) / span;
+  };
+
+  const rows = Array.from(lat, latIndex);
+  const cols = Array.from(lon, lonIndex);
+  const out = new Float64Array(lat.length * lon.length);
+  for (let i = 0; i < lat.length; i += 1) {
+    const i0 = Math.floor(rows[i]);
+    const i1 = Math.min(i0 + 1, nLat - 1);
+    const fi = rows[i] - i0;
+    for (let j = 0; j < lon.length; j += 1) {
+      const j0 = Math.floor(cols[j]) % nLon;
+      const j1 = (j0 + 1) % nLon;
+      const fj = cols[j] - Math.floor(cols[j]);
+      const at = (r, c) => source.field[r * nLon + c];
+      out[i * lon.length + j] =
+        (1 - fi) * ((1 - fj) * at(i0, j0) + fj * at(i0, j1)) +
+        fi * ((1 - fj) * at(i1, j0) + fj * at(i1, j1));
+    }
+  }
+  return out;
+}
+
+/** Whether two grids are the same, so a difference needs no regridding. */
+export function sameGrid(a, b) {
+  const same = (x, y) => x.length === y.length && Array.prototype.every.call(x, (v, i) => Math.abs(v - y[i]) < 1e-6);
+  return same(a.lat, b.lat) && same(a.lon, b.lon);
+}
+
+/**
  * The field's value at a point: the gridbox it falls in.
  *
  * Nearest neighbour, because the map draws gridboxes and a readout should

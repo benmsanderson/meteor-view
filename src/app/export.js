@@ -16,6 +16,7 @@ function provenanceLines({
   url,
   nRealizations,
   seed,
+  models = [bundle.attrs.cmip6_model],
   baseline = 'absolute (no baseline)',
 }) {
   return [
@@ -25,7 +26,7 @@ function provenanceLines({
     `# location: ${location}`,
     `# scenarios: ${scenarios.join(', ')}`,
     `# realizations: ${nRealizations}, seed: ${seed}`,
-    `# cmip6_model: ${bundle.attrs.cmip6_model}`,
+    `# cmip6_model: ${models.join(', ')}`,
     `# training_scenario: ${bundle.attrs.training_scenario}`,
     `# meteor_version: ${bundle.attrs.meteor_version}`,
     `# schema_version: ${bundle.schemaVersion}`,
@@ -39,17 +40,16 @@ function provenanceLines({
 }
 
 /**
- * The ensembles as CSV: one row per scenario and month, one column per
+ * The ensembles as CSV: one row per model, scenario and month, one column per
  * realization.
  *
- * Long in scenario rather than wide, so the file has the same columns however
- * many scenarios were selected, and `df.groupby('scenario')` is all it takes
- * to split it. Every scenario shares the seed, so realization_01 of one and of
- * another were driven by the same random draws.
+ * Long rather than wide, so the file has the same columns however many
+ * scenarios or models were selected, and `df.groupby(['model', 'scenario'])`
+ * is all it takes to split it. Every series shares the seed.
  *
  * @param {object} options
  * @param {number[]} options.years
- * @param {Array<{scenario: string, series: Float64Array[]}>} options.runs
+ * @param {Array<{model?: string, scenario: string, series: Float64Array[]}>} options.runs
  *   monthly, in display units
  * @returns {string}
  */
@@ -57,20 +57,20 @@ export function toCsv({ years, runs, ...provenance }) {
   const nRealizations = runs[0].series.length;
   const lines = provenanceLines({
     ...provenance,
-    scenarios: runs.map((run) => run.scenario),
+    scenarios: [...new Set(runs.map((run) => run.scenario))],
     nRealizations,
   });
 
-  const header = ['scenario', 'year', 'month'];
+  const header = ['model', 'scenario', 'year', 'month'];
   for (let r = 0; r < nRealizations; r += 1) {
     header.push(`realization_${String(r + 1).padStart(2, '0')}`);
   }
   lines.push(header.join(','));
 
-  for (const { scenario, series } of runs) {
+  for (const { model = provenance.bundle.attrs.cmip6_model, scenario, series } of runs) {
     const months = series[0].length;
     for (let t = 0; t < months; t += 1) {
-      const row = [scenario, years[Math.floor(t / 12)], (t % 12) + 1];
+      const row = [model, scenario, years[Math.floor(t / 12)], (t % 12) + 1];
       for (const s of series) row.push(formatValue(s[t]));
       lines.push(row.join(','));
     }

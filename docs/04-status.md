@@ -182,6 +182,14 @@ are unchanged by the choice. Applies to temperature everywhere and to the
 precipitation maps; the precipitation timeseries stays absolute. Before this,
 "anomaly" silently meant change since 1750, the first year of the forcing.
 
+### Model comparison and absolute seasonal cycle — done
+
+"Compare: Models" runs up to six models under one scenario, with a model-
+difference map on the first model's grid (B interpolated bilinearly). Each
+model is measured from its own baseline. The seasonal panel now shows absolute
+values (°C, mm/day) under either baseline, validated against the ESMs' own
+monthly climatologies to 0.2–1.1 °C RMS. Links: `by=models&m=a,b,c`.
+
 ## Things that would surprise you
 
 - **METEOR's trunk is `base`, not `main`.** `main` is a 2023 orphan with no

@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULTS, MAX_SCENARIOS, fromQuery, toQuery } from '../src/app/state.js';
+import { DEFAULTS, MAX_MODELS, MAX_SCENARIOS, fromQuery, toQuery } from '../src/app/state.js';
 import { filenameStem, toCsv } from '../src/app/export.js';
 import {
   groupScenarios,
@@ -23,7 +23,7 @@ const CONTEXT = {
     'ssp126', 'ssp245', 'ssp370', 'ssp585', 'ssp119', 'ssp434', 'ssp460',
     'cmip7-low', 'cmip7-high',
   ],
-  models: ['NorESM2-MM', 'CanESM5'],
+  models: ['NorESM2-MM', 'CanESM5', 'MIROC6', 'INM-CM5-0', 'IPSL-CM6A-LR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0'],
 };
 
 describe('URL state', () => {
@@ -33,7 +33,8 @@ describe('URL state', () => {
 
   it('round-trips a full state', () => {
     const state = {
-      model: 'CanESM5',
+      compareBy: 'scenarios',
+      models: ['CanESM5'],
       variable: 'pr',
       location: 'regional:NEU',
       scenarios: ['ssp126', 'ssp370', 'ssp585'],
@@ -100,16 +101,51 @@ describe('URL state', () => {
   });
 
   it('names the model only when it is not the default', () => {
-    expect(toQuery({ ...DEFAULTS, model: 'CanESM5' })).toBe('?m=CanESM5');
-    expect(toQuery({ ...DEFAULTS, model: DEFAULTS.model })).toBe('');
+    expect(toQuery({ ...DEFAULTS, models: ['CanESM5'] })).toBe('?m=CanESM5');
+    expect(toQuery({ ...DEFAULTS, models: DEFAULTS.models })).toBe('');
   });
 
   it('accepts only models the site carries', () => {
     // The model decides which files are fetched, so an unknown one must not
     // reach a URL.
-    expect(fromQuery('?m=CanESM5', CONTEXT).model).toBe('CanESM5');
-    expect(fromQuery('?m=../../etc', CONTEXT).model).toBe(DEFAULTS.model);
-    expect(fromQuery('?m=CanESM5', { ...CONTEXT, models: [] }).model).toBe(DEFAULTS.model);
+    expect(fromQuery('?m=CanESM5', CONTEXT).models).toEqual(['CanESM5']);
+    expect(fromQuery('?m=../../etc', CONTEXT).models).toEqual(DEFAULTS.models);
+    expect(fromQuery('?m=CanESM5', { ...CONTEXT, models: [] }).models).toEqual(DEFAULTS.models);
+  });
+
+  it('round-trips a model comparison', () => {
+    const state = {
+      ...DEFAULTS,
+      compareBy: 'models',
+      models: ['CanESM5', 'MIROC6', 'NorESM2-MM'],
+      scenarios: ['cmip7-high'],
+      compare: ['NorESM2-MM', 'CanESM5'],
+    };
+    const query = toQuery(state);
+    expect(query).toContain('by=models');
+    expect(fromQuery(query, CONTEXT)).toEqual(state);
+  });
+
+  it('keeps many of whichever is compared, and one of the other', () => {
+    // Comparing scenarios: several scenarios, the first model only.
+    const byScenario = fromQuery('?m=CanESM5,MIROC6&scn=ssp126,ssp585', CONTEXT);
+    expect(byScenario.models).toEqual(['CanESM5']);
+    expect(byScenario.scenarios).toEqual(['ssp126', 'ssp585']);
+    // Comparing models: several models, the first scenario only.
+    const byModel = fromQuery('?by=models&m=CanESM5,MIROC6&scn=ssp126,ssp585', CONTEXT);
+    expect(byModel.models).toEqual(['CanESM5', 'MIROC6']);
+    expect(byModel.scenarios).toEqual(['ssp126']);
+    expect(byModel.compare).toEqual(['CanESM5', 'MIROC6']);
+  });
+
+  it('caps the models a link can compare, and checks the pair against them', () => {
+    const all = CONTEXT.models.join(',');
+    expect(fromQuery(`?by=models&m=${all}`, CONTEXT).models).toHaveLength(MAX_MODELS);
+    // A scenario pair means nothing when models are compared.
+    expect(fromQuery('?by=models&m=CanESM5,MIROC6&cmp=ssp126,ssp585', CONTEXT).compare).toEqual([
+      'CanESM5',
+      'MIROC6',
+    ]);
   });
 
   it('caps the realization count a link can demand', () => {
@@ -160,12 +196,12 @@ describe('CSV export', () => {
   });
 
   it('has one row per scenario and month, one column per realization', () => {
-    expect(dataLines[0]).toBe('scenario,year,month,realization_01,realization_02');
+    expect(dataLines[0]).toBe('model,scenario,year,month,realization_01,realization_02');
     expect(dataLines.length).toBe(1 + 2 * 24);
-    expect(dataLines[1].startsWith('ssp245,2015,1,')).toBe(true);
-    expect(dataLines[12].startsWith('ssp245,2015,12,')).toBe(true);
-    expect(dataLines[13].startsWith('ssp245,2016,1,')).toBe(true);
-    expect(dataLines[25].startsWith('cmip7-high,2015,1,')).toBe(true);
+    expect(dataLines[1].startsWith('NorESM2-MM,ssp245,2015,1,')).toBe(true);
+    expect(dataLines[12].startsWith('NorESM2-MM,ssp245,2015,12,')).toBe(true);
+    expect(dataLines[13].startsWith('NorESM2-MM,ssp245,2016,1,')).toBe(true);
+    expect(dataLines[25].startsWith('NorESM2-MM,cmip7-high,2015,1,')).toBe(true);
   });
 
   it('lists every scenario in the provenance', () => {
@@ -173,7 +209,7 @@ describe('CSV export', () => {
   });
 
   it('round-trips values without visible loss', () => {
-    const third = Number(dataLines[2].split(',')[3]);
+    const third = Number(dataLines[2].split(',')[4]);
     expect(third).toBeCloseTo(1 / 3, 6);
   });
 });

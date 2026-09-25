@@ -18,11 +18,14 @@ import {
   drawMap,
   projection,
   regionAt,
+  regrid,
+  sameGrid,
   toLatLon,
   valueAt,
 } from './map.js';
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
+import { assignModelColours, modelColour } from './models.js';
 import { placeLabel } from './places.js';
 import {
   groupScenarios,
@@ -35,6 +38,7 @@ import {
 } from './scenarios.js';
 import {
   DEFAULT_SEED,
+  MAX_MODELS,
   MAX_SCENARIOS,
   defaultCompare,
   fromQuery,
@@ -69,7 +73,10 @@ const VARIABLES = {
 
 const elements = {
   controls: document.getElementById('controls'),
-  model: document.getElementById('model'),
+  compareBy: document.getElementById('compare-by'),
+  modelPicker: document.getElementById('model-picker'),
+  modelList: document.getElementById('model-list'),
+  modelSummary: document.getElementById('model-summary'),
   variable: document.getElementById('variable'),
   location: document.getElementById('location'),
   scenarioPicker: document.getElementById('scenario-picker'),
@@ -118,8 +125,20 @@ const elements = {
   provenance: document.getElementById('provenance'),
 };
 
-/** @type {Explorer} */
+/**
+ * The first selected model's explorer: the one that answers for everything
+ * that does not depend on the model — places, scenarios, emissions, outlines.
+ * @type {Explorer}
+ */
 let explorer;
+/** One explorer per model asked for, loaded once. */
+const explorers = new Map();
+/** Every model the site carries, from the manifest. */
+let availableModelList = [];
+/** Whether a view compares scenarios under one model, or models under one scenario. */
+let compareBy = 'scenarios';
+/** The selected models, in manifest order. Never empty. */
+let models = ['NorESM2-MM'];
 /** Where the data files are served from. */
 let dataBase;
 /** Generates ensembles off the main thread. */
@@ -139,13 +158,11 @@ let customBox = null;
 let scenarioEmissions = null;
 /** Coastlines, once loaded. */
 let coastlines = [];
-/** Gridded precipitation climatology, the percent-change denominator. */
-let prClimatology = null;
 /** Which gesture the plain drag performs; shift does the other. */
 let mapMode = 'pan';
 /** The selected scenarios, in menu order. Never empty. */
 let selection = ['ssp245'];
-/** The two scenarios the maps compare, or null with only one selected. */
+/** The two scenarios or models the maps compare, or null with only one. */
 let compare = null;
 /** What part of the world the map shows. */
 let mapView = defaultView();
@@ -182,60 +199,117 @@ function populateControls() {
     elements.location.append(group);
   }
 
+  renderPickers();
+}
+
+/**
+ * The model and scenario menus, as checkboxes for whichever is being compared
+ * and radio buttons for the other: only one of the two can be many at once.
+ */
+function renderPickers() {
+  const many = (dimension) => compareBy === dimension;
   // Grouped by generation, because the two are not interchangeable and the
   // menu is the only place that can say so before a comparison is made.
-  elements.scenarioList.replaceChildren();
-  for (const { family, names } of groupScenarios(explorer.scenarios)) {
+  fillPicker(elements.scenarioList, {
+    name: 'scenario',
+    groups: groupScenarios(explorer.scenarios),
+    label: scenarioLabel,
+    colour: (name) => (many('scenarios') ? selectedColour(name) : null),
+    multiple: many('scenarios'),
+    cap: MAX_SCENARIOS,
+  });
+  fillPicker(elements.modelList, {
+    name: 'model',
+    groups: [{ family: 'CMIP6 models', names: availableModelList }],
+    label: (name) => name,
+    colour: null,
+    multiple: many('models'),
+    cap: MAX_MODELS,
+  });
+}
+
+/** Fill one dropdown list with checkboxes or radio buttons. */
+function fillPicker(list, { name, groups, label, colour, multiple, cap }) {
+  list.replaceChildren();
+  for (const { family, names } of groups) {
     const fieldset = document.createElement('fieldset');
     const legend = document.createElement('legend');
     legend.textContent = family;
     fieldset.append(legend);
-    for (const scenario of names) {
-      const label = document.createElement('label');
-      const box = document.createElement('input');
-      box.type = 'checkbox';
-      box.value = scenario;
-      box.name = 'scenario';
+    for (const item of names) {
+      const row = document.createElement('label');
+      const input = document.createElement('input');
+      input.type = multiple ? 'checkbox' : 'radio';
+      input.value = item;
+      input.name = name;
       const swatch = document.createElement('span');
       swatch.className = 'multiselect__swatch';
-      swatch.style.background = selectedColour(scenario);
-      label.append(box, swatch, scenarioLabel(scenario));
-      fieldset.append(label);
+      swatch.dataset.item = item;
+      const hue = colour?.(item);
+      if (hue) swatch.style.background = hue;
+      row.append(input, swatch, label(item));
+      fieldset.append(row);
     }
-    elements.scenarioList.append(fieldset);
+    list.append(fieldset);
   }
-  const note = document.createElement('p');
-  note.className = 'multiselect__note';
-  note.textContent = `Up to ${MAX_SCENARIOS} at once.`;
-  elements.scenarioList.append(note);
+  if (multiple) {
+    const note = document.createElement('p');
+    note.className = 'multiselect__note';
+    note.textContent = `Up to ${cap} at once.`;
+    list.append(note);
+  }
 }
 
-/** Every scenario checkbox. */
-function scenarioBoxes() {
-  return [...elements.scenarioList.querySelectorAll('input[name="scenario"]')];
+/** Every input in one picker. */
+function pickerInputs(list, name) {
+  return [...list.querySelectorAll(`input[name="${name}"]`)];
+}
+
+/** The items being compared: scenarios or models. */
+function comparedItems() {
+  return compareBy === 'models' ? models : selection;
+}
+
+/** A display name for a compared item. */
+function itemLabel(item) {
+  return compareBy === 'models' ? item : scenarioLabel(item);
 }
 
 /**
- * Make the checkboxes, the summary and the compare menus show `selection`.
+ * Make both pickers, their summaries and the compare menus show the
+ * selection.
  *
  * Unticked boxes are disabled at the cap rather than the tick being refused
  * after the fact, so the limit is visible before anyone runs into it.
  */
 function showSelection() {
-  const full = selection.length >= MAX_SCENARIOS;
-  for (const box of scenarioBoxes()) {
-    box.checked = selection.includes(box.value);
-    box.disabled = full && !box.checked;
-    box.closest('label').dataset.disabled = String(box.disabled);
+  assignModelColours(models);
+  const sync = (list, name, chosen, cap) => {
+    const full = chosen.length >= cap;
+    for (const input of pickerInputs(list, name)) {
+      input.checked = chosen.includes(input.value);
+      input.disabled = input.type === 'checkbox' && full && !input.checked;
+      input.closest('label').dataset.disabled = String(input.disabled);
+    }
+  };
+  sync(elements.scenarioList, 'scenario', selection, MAX_SCENARIOS);
+  sync(elements.modelList, 'model', models, MAX_MODELS);
+  // Model colours belong to the selection, so repaint their swatches.
+  for (const swatch of elements.modelList.querySelectorAll('.multiselect__swatch')) {
+    const on = compareBy === 'models' && models.includes(swatch.dataset.item);
+    swatch.style.background = on ? modelColour(swatch.dataset.item) : '';
   }
-  elements.scenarioSummary.textContent =
-    selection.length === 1
-      ? scenarioLabel(selection[0])
-      : `${scenarioShortLabel(selection[0])} + ${selection.length - 1} more`;
-  elements.scenarioPicker.title = selection.map(scenarioLabel).join(', ');
 
-  if (!compare || !compare.every((name) => selection.includes(name))) {
-    compare = defaultCompare(selection);
+  const summary = (chosen, label, short) =>
+    chosen.length === 1 ? label(chosen[0]) : `${short(chosen[0])} + ${chosen.length - 1} more`;
+  elements.scenarioSummary.textContent = summary(selection, scenarioLabel, scenarioShortLabel);
+  elements.scenarioPicker.title = selection.map(scenarioLabel).join(', ');
+  elements.modelSummary.textContent = summary(models, (m) => m, (m) => m);
+  elements.modelPicker.title = models.join(', ');
+
+  const items = comparedItems();
+  if (!compare || !compare.every((name) => items.includes(name))) {
+    compare = defaultCompare(items);
   }
   elements.mapCompare.hidden = !compare;
   elements.maps.dataset.layout = compare ? 'compare' : 'single';
@@ -244,10 +318,10 @@ function showSelection() {
     [elements.compareB, compare?.[1]],
   ]) {
     menu.replaceChildren(
-      ...selection.map((name) => {
+      ...items.map((name) => {
         const option = document.createElement('option');
         option.value = name;
-        option.textContent = scenarioLabel(name);
+        option.textContent = itemLabel(name);
         return option;
       })
     );
@@ -255,16 +329,68 @@ function showSelection() {
   }
 }
 
-/** Read the ticked boxes into `selection`, keeping at least one. */
-function readSelection(changed) {
-  const ticked = sortScenarios(scenarioBoxes().filter((b) => b.checked).map((b) => b.value));
-  // Unticking the last scenario would leave nothing to show, so it stays.
-  if (ticked.length === 0) {
+/**
+ * Read one picker into the selection, keeping at least one item.
+ *
+ * @returns {boolean} whether the selection changed
+ */
+function readPicker(name, changed) {
+  const list = name === 'model' ? elements.modelList : elements.scenarioList;
+  const order = name === 'model' ? availableModelList : null;
+  let chosen = pickerInputs(list, name).filter((b) => b.checked).map((b) => b.value);
+  chosen = order ? order.filter((m) => chosen.includes(m)) : sortScenarios(chosen);
+  // Unticking the last one would leave nothing to show, so it stays.
+  if (chosen.length === 0) {
     changed.checked = true;
     return false;
   }
-  selection = ticked.slice(0, MAX_SCENARIOS);
+  if (name === 'model') models = chosen.slice(0, MAX_MODELS);
+  else selection = chosen.slice(0, MAX_SCENARIOS);
+  // A single choice is made in one click, so the menu has done its job.
+  if (changed.type === 'radio') (name === 'model' ? elements.modelPicker : elements.scenarioPicker).open = false;
   return true;
+}
+
+/** The explorer for a model, loading its bundles the first time. */
+function explorerFor(model) {
+  if (!explorers.has(model)) {
+    const loading = Explorer.load(dataBase, model).then((loaded) => {
+      // Outlines, coastlines and emissions do not depend on the model.
+      loaded.regionOutlines = explorer?.regionOutlines ?? null;
+      loaded.coastlineRings = explorer?.coastlineRings ?? null;
+      loaded.scenarioEmissions = explorer?.scenarioEmissions ?? null;
+      return loaded;
+    });
+    // A failed load must not stay cached, or the model could never be retried.
+    loading.catch(() => explorers.delete(model));
+    explorers.set(model, loading);
+  }
+  return explorers.get(model);
+}
+
+/**
+ * The series a view shows: one per scenario under one model, or one per
+ * model under one scenario. Each carries its own label and colour.
+ */
+function seriesSpecs() {
+  if (compareBy === 'models') {
+    const scenario = selection[0];
+    return models.map((model) => ({
+      key: model,
+      model,
+      scenario,
+      label: model,
+      colour: modelColour(model),
+    }));
+  }
+  const model = models[0];
+  return selection.map((scenario) => ({
+    key: scenario,
+    model,
+    scenario,
+    label: scenarioShortLabel(scenario),
+    colour: selectedColour(scenario),
+  }));
 }
 
 /**
@@ -292,23 +418,25 @@ async function run() {
   const spec = VARIABLES[variable];
   const location = elements.location.value;
   const nRealizations = Number(elements.realizations.value);
-  const scenarios = [...selection];
-  const model = explorer.model;
+  const specs = seriesSpecs();
+  const noun = compareBy === 'models' ? 'models' : 'scenarios';
 
   const started = performance.now();
   let done = 0;
   const progress = () => {
-    if (scenarios.length > 1 && request === runRequest) {
-      setStatus(`Generating ${done} of ${scenarios.length} scenarios…`);
+    if (specs.length > 1 && request === runRequest) {
+      setStatus(`Generating ${done} of ${specs.length} ${noun}…`);
     }
   };
   progress();
 
   let results;
+  let loaded;
   try {
-    // Every scenario at once: the pool spreads them over its workers.
+    loaded = await Promise.all(specs.map((s) => explorerFor(s.model)));
+    // Every series at once: the pool spreads them over its workers.
     results = await Promise.all(
-      scenarios.map((scenario) =>
+      specs.map(({ model, scenario }) =>
         runner.run(model, { variable, location, scenario, nRealizations, seed }).then((r) => {
           done += 1;
           progress();
@@ -325,32 +453,50 @@ async function run() {
   const elapsed = performance.now() - started;
 
   const years = results[0].years;
-  const offset = spec.baselined
-    ? spec.convert(explorer.baselineOffset({ variable, location, baseline: elements.baseline.value }))
-    : 0;
-  // What turns a baselined series back into an absolute one, for the
-  // seasonal panel, which shows absolute values.
-  const toAbsolute = offset + explorer.absoluteOffset({ variable, location });
-  const runs = results.map((result, i) => ({
-    scenario: scenarios[i],
-    series: result.series.map((series) =>
-      subtract(Float64Array.from(series, spec.convert), offset)
-    ),
-    toAbsolute,
-  }));
+  const runs = results.map((result, i) => {
+    // Each model is measured from its own baseline: under recent history that
+    // is what takes out the part of two models' difference inherited from the
+    // past.
+    const own = loaded[i];
+    const offset = spec.baselined
+      ? spec.convert(own.baselineOffset({ variable, location, baseline: elements.baseline.value }))
+      : 0;
+    return {
+      ...specs[i],
+      series: result.series.map((series) =>
+        subtract(Float64Array.from(series, spec.convert), offset)
+      ),
+      // What turns a baselined series back into an absolute one, for the
+      // seasonal panel, which shows absolute values.
+      toAbsolute: offset + own.absoluteOffset({ variable, location }),
+    };
+  });
 
-  lastRun = { years, runs, variable, location, baseline: baselineNote(variable) };
+  lastRun = { years, runs, variable, location, compareBy, baseline: baselineNote(variable) };
   syncUrl();
 
-  elements.chartTitle.textContent = `${spec.label} at ${placeLabel(location)}`;
+  elements.chartTitle.textContent = chartTitle(spec, placeLabel(location), 'at');
   drawChart();
   drawSeasonalPanel();
 
   setStatus(
     `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
-      `${placeLabel(location)} under ${listScenarios(scenarios)}, ` +
+      `${placeLabel(location)}, ${describeRuns(runs)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
+}
+
+/** "Temperature at Global mean", naming the one scenario when models vary. */
+function chartTitle(spec, place, preposition) {
+  const title = `${spec.label} ${preposition} ${place}`;
+  return compareBy === 'models' ? `${title}, ${scenarioLabel(selection[0])}` : title;
+}
+
+/** "from NorESM2-MM under SSP1-2.6 and SSP5-8.5", or the other way round. */
+function describeRuns(runs) {
+  const models = [...new Set(runs.map((r) => r.model))];
+  const scenarios = [...new Set(runs.map((r) => r.scenario))];
+  return `from ${listOf(models)} under ${listOf(scenarios.map(scenarioLabel))}`;
 }
 
 /** The y-axis label, naming the baseline when there is one. */
@@ -364,7 +510,8 @@ function yLabel(variable) {
 function baselineNote(variable) {
   if (!VARIABLES[variable].baselined) return 'absolute (no baseline)';
   const { label } = BASELINES[elements.baseline.value];
-  return `change from ${label}, the forced-response mean under ${scenarioLabel(explorer.baselineScenario)}`;
+  const own = compareBy === 'models' ? ", each model's own" : '';
+  return `change from ${label}, the forced-response mean under ${scenarioLabel(explorer.baselineScenario)}${own}`;
 }
 
 /** Subtract a baseline in place, in display units. */
@@ -374,8 +521,7 @@ function subtract(series, offset) {
 }
 
 /** "A", "A and B", "A, B and C". */
-function listScenarios(names) {
-  const labels = names.map(scenarioLabel);
+function listOf(labels) {
   if (labels.length === 1) return labels[0];
   return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
@@ -390,16 +536,17 @@ async function runCustomRegion(request) {
   let years;
   try {
     const mask = boxRegion(customBox);
-    const offset = spec.baselined
-      ? spec.convert(
-          await explorer.customBaselineOffset({ variable, mask, baseline: elements.baseline.value })
-        )
-      : 0;
-    for (const scenario of selection) {
-      const result = await explorer.customForcedResponse({ variable, scenario, mask });
+    for (const s of seriesSpecs()) {
+      const own = await explorerFor(s.model);
+      const offset = spec.baselined
+        ? spec.convert(
+            await own.customBaselineOffset({ variable, mask, baseline: elements.baseline.value })
+          )
+        : 0;
+      const result = await own.customForcedResponse({ variable, scenario: s.scenario, mask });
       years = result.years;
       runs.push({
-        scenario,
+        ...s,
         series: [subtract(Float64Array.from(result.forced, spec.convert), offset)],
       });
     }
@@ -414,12 +561,13 @@ async function runCustomRegion(request) {
     runs,
     variable,
     location: describeBox(customBox),
+    compareBy,
     forcedOnly: true,
     baseline: baselineNote(variable),
   };
   syncUrl();
 
-  elements.chartTitle.textContent = `${spec.label} over ${describeBox(customBox)}`;
+  elements.chartTitle.textContent = chartTitle(spec, describeBox(customBox), 'over');
   drawChart();
   drawSeasonalPanel();
 
@@ -437,18 +585,18 @@ function drawChart() {
   const spec = VARIABLES[lastRun.variable];
   drawFanChart(elements.chart, {
     x: lastRun.years,
-    groups: lastRun.runs.map(({ scenario, series }) => ({
-      label: scenarioShortLabel(scenario),
-      colour: selectedColour(scenario),
+    groups: lastRun.runs.map(({ label, colour, series }) => ({
+      label,
+      colour,
       series: series.map(annualMeans),
     })),
     yLabel: yLabel(lastRun.variable),
     format: spec.format,
   });
 
-  // The legend says what the marks are; which scenario is which is named on
+  // The legend says what the marks are; which series is which is named on
   // the chart itself when there are several.
-  const colour = selectedColour(lastRun.runs[0].scenario);
+  const { colour } = lastRun.runs[0];
   const swatch = (kind, text) => {
     const span = document.createElement('span');
     span.className = `swatch swatch--${kind}`;
@@ -464,7 +612,8 @@ function drawChart() {
       ...swatch('wide', '5–95%')
     );
   } else {
-    elements.chartLegend.textContent = 'Median (line) and 5–95% (band) per scenario';
+    const per = lastRun.compareBy === 'models' ? 'model' : 'scenario';
+    elements.chartLegend.textContent = `Median (line) and 5–95% (band) per ${per}`;
   }
 }
 
@@ -511,12 +660,19 @@ function drawSeasonalPanel() {
     return out;
   };
 
+  // Scenarios under one model share a present-day climate, so the early
+  // period is drawn once. Models do not — their absolute climates differ by
+  // degrees — so comparing models, each gets its own early line too.
+  const byModel = lastRun.compareBy === 'models';
   drawSeasonal(elements.seasonal, {
-    // The first scenario's, as the baseline: by 2015-2034 the scenarios have
-    // barely begun to diverge.
-    early: climatology(lastRun.runs[0].series, 2015, 2034, lastRun.runs[0].toAbsolute),
-    late: lastRun.runs.map(({ scenario, series, toAbsolute }) => ({
-      colour: selectedColour(scenario),
+    early: byModel
+      ? lastRun.runs.map(({ colour, series, toAbsolute }) => ({
+          colour,
+          values: climatology(series, 2015, 2034, toAbsolute),
+        }))
+      : climatology(lastRun.runs[0].series, 2015, 2034, lastRun.runs[0].toAbsolute),
+    late: lastRun.runs.map(({ colour, series, toAbsolute }) => ({
+      colour,
       values: climatology(series, 2081, 2100, toAbsolute),
     })),
     format: spec.format,
@@ -531,9 +687,9 @@ function drawSeasonalPanel() {
     return span;
   };
   const items = [swatch('swatch--dashed'), ' 2015–2034 '];
-  for (const { scenario } of lastRun.runs) {
-    const label = lastRun.runs.length === 1 ? '2081–2100' : scenarioShortLabel(scenario);
-    items.push(swatch('swatch--line', selectedColour(scenario)), ` ${label} `);
+  for (const run of lastRun.runs) {
+    const label = lastRun.runs.length === 1 ? '2081–2100' : run.label;
+    items.push(swatch('swatch--line', run.colour), ` ${label} `);
   }
   if (lastRun.runs.length > 1) items.push('(2081–2100)');
   // Says so, because the chart above is a change and this is not.
@@ -544,7 +700,8 @@ function drawSeasonalPanel() {
 /** The current control state, as the URL records it. */
 function currentState() {
   return {
-    model: elements.model.value,
+    compareBy,
+    models,
     variable: elements.variable.value,
     location: elements.location.value,
     scenarios: selection,
@@ -569,7 +726,11 @@ function syncUrl() {
 
 /** Apply state parsed from the URL to the controls. */
 function applyState(state) {
-  elements.model.value = state.model;
+  compareBy = state.compareBy;
+  elements.compareBy.value = compareBy;
+  models = availableModelList.filter((m) => state.models.includes(m));
+  if (!models.length) models = [availableModelList[0]];
+  renderPickers();
   elements.baseline.value = state.baseline;
   elements.variable.value = state.variable;
   if (explorer.locations.includes(state.location)) elements.location.value = state.location;
@@ -621,6 +782,7 @@ function attachActions() {
       years: lastRun.years,
       runs: lastRun.runs,
       bundle: explorer.bundles[lastRun.variable],
+      models: [...new Set(lastRun.runs.map((r) => r.model))],
       variable: lastRun.variable,
       location: lastRun.location,
       units: yLabel(lastRun.variable),
@@ -638,8 +800,8 @@ function attachActions() {
     const blob = await chartToPng(elements.chart, {
       title: `${spec.label} at ${placeLabel(lastRun.location)}`,
       subtitle:
-        `${explorer.bundles[lastRun.variable].attrs.cmip6_model} · ` +
-        `${lastRun.runs.map((r) => scenarioLabel(r.scenario)).join(', ')} · ` +
+        `${[...new Set(lastRun.runs.map((r) => r.model))].join(', ')} · ` +
+        `${[...new Set(lastRun.runs.map((r) => scenarioLabel(r.scenario)))].join(', ')} · ` +
         `${lastRun.runs[0].series.length} realizations · ${WINDOW.start}–${WINDOW.end}` +
         (VARIABLES[lastRun.variable].baselined
           ? ` · from ${BASELINES[elements.baseline.value].label}`
@@ -659,10 +821,10 @@ function attachActions() {
 
 function stem() {
   return filenameStem({
-    cmip6Model: explorer.bundles[lastRun.variable].attrs.cmip6_model,
+    cmip6Model: [...new Set(lastRun.runs.map((r) => r.model))].join('+'),
     variable: lastRun.variable,
     location: lastRun.location,
-    scenario: lastRun.runs.map((r) => r.scenario),
+    scenario: [...new Set(lastRun.runs.map((r) => r.scenario))],
   });
 }
 
@@ -702,7 +864,7 @@ async function loadMap() {
  * transformative in a desert, so an absolute map mostly shows where it already
  * rains.
  */
-function toMapUnits(field, variable, base) {
+function toMapUnits(field, variable, base, climatology) {
   // Change from the baseline period: the forced response here, less its mean
   // over the period. Both are relative to the same unforced state, so it
   // cancels.
@@ -711,7 +873,7 @@ function toMapUnits(field, variable, base) {
     // The denominator is the baseline period's own precipitation. The
     // climatology is the model's 2015 field; the forced response carries it
     // back or forward to the period.
-    const level = prClimatology[i] + base.mean[i] - base.at2015[i];
+    const level = climatology[i] + base.mean[i] - base.at2015[i];
     // Where there is essentially no rain, a percentage is meaningless rather
     // than large, so leave it blank instead of rendering a spurious extreme.
     if (!Number.isFinite(level) || level <= 1e-9) return NaN;
@@ -730,10 +892,11 @@ let mapRequest = 0;
 /**
  * Compute and draw the forced-response maps for the selected year.
  *
- * One scenario selected, one map. Two or more, the pair chosen in the
- * compare menus, each on the same scale, and their difference B − A on its
- * own zero-centred scale. The difference is taken in map units, so for
- * precipitation it is in percentage points of the same climatology.
+ * One series selected, one map. Two or more, the pair chosen in the compare
+ * menus, each on the same scale, and their difference B − A on its own
+ * zero-centred scale. The difference is taken in map units, so for
+ * precipitation it is in percentage points. Two models rarely share a grid,
+ * so B is interpolated onto A's before the difference is taken.
  */
 async function renderMap() {
   if (elements.mapPanel.dataset.map !== 'ready') return;
@@ -741,23 +904,21 @@ async function renderMap() {
 
   const variable = elements.variable.value;
   const year = Number(elements.mapYear.value);
-
-  if (variable === 'pr' && !prClimatology) {
-    prClimatology = await explorer.climatology();
-  }
-
-  const shown = compare ?? [selection[0]];
   const baseline = elements.baseline.value;
+  const specs = seriesSpecs();
+  const shown = compare ? compare.map((key) => specs.find((s) => s.key === key)) : [specs[0]];
+
   let fields;
-  let grid;
   try {
-    const base = await explorer.baselineMap({ variable, baseline });
-    fields = [];
-    for (const scenario of shown) {
-      const { field, lat, lon } = await explorer.forcedMap({ variable, scenario, year });
-      grid = { lat, lon };
-      fields.push(toMapUnits(field, variable, base));
-    }
+    fields = await Promise.all(
+      shown.map(async (s) => {
+        const own = await explorerFor(s.model);
+        const base = await own.baselineMap({ variable, baseline });
+        const climatology = variable === 'pr' ? await own.climatology() : null;
+        const { field, lat, lon } = await own.forcedMap({ variable, scenario: s.scenario, year });
+        return { field: toMapUnits(field, variable, base, climatology), lat, lon };
+      })
+    );
   } catch (error) {
     setStatus(`Could not draw the map: ${error.message}`, 'error');
     return;
@@ -766,13 +927,22 @@ async function renderMap() {
 
   let difference = null;
   if (fields.length === 2) {
-    difference = Float64Array.from(fields[1], (v, i) => v - fields[0][i]);
+    const [a, b] = fields;
+    const regridded = !sameGrid(a, b);
+    const bOnA = regridded ? regrid(b, a.lat, a.lon) : b.field;
+    difference = {
+      field: Float64Array.from(bOnA, (v, i) => v - a.field[i]),
+      lat: a.lat,
+      lon: a.lon,
+      regridded,
+    };
   }
-  lastMap = { ...grid, fields, difference, scenarios: shown, variable, year, baseline };
+  lastMap = { fields, difference, specs: shown, variable, year, baseline };
 
   redrawMap();
+  const what = compareBy === 'models' ? 'two models' : 'two scenarios';
   elements.mapTitle.textContent = compare
-    ? `Forced response, ${year}: two scenarios and their difference`
+    ? `Forced response, ${year}: ${what} and their difference`
     : `Forced response, ${year}`;
 }
 
@@ -1117,13 +1287,12 @@ function showReadout(point) {
   }
   const ns = `${Math.abs(point.lat).toFixed(0)}°${point.lat >= 0 ? 'N' : 'S'}`;
   const ew = `${Math.abs(point.lon).toFixed(0)}°${point.lon >= 0 ? 'E' : 'W'}`;
-  const read = (field) => valueAt({ field, lat: lastMap.lat, lon: lastMap.lon }, point);
-  const rows = lastMap.fields.map((field, i) => [
-    scenarioLabel(lastMap.scenarios[i]),
-    mapValueText(read(field), lastMap.variable),
+  const rows = lastMap.fields.map((grid, i) => [
+    lastMap.specs[i].label,
+    mapValueText(valueAt(grid, point), lastMap.variable),
   ]);
   if (lastMap.difference) {
-    rows.push(['Difference', mapValueText(read(lastMap.difference), lastMap.variable, true)]);
+    rows.push(['Difference', mapValueText(valueAt(lastMap.difference, point), lastMap.variable, true)]);
   }
   const list = document.createElement('dl');
   for (const [term, value] of rows) {
@@ -1235,8 +1404,6 @@ function redrawMap() {
   if (!lastMap || elements.mapPanel.dataset.map !== 'ready') return;
   const kind = lastMap.variable === 'tas' ? 'temperature' : 'precipitation';
   const shared = {
-    lat: lastMap.lat,
-    lon: lastMap.lon,
     regions: outlines,
     coastlines,
     highlight: elements.location.value.startsWith('regional:') && !customBox
@@ -1258,18 +1425,19 @@ function redrawMap() {
   const comparing = lastMap.fields.length === 2;
   elements.maps.dataset.layout = comparing ? 'compare' : 'single';
 
-  drawMap(elements.map, { ...shared, field: lastMap.fields[0], variable: kind });
+  const full = (s) => (lastMap.specs.length && compareBy === 'models' ? s.label : scenarioLabel(s.scenario));
+  drawMap(elements.map, { ...shared, ...lastMap.fields[0], variable: kind });
   bar(elements.colourbar);
-  const [a, b] = lastMap.scenarios;
-  caption(elements.captionA, comparing ? `A: ${scenarioLabel(a)}` : '', comparing ? selectedColour(a) : null);
+  const [a, b] = lastMap.specs;
+  caption(elements.captionA, comparing ? `A: ${full(a)}` : '', comparing ? a.colour : null);
 
   if (comparing) {
-    drawMap(elements.mapB, { ...shared, field: lastMap.fields[1], variable: kind });
+    drawMap(elements.mapB, { ...shared, ...lastMap.fields[1], variable: kind });
     bar(elements.colourbarB);
-    caption(elements.captionB, `B: ${scenarioLabel(b)}`, selectedColour(b));
+    caption(elements.captionB, `B: ${full(b)}`, b.colour);
 
     const differenceKind = `${kind}-difference`;
-    drawMap(elements.mapDiff, { ...shared, field: lastMap.difference, variable: differenceKind });
+    drawMap(elements.mapDiff, { ...shared, ...lastMap.difference, variable: differenceKind });
     const differenceScale = classedScale(differenceKind);
     drawColourBar(elements.colourbarDiff, {
       edges: differenceScale.edges,
@@ -1283,7 +1451,8 @@ function redrawMap() {
     // it is the signal the scenarios separate by, not a "will differ by".
     caption(
       elements.captionDiff,
-      `B − A: ${scenarioShortLabel(b)} minus ${scenarioShortLabel(a)}, forced signal only`
+      `B − A: ${b.label} minus ${a.label}, forced signal only` +
+        (lastMap.difference.regridded ? `, on ${a.label}'s grid` : '')
     );
   }
   showReadout(null);
@@ -1298,33 +1467,20 @@ function redraw() {
 }
 
 /**
- * Load another model's bundles and redraw everything from them.
- *
- * Locations and scenarios are the same for every model the exporter writes,
- * but the grid is not, so everything cached from the previous model's pattern
- * artifact — the climatology, the drawn map — goes with it. Outlines,
- * coastlines and emissions do not depend on the model and are carried over.
+ * After the models or scenarios change: make the first selected model the
+ * primary explorer, then redraw everything.
  */
-async function switchModel(model) {
-  const previous = explorer;
-  elements.model.disabled = true;
-  setStatus(`Loading ${model}…`);
+async function selectionChanged() {
   try {
-    explorer = await Explorer.load(dataBase, model);
+    const primary = await explorerFor(models[0]);
+    if (primary !== explorer) {
+      explorer = primary;
+      showProvenance();
+    }
   } catch (error) {
-    setStatus(`Could not load ${model}: ${error.message}`, 'error');
-    elements.model.value = previous.model;
-    elements.model.disabled = false;
+    setStatus(`Could not load ${models[0]}: ${error.message}`, 'error');
     return;
   }
-  explorer.regionOutlines = previous.regionOutlines;
-  explorer.coastlineRings = previous.coastlineRings;
-  explorer.scenarioEmissions = previous.scenarioEmissions;
-  prClimatology = null;
-  lastMap = null;
-  elements.model.disabled = false;
-
-  showProvenance();
   run();
   renderContext();
   renderMap();
@@ -1347,29 +1503,37 @@ function attachControls() {
     });
   }
 
-  // The scenario list is a dropdown, so close it on a click elsewhere, as a
+  // The pickers are dropdowns, so close them on a click elsewhere, as a
   // native select would.
-  document.addEventListener('click', (event) => {
-    if (!elements.scenarioPicker.contains(event.target)) elements.scenarioPicker.open = false;
-  });
-  elements.scenarioPicker.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') {
-      elements.scenarioPicker.open = false;
-      elements.scenarioPicker.querySelector('summary').focus();
-    }
-  });
+  for (const picker of [elements.scenarioPicker, elements.modelPicker]) {
+    document.addEventListener('click', (event) => {
+      if (!picker.contains(event.target)) picker.open = false;
+    });
+    picker.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        picker.open = false;
+        picker.querySelector('summary').focus();
+      }
+    });
+  }
 
-  elements.controls.addEventListener('change', (event) => {
-    if (event.target === elements.model) {
-      switchModel(elements.model.value);
+  elements.controls.addEventListener('change', async (event) => {
+    if (event.target === elements.compareBy) {
+      // Switching what is compared keeps the first of each: the first model,
+      // and the first scenario, carry over as the single choice.
+      compareBy = elements.compareBy.value;
+      models = models.slice(0, compareBy === 'models' ? MAX_MODELS : 1);
+      if (compareBy === 'models') selection = selection.slice(0, 1);
+      compare = null;
+      renderPickers();
+      showSelection();
+      await selectionChanged();
       return;
     }
-    if (event.target.name === 'scenario') {
-      if (!readSelection(event.target)) return;
+    if (event.target.name === 'scenario' || event.target.name === 'model') {
+      if (!readPicker(event.target.name, event.target)) return;
       showSelection();
-      run();
-      renderContext();
-      renderMap();
+      await selectionChanged();
       return;
     }
     // Choosing a listed place supersedes a region drawn on the map.
@@ -1398,25 +1562,14 @@ function attachControls() {
   observer.observe(elements.context);
 }
 
-/** Which model, trained how, from which version of METEOR. */
+/** Which models, trained how, from which version of METEOR. */
 function showProvenance() {
   const bundle = explorer.bundles.tas;
+  const which = compareBy === 'models' ? models.join(', ') : bundle.attrs.cmip6_model;
   elements.provenance.textContent =
-    `Bundle: ${bundle.attrs.cmip6_model}, trained on ${bundle.attrs.training_scenario}, ` +
+    `Bundles: ${which}, trained on ${bundle.attrs.training_scenario}, ` +
     `METEOR ${bundle.attrs.meteor_version}, schema v${bundle.schemaVersion}. ` +
     `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
-}
-
-/** One entry per model with artifacts on the site. */
-function populateModels(models) {
-  for (const model of models) {
-    const option = document.createElement('option');
-    option.value = model;
-    option.textContent = model;
-    elements.model.append(option);
-  }
-  // A single model is not a choice, so do not present it as one.
-  elements.model.closest('.control').hidden = models.length < 2;
 }
 
 async function start() {
@@ -1424,7 +1577,7 @@ async function start() {
   // on Pages the page may be served with or without a trailing slash, and a
   // relative URL resolves differently in each case.
   dataBase = `${import.meta.env.BASE_URL}data/`;
-  const models = await availableModels(dataBase);
+  availableModelList = await availableModels(dataBase);
   runner = new EnsembleRunner({
     loadExplorer: (model) => Explorer.load(dataBase, model),
     createWorker: () => {
@@ -1440,15 +1593,15 @@ async function start() {
   // The model decides which bundles to fetch, so it is read from the link
   // before anything else; the rest is validated once the bundles say what
   // locations and scenarios exist.
-  const { model } = fromQuery(window.location.search, { models });
+  const first = fromQuery(window.location.search, { models: availableModelList });
+  compareBy = first.compareBy;
   try {
-    explorer = await Explorer.load(dataBase, model);
+    explorer = await explorerFor(first.models[0]);
   } catch (error) {
     setStatus(`Could not load the emulator bundles: ${error.message}`, 'error');
     return;
   }
 
-  populateModels(models);
   populateControls();
 
   // Apply the shared link before the first run, so a link opens on what it
@@ -1457,7 +1610,7 @@ async function start() {
     fromQuery(window.location.search, {
       locations: explorer.locations,
       scenarios: explorer.scenarios,
-      models,
+      models: availableModelList,
     })
   );
 
