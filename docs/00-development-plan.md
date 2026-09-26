@@ -324,6 +324,9 @@ machine.
       a switch — as the AR6 Atlas. `scripts/landmask.py`, applied at export
       by wrapping METEOR's two location-weight helpers; the proper home is an
       option in METEOR itself.
+- [ ] The forty-model run: 23 done (2026-09-26, on `data-staging`); 11 need a
+      32 GB machine, 6 need METEOR fixes. See
+      [`05-training-run.md`](05-training-run.md).
 - [ ] The remaining ~33 models trained, once, from `base`, straight into the
       deposit.
 - [ ] The model menu grouped for forty entries — by modelling centre or by
