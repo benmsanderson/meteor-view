@@ -6,3 +6,4 @@ scenario-work/
 # model's are committed. The rest are checked locally by test/golden.test.js.
 data/meteor_*_golden_*_v1.nc
 !data/meteor_NorESM2-MM_*_golden_*_v1.nc
+__pycache__/

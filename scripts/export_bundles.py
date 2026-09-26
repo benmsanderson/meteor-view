@@ -37,6 +37,7 @@ import xarray as xr
 
 from ciceroscm import input_handler
 
+import landmask
 from meteor.meteor_interface import MeteorInterface
 from meteor.scm_input_lib import load_emissions_concentrations_from_name
 from meteor.portable_artifact import export_pattern_scaling
@@ -272,6 +273,15 @@ def export_pr_climatology(field, path):
     write_if_changed(dataset, path)
 
 
+def annotated(path, masks, _written=None):
+    """Record in a bundle how its locations were averaged, and from what."""
+    with xr.open_dataset(path) as ds:
+        ds = ds.load()
+    ds.attrs["region_surface"] = masks.describe()
+    ds.attrs["land_fraction_source"] = masks.source or "not needed"
+    ds.to_netcdf(path, format="NETCDF3_64BIT")
+
+
 def register_model(out, model):
     """Add a model to the manifest the client builds its model menu from.
 
@@ -312,6 +322,10 @@ def main():
     emu = MeteorInterface(MODEL, ["tas", "pr"], cache_dir=CACHE)
     emu.train(verbose=True)
 
+    # Land-aware location weights, as the AR6 Atlas: see landmask.py. Installed
+    # after training, since they change only how fields reduce to locations.
+    masks = landmask.install(MODEL, CACHE)
+
     for var in ("tas", "pr"):
         noise = emu.noise_models[var]
         pattern = emu.pattern_models[var]
@@ -327,7 +341,7 @@ def main():
         path = os.path.join(OUT, f"meteor_{MODEL}_{var}_bundle_v1.nc")
         produce(
             path,
-            lambda target: export_timeseries_bundle(
+            lambda target: annotated(target, masks, export_timeseries_bundle(
                 noise,
                 pattern,
                 target,
@@ -339,7 +353,7 @@ def main():
                 transform_window=WINDOW if ref is not None else None,
                 scenarios=scenarios,
                 source_url="https://github.com/benmsanderson/meteor-view",
-            ),
+            )),
         )
 
         # Golden fixture: a fixture carries every location of the bundle it is
@@ -407,6 +421,15 @@ def main():
                 source_url="https://github.com/benmsanderson/meteor-view",
             )
             write_if_changed(xr.open_dataset(hdf5).load(), pattern_path)
+
+    # Land fraction on the pattern grid, so a region drawn in the browser can
+    # average over land as the listed ones do.
+    with xr.open_dataset(pattern_path) as grid:
+        lat, lon = grid["lat"].values, grid["lon"].values
+    write_if_changed(
+        landmask.export_land_fraction(masks, lat, lon, None),
+        os.path.join(OUT, f"meteor_{MODEL}_landfrac_v1.nc"),
+    )
 
     emissions_path = os.path.join(OUT, "scenario_emissions_v1.json")
     export_plot_emissions(scenarios, emissions_path)

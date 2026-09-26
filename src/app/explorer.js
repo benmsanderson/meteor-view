@@ -125,6 +125,7 @@ export class Explorer {
     this.scenarioEmissions = null;
     this.coastlineRings = null;
     this.prClimatology = null;
+    this.landPercent = undefined;
     /** Baseline offsets and fields, which never change for a loaded model. */
     this.baselineCache = new Map();
   }
@@ -177,11 +178,12 @@ export class Explorer {
   }
 
   /** As {@link baselineOffset}, for a drawn region. Not cached: masks vary. */
-  async customBaselineOffset({ variable, mask, baseline }) {
-    const forced = await this.customForcedFull({
+  async customBaselineOffset({ variable, mask, baseline, landOnly = false }) {
+    const { annual: forced } = await this.customForcedFull({
       variable,
       scenario: this.baselineScenario,
       mask,
+      landOnly,
     });
     const { from, to } = BASELINES[baseline];
     return periodMean(forced, this.bundles[variable].forcingYearStart, from, to);
@@ -325,6 +327,45 @@ export class Explorer {
   }
 
   /**
+   * Land fraction on the pattern grid, in percent, or null for data exported
+   * before it was: a drawn region then averages over land and sea alike.
+   */
+  async landFraction() {
+    if (this.landPercent === undefined) {
+      try {
+        const { Artifact } = await import('../lib/bundle.js');
+        const url = `${this.base}meteor_${this.model}_landfrac_v1.nc`;
+        const response = await fetch(url);
+        this.landPercent = response.ok
+          ? new Artifact(await response.arrayBuffer()).array('land_percent')
+          : null;
+      } catch {
+        this.landPercent = null;
+      }
+    }
+    return this.landPercent;
+  }
+
+  /**
+   * The weights a drawn region averages with: over land only when asked and
+   * possible, otherwise over every gridbox in it.
+   *
+   * @returns {Promise<{weights: Float64Array, landOnly: boolean}>}
+   */
+  async regionWeights(artifact, mask, landOnly) {
+    const land = landOnly ? await this.landFraction() : null;
+    if (land) {
+      try {
+        return { weights: artifact.areaWeights(mask, land), landOnly: true };
+      } catch {
+        // Open sea: no gridbox more than half land. All of it, then, and the
+        // caller says so.
+      }
+    }
+    return { weights: artifact.areaWeights(mask), landOnly: false };
+  }
+
+  /**
    * The forced response on the grid, for one scenario and year.
    *
    * @returns {Promise<{field: Float64Array, lat: Float64Array, lon: Float64Array}>}
@@ -367,8 +408,9 @@ export class Explorer {
    * needs the EOF maps from the 11 MB noise artifact, which is not loaded here
    * — so this returns the forced response alone, and says so.
    */
-  async customForcedResponse({ variable, scenario, mask, pathway = null }) {
-    let annual = await this.customForcedFull({ variable, scenario, mask });
+  async customForcedResponse({ variable, scenario, mask, pathway = null, landOnly = false }) {
+    const full = await this.customForcedFull({ variable, scenario, mask, landOnly });
+    let { annual } = full;
     if (pathway) {
       annual = scaleToWarmingPathway(annual, this.globalWarming(scenario), pathway);
     }
@@ -378,17 +420,23 @@ export class Explorer {
     return {
       years: this.windowYears(),
       forced: annual.slice(start, start + nYears),
+      landOnly: full.landOnly,
     };
   }
 
-  /** The forced response over a mask, annual, over the full forcing axis. */
-  async customForcedFull({ variable, scenario, mask }) {
+  /**
+   * The forced response over a mask, annual, over the full forcing axis.
+   *
+   * @returns {Promise<{annual: Float64Array, landOnly: boolean}>} and whether
+   *   it is over land only, which it cannot be over open sea
+   */
+  async customForcedFull({ variable, scenario, mask, landOnly = false }) {
     const artifact = await this.patterns(variable);
     const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
     const bundle = this.bundles[variable];
 
-    const weights = artifact.areaWeights(mask);
-    const projection = artifact.project(weights);
+    const region = await this.regionWeights(artifact, mask, landOnly);
+    const projection = artifact.project(region.weights);
     const { pcs, nTimes } = stepResponsePcs(
       patternKernel(artifact),
       bundle.forcing(scenario)
@@ -406,7 +454,7 @@ export class Explorer {
       }
       annual[t] = acc;
     }
-    return annual;
+    return { annual, landOnly: region.landOnly };
   }
 
   /**

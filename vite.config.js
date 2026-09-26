@@ -26,6 +26,7 @@ function copyBundles() {
         filter: (source) =>
           !source.endsWith('.nc') ||
           source.includes('_bundle_v1.nc') ||
+          source.includes('_landfrac_v1.nc') ||
           source.includes('_pattern_v1.nc') ||
           source.includes('_climatology_v1.nc'),
       });

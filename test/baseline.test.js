@@ -69,6 +69,7 @@ describe('baselines', () => {
     for (const baseline of ['pi', 'recent']) {
       const listed = explorer.baselineOffset({ variable: 'tas', location: 'global', baseline });
       const drawn = await explorer.customBaselineOffset({
+        landOnly: false,
         variable: 'tas',
         // Every gridpoint, area-weighted: the global mean by the map route.
         mask: () => true,
@@ -114,5 +115,50 @@ describe('absolute values', () => {
 
   it('leave precipitation alone, which is absolute already', () => {
     expect(explorer.absoluteOffset({ variable: 'pr', location: 'global' })).toBe(0);
+  });
+});
+
+describe('drawn regions over land', () => {
+  // A synthetic land mask rather than a model's: these test the weighting,
+  // and the model data lives off this branch (docs/05-training-run.md). Land
+  // is 0-60 E between the equator and 70 N; everything else is sea.
+  beforeAll(async () => {
+    const artifact = await explorer.patterns('tas');
+    const { lat, lon, nLat, nLon } = artifact;
+    explorer.landPercent = Float64Array.from({ length: nLat * nLon }, (_, k) => {
+      const la = lat[Math.floor(k / nLon)];
+      const lo = lon[k % nLon];
+      return la >= 0 && la <= 70 && lo >= 0 && lo <= 60 ? 100 : 0;
+    });
+  });
+
+  const box = (south, north, west, east) => (lat, lon) => {
+    const l = ((lon % 360) + 360) % 360;
+    return lat >= south && lat <= north && (west <= east ? l >= west && l <= east : l >= west || l <= east);
+  };
+
+  it('average over land only when asked, which differs in a part-land box', async () => {
+    // 350 E to 10 E: sea to the west of the meridian, land to the east.
+    const mask = box(40, 50, 350, 10);
+    const land = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp585', mask, landOnly: true });
+    const all = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp585', mask, landOnly: false });
+    expect(land.landOnly).toBe(true);
+    expect(all.landOnly).toBe(false);
+    const last = land.annual.length - 1;
+    expect(Math.abs(land.annual[last] - all.annual[last])).toBeGreaterThan(1e-3);
+  });
+
+  it('fall back to every gridbox over open sea, and say so', async () => {
+    const mask = box(-40, -30, 220, 230);
+    const result = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp245', mask, landOnly: true });
+    expect(result.landOnly).toBe(false);
+  });
+
+  it('change nothing in a box that is all land', async () => {
+    const mask = box(20, 26, 5, 20);
+    const land = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp245', mask, landOnly: true });
+    const all = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp245', mask, landOnly: false });
+    const last = land.annual.length - 1;
+    expect(Math.abs(land.annual[last] - all.annual[last])).toBeLessThan(1e-9);
   });
 });

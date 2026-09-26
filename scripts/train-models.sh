@@ -19,6 +19,11 @@
 # itself down and the rest of the batch carries on. Models already in the cache
 # are not retrained, so re-running after a failure resumes rather than restarts.
 #
+# Set CLEAN_CACHE=1 to delete each model's downloads and fitted caches once its
+# export has succeeded, which keeps a forty-model run inside ~5 GB of disk
+# rather than ~100 GB. The cost is that a later re-export retrains, which takes
+# minutes per model.
+#
 # Usage:
 #   scripts/train-models.sh CanESM5 MIROC6 INM-CM5-0
 #   METEOR_CACHE=/mnt/data/cache OUT=data scripts/train-models.sh CanESM5
@@ -30,6 +35,7 @@ METEOR_CACHE="${METEOR_CACHE:-$PWD/cache}"
 OUT="${OUT:-data}"
 PYTHON="${PYTHON:-python3}"
 LOG_DIR="${LOG_DIR:-training-logs}"
+CLEAN_CACHE="${CLEAN_CACHE:-0}"
 
 if [ "$#" -eq 0 ]; then
   echo "usage: $0 MODEL [MODEL ...]" >&2
@@ -74,6 +80,11 @@ for model in "$@"; do
     printf '    done in %dm %ds\n' $((elapsed / 60)) $((elapsed % 60))
     grep -E '^(wrote|unchanged)' "$log" | sed 's/^/    /'
     succeeded+=("$model")
+    if [ "$CLEAN_CACHE" = 1 ]; then
+      rm -rf "$METEOR_CACHE"/cmip6/"${model}"_* "$METEOR_CACHE"/noise_models/"${model}"_* \
+             "$METEOR_CACHE"/pattern_scaling/*"${model}"* 2>/dev/null
+      printf '    cache cleared; %s free\n' "$(df -h "$METEOR_CACHE" | awk 'NR==2 {print $4}')"
+    fi
   else
     elapsed=$(( $(date +%s) - started ))
     printf '    FAILED after %dm %ds\n' $((elapsed / 60)) $((elapsed % 60))

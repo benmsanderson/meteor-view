@@ -112,6 +112,24 @@ The map is also the region picker. **Drag** pans and the wheel zooms.
 **Click** an AR6 region to select it. **Draw region** mode, or shift-drag,
 defines a region of your own, anywhere, at any size.
 
+## What a region averages over
+
+As the AR6 WGI Atlas does: the **AR6 land regions over land only** (gridboxes
+more than half land, by each model's own land fraction), the ocean regions and
+the three mixed ones — Mediterranean, Caribbean, South-East Asia — over every
+gridbox, and each **city at the nearest gridbox that is more than half land**.
+All means are area-weighted. A **drawn region** averages over land by default,
+with a *Land only* switch beside it; over open sea it falls back to every
+gridbox and says so.
+
+It matters most on coasts. Measured on CanESM5's own output, averaging over
+all points instead of land moved 2015–2034 to 2081–2100 warming by up to
+0.5 °C in coastal regions (northern and southern Australia, south-western
+Africa), and the land-only emulator lands closer to the model's land-only
+warming in 9 of 11 regions tested. Each bundle records the convention it was
+exported with, and where its land fraction came from: the model's own `sftlf`,
+or, for the few models that publish none, the Atlas's 1° land fraction.
+
 ## Comparing scenarios
 
 Tick up to six scenarios. The timeseries overlays them — each scenario's
