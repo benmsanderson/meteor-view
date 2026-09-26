@@ -11,7 +11,7 @@
  * worse is a bug in the port, not rounding.
  */
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { Bundle, GoldenFixture } from '../src/lib/bundle.js';
@@ -66,7 +66,10 @@ const FIXTURES = readdirSync(DATA)
     variable,
     `meteor_${model}_${variable}_bundle_v1.nc`,
     name,
-  ]);
+  ])
+  // A fixture left behind (they are gitignored) without its bundle has
+  // nothing to check against.
+  .filter(([, , bundle]) => existsSync(new URL(bundle, DATA)));
 
 it('finds the committed fixtures', () => {
   expect(FIXTURES.map(([label]) => label)).toEqual(

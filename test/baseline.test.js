@@ -119,40 +119,42 @@ describe('absolute values', () => {
 });
 
 describe('drawn regions over land', () => {
+  // A synthetic land mask rather than a model's: these test the weighting,
+  // and the model data lives off this branch (docs/05-training-run.md). Land
+  // is 0-60 E between the equator and 70 N; everything else is sea.
   beforeAll(async () => {
-    // Loaded here rather than fetched, as the page would.
-    const { Artifact } = await import('../src/lib/bundle.js');
-    explorer.landPercent = new Artifact(
-      readFileSync(new URL(`meteor_${MODEL}_landfrac_v1.nc`, DATA))
-    ).array('land_percent');
+    const artifact = await explorer.patterns('tas');
+    const { lat, lon, nLat, nLon } = artifact;
+    explorer.landPercent = Float64Array.from({ length: nLat * nLon }, (_, k) => {
+      const la = lat[Math.floor(k / nLon)];
+      const lo = lon[k % nLon];
+      return la >= 0 && la <= 70 && lo >= 0 && lo <= 60 ? 100 : 0;
+    });
   });
 
   const box = (south, north, west, east) => (lat, lon) => {
     const l = ((lon % 360) + 360) % 360;
-    return lat >= south && lat <= north && l >= west && l <= east;
+    return lat >= south && lat <= north && (west <= east ? l >= west && l <= east : l >= west || l <= east);
   };
 
-  it('average over land only when asked, and differ where the box is coastal', async () => {
-    // North-west Europe with the North Sea: part land, part sea.
-    const mask = box(48, 62, 355, 360.1);
+  it('average over land only when asked, which differs in a part-land box', async () => {
+    // 350 E to 10 E: sea to the west of the meridian, land to the east.
+    const mask = box(40, 50, 350, 10);
     const land = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp585', mask, landOnly: true });
     const all = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp585', mask, landOnly: false });
     expect(land.landOnly).toBe(true);
     expect(all.landOnly).toBe(false);
     const last = land.annual.length - 1;
-    // Land warms faster than sea.
-    expect(land.annual[last]).toBeGreaterThan(all.annual[last]);
+    expect(Math.abs(land.annual[last] - all.annual[last])).toBeGreaterThan(1e-3);
   });
 
   it('fall back to every gridbox over open sea, and say so', async () => {
-    // The middle of the South Pacific.
     const mask = box(-40, -30, 220, 230);
     const result = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp245', mask, landOnly: true });
     expect(result.landOnly).toBe(false);
   });
 
   it('change nothing in a box that is all land', async () => {
-    // Central Sahara.
     const mask = box(20, 26, 5, 20);
     const land = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp245', mask, landOnly: true });
     const all = await explorer.customForcedFull({ variable: 'tas', scenario: 'ssp245', mask, landOnly: false });
