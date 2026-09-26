@@ -58,15 +58,19 @@ export class PatternArtifact extends Artifact {
    * and is what METEOR's own reductions use.
    *
    * @param {(lat: number, lon: number) => boolean} [inside] mask predicate
+   * @param {ArrayLike<number>|null} [landPercent] per-gridbox land fraction in
+   *   percent; when given, only gridboxes more than half land count, as the
+   *   AR6 Atlas averages land regions
    * @returns {Float64Array} length `nLat * nLon`, summing to 1
    */
-  areaWeights(inside) {
+  areaWeights(inside, landPercent = null) {
     const weights = new Float64Array(this.nLat * this.nLon);
     let total = 0;
     for (let i = 0; i < this.nLat; i += 1) {
       const w = Math.cos(this.lat[i] * DEGREES_TO_RADIANS);
       for (let j = 0; j < this.nLon; j += 1) {
         if (inside && !inside(this.lat[i], this.lon[j])) continue;
+        if (landPercent && !(landPercent[i * this.nLon + j] > 50)) continue;
         weights[i * this.nLon + j] = w;
         total += w;
       }

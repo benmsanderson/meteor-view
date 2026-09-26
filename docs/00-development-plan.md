@@ -318,6 +318,12 @@ machine.
       page.
 - [ ] The storage pipeline above built and proven end to end with the seven
       models, before anything is deposited.
+- [x] Region averaging settled (2026-09-26): AR6 land regions over land
+      (land fraction > 0.5), ocean and mixed regions (MED, CAR, SEA) over all
+      points, cities at the nearest land gridbox, drawn regions over land with
+      a switch — as the AR6 Atlas. `scripts/landmask.py`, applied at export
+      by wrapping METEOR's two location-weight helpers; the proper home is an
+      option in METEOR itself.
 - [ ] The remaining ~33 models trained, once, from `base`, straight into the
       deposit.
 - [ ] The model menu grouped for forty entries — by modelling centre or by

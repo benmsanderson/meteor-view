@@ -613,3 +613,20 @@ button.link {
 .panel[data-map='idle'] .map-compare {
   display: none;
 }
+
+/* Beside "Clear custom region": whether a drawn region averages over land. */
+.box-land {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  font-size: 0.86rem;
+  cursor: pointer;
+}
+
+.box-land[hidden] {
+  display: none;
+}
+
+.box-land input {
+  accent-color: var(--accent);
+}

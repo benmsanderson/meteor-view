@@ -121,6 +121,8 @@ const elements = {
   colourbar: document.getElementById('colourbar'),
   loadMap: document.getElementById('load-map'),
   clearBox: document.getElementById('clear-box'),
+  boxLand: document.getElementById('box-land'),
+  boxLandLabel: document.getElementById('box-land-label'),
   status: document.getElementById('status'),
   provenance: document.getElementById('provenance'),
 };
@@ -526,6 +528,12 @@ function listOf(labels) {
   return `${labels.slice(0, -1).join(', ')} and ${labels[labels.length - 1]}`;
 }
 
+/** The controls that belong to a drawn region, shown only while there is one. */
+function showBoxControls(visible) {
+  elements.clearBox.hidden = !visible;
+  elements.boxLandLabel.hidden = !visible;
+}
+
 /** The forced response for a drawn region, with no ensemble behind it. */
 async function runCustomRegion(request) {
   const variable = elements.variable.value;
@@ -534,16 +542,26 @@ async function runCustomRegion(request) {
 
   const runs = [];
   let years;
+  // Over land by default, as the listed AR6 land regions are; over open sea
+  // there is no land to average, and the region falls back to every gridbox.
+  const landOnly = elements.boxLand.checked;
+  let overLand = landOnly;
   try {
     const mask = boxRegion(customBox);
     for (const s of seriesSpecs()) {
       const own = await explorerFor(s.model);
       const offset = spec.baselined
         ? spec.convert(
-            await own.customBaselineOffset({ variable, mask, baseline: elements.baseline.value })
+            await own.customBaselineOffset({
+              variable,
+              mask,
+              baseline: elements.baseline.value,
+              landOnly,
+            })
           )
         : 0;
-      const result = await own.customForcedResponse({ variable, scenario: s.scenario, mask });
+      const result = await own.customForcedResponse({ variable, scenario: s.scenario, mask, landOnly });
+      overLand = overLand && result.landOnly;
       years = result.years;
       runs.push({
         ...s,
@@ -556,23 +574,26 @@ async function runCustomRegion(request) {
   }
   if (request !== runRequest || !customBox) return;
 
+  const surface = overLand ? 'land only' : 'land and sea';
   lastRun = {
     years,
     runs,
     variable,
-    location: describeBox(customBox),
+    location: `${describeBox(customBox)} (${surface})`,
     compareBy,
     forcedOnly: true,
     baseline: baselineNote(variable),
   };
   syncUrl();
 
-  elements.chartTitle.textContent = chartTitle(spec, describeBox(customBox), 'over');
+  elements.chartTitle.textContent = chartTitle(spec, `${describeBox(customBox)}, ${surface}`, 'over');
   drawChart();
   drawSeasonalPanel();
 
+  const note =
+    landOnly && !overLand ? ' There is no land in it, so it averages over sea.' : '';
   setStatus(
-    `Forced response only over ${describeBox(customBox)}. A drawn region has no ` +
+    `Forced response only over ${describeBox(customBox)}, ${surface}.${note} A drawn region has no ` +
       `ensemble behind it: internal variability needs the EOF maps from the ` +
       `11 MB noise artifact, which this page does not load. Pick a listed ` +
       `place for the full spread.`
@@ -990,7 +1011,7 @@ function selectRegionAt(point) {
   const spec = `regional:${region.code}`;
   if (!explorer.locations.includes(spec)) return;
   customBox = null;
-  elements.clearBox.hidden = true;
+  showBoxControls(false);
   elements.location.value = spec;
   run();
   redrawMap();
@@ -1017,10 +1038,11 @@ function attachMap() {
     elements.mapYearValue.textContent = elements.mapYear.value;
   });
   elements.mapYear.addEventListener('change', renderMap);
+  elements.boxLand.addEventListener('change', run);
 
   elements.clearBox.addEventListener('click', () => {
     customBox = null;
-    elements.clearBox.hidden = true;
+    showBoxControls(false);
     run();
     redrawMap();
   });
@@ -1180,7 +1202,7 @@ function attachMap() {
 
       if (moved) {
         if (panning) return;
-        elements.clearBox.hidden = false;
+        showBoxControls(true);
         run();
         return;
       }
@@ -1539,7 +1561,7 @@ function attachControls() {
     // Choosing a listed place supersedes a region drawn on the map.
     if (event.target === elements.location && customBox) {
       customBox = null;
-      elements.clearBox.hidden = true;
+      showBoxControls(false);
     }
     run();
     renderMap();
