@@ -67,7 +67,8 @@ CLEAN_CACHE=1 METEOR_SRC=... METEOR_CACHE=... scripts/train-models.sh \
   AWI-CM-1-1-MR MPI-ESM1-2-HR EC-Earth3 EC-Earth3-Veg CNRM-CM6-1-HR
 ```
 
-with 32 GB, then copy their files onto `data-staging`. **NorESM2-MM, the
+with 32 GB, then copy their files onto `data-staging`. Step-by-step:
+[`06-handover-large-models.md`](06-handover-large-models.md). **NorESM2-MM, the
 site's default model, is still its earlier all-points export until then.**
 
 ### Six are METEOR's to fix
