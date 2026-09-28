@@ -14,7 +14,14 @@ import { regrid, sameGrid } from '../src/app/map.js';
 const artifact = (model) =>
   new PatternArtifact(readFileSync(new URL(`../data/meteor_${model}_tas_pattern_v1.nc`, import.meta.url)));
 const noresm = artifact('NorESM2-MM');
-const canesm = artifact('CanESM5');
+// A coarse grid of CanESM5's shape (T63: 64 x 128, 2.8125 degrees), built here
+// rather than read, since only the default model's data is in git.
+const canesm = {
+  lat: Float64Array.from({ length: 64 }, (_, i) => -90 + ((i + 0.5) * 180) / 64),
+  lon: Float64Array.from({ length: 128 }, (_, j) => j * 2.8125),
+  nLat: 64,
+  nLon: 128,
+};
 
 const grid = (lat, lon, f) => ({
   lat,
@@ -54,7 +61,7 @@ describe('regrid', () => {
     expect(Number.isNaN(regrid(source, [0], [45])[0])).toBe(true);
   });
 
-  it('keeps a real map\'s global mean moving NorESM2-MM onto CanESM5\'s grid', () => {
+  it('keeps a real map\'s global mean moving NorESM2-MM onto a CanESM5-sized grid', () => {
     // Pattern mode 0, experiment 0: a smooth warming pattern.
     const space = noresm.nLat * noresm.nLon;
     const field = Float64Array.from(noresm.get('pattern_v').subarray(0, space));

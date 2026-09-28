@@ -79,8 +79,8 @@ describe('ensemble worker pool', () => {
         throw new Error('no workers here');
       },
     });
-    const result = await runner.run('CanESM5', request('ssp245'));
-    const expected = (await loadExplorer('CanESM5')).run(request('ssp245'));
+    const result = await runner.run('NorESM2-MM', request('ssp245'));
+    const expected = (await loadExplorer('NorESM2-MM')).run(request('ssp245'));
     expect(Array.from(result.series[0])).toEqual(Array.from(expected.series[0]));
     expect(runner.createWorker).toBeNull();
   });

@@ -4,38 +4,45 @@ Two kinds of file live here, and the distinction matters.
 
 ## Where each file lives
 
-Settled 2026-09-24, and the split matters once there is more than one model:
+Settled 2026-09-29 (`docs/00-development-plan.md` §6), replacing the split of
+2026-09-24:
 
-- **Committed here** — bundles, region outlines, coastlines, scenario
-  emissions, the `pr` climatology. About 575 KB per model, small enough that
-  the default view stays instant and works offline.
-- **Zenodo, fetched at build time** — the 2 MB pattern artifacts. The Pages
-  workflow will download them into `dist/`, so visitors still get them
-  same-origin with no third party in the path of a page load, while git stays
-  free of multi-megabyte binaries it would keep for ever.
-- **Zenodo, fetched in the browser on demand** — the 11 MB noise artifacts, if
-  that tier ships. Too heavy to bake into every deploy for a feature most
-  visits never use, and Zenodo permits cross-origin fetches.
+- **Committed here**: the default model, NorESM2-MM, with its golden
+  fixtures; region outlines, coastlines, scenario emissions; and
+  `artifacts_v1.json`, which pins the release below. A fresh clone works with
+  no download, showing NorESM2-MM alone.
+- **A GitHub release, one zip per model, fetched at build time**: every other
+  model's bundles, pattern artifacts, `pr` climatology and land fraction.
+  `node scripts/fetch-artifacts.mjs` downloads the zips, checks each against
+  the SHA-256 in `artifacts_v1.json`, unpacks them here (gitignored), and
+  writes `models_v1.json` from the models present. Both workflows run it
+  before testing, behind a cache keyed on `artifacts_v1.json`. Visitors are
+  served the files same-origin from Pages, one model at a time, exactly as
+  before. The zips never reach a browser.
+- **Noise artifacts, if that tier ships**: about 22 MB per model, too heavy to
+  bake into every deploy, so they would be fetched in the browser on demand
+  from a separate store.
 
-**This split is for a handful of models.** At the full list of about forty it
-stops working — Zenodo allows 100 files per record — and the revised plan is
-in [`docs/00-development-plan.md`](../docs/00-development-plan.md) §6: git
-keeps NorESM2-MM only, and every other model is fetched from one zip per model
-at build.
+The current release,
+[`artifacts-2026-09-28`](https://github.com/benmsanderson/meteor-view/releases/tag/artifacts-2026-09-28),
+is **provisional**: 30 models exported from METEOR `b02011b`, before
+METEOR#101, #102 and #104 merge. Once they do, everything is re-exported from
+`base` into a new release, and `artifacts_v1.json` is updated to point at it.
+A citable Zenodo record can later archive the same zips; the pipeline only
+needs `base_url` changed.
 
-Pending the deposit, everything is still committed. `scripts/export_bundles.py`
-now rewrites a file only when its numbers change, so re-exporting does not
-quietly add another copy of each artifact to history.
+To publish a new release: zip each model's `meteor_<model>_{tas,pr}_{bundle,pattern}_v1.nc`,
+`meteor_<model>_pr_climatology_v1.nc` and `meteor_<model>_landfrac_v1.nc` as
+`meteor_<model>_v1.zip`, attach them to a release, and record the tag, each
+zip's size and SHA-256, and its member files in `artifacts_v1.json`.
 
-## Committed: emulator artifacts
+## Emulator artifacts
 
 `meteor_*_bundle_v1.nc`, `meteor_*_pattern_v1.nc`, `meteor_*_golden_*.nc`
 
 METEOR output, derived from CMIP6 (the models in `models_v1.json`, which the
-exporter maintains and the client builds its model menu from). Small, same-origin, versioned
-with the client that reads them. Regenerate with `scripts/export_bundles.py`;
-`docs/03-roadmap.md` records the plan to move them to a Zenodo deposit once the
-schema settles.
+fetch script and the exporter maintain and the client builds its model menu
+from). Regenerate with `scripts/export_bundles.py`.
 
 `ar6_regions_v1.json` — AR6 reference region outlines, simplified from
 `regionmask`, via `scripts/export_regions.py`. Cite Iturbide et al. (2020),

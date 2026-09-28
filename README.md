@@ -70,10 +70,13 @@ npm test
 
 ```bash
 npm install
+node scripts/fetch-artifacts.mjs   # every model but NorESM2-MM; optional
 npm run dev
 ```
 
-`npm run build` produces `dist/`, which is what Pages serves.
+`npm run build` produces `dist/`, which is what Pages serves. Without the
+fetch, the site and tests run on NorESM2-MM alone, and the CanESM5 tests are
+skipped; see [`data/README.md`](data/README.md).
 
 Regenerating the data files needs METEOR itself:
 
@@ -246,10 +249,11 @@ interface until then — is the most important thing left.
 
 ## Data provenance
 
-The bundles are committed here for now: they are small, same-origin, and
-versioned alongside the client that reads them. A permanent Zenodo deposit
-follows once the schema has survived contact with a real client — a DOI is a
-promise you cannot retract.
+The default model's artifacts are committed here; every other model's come
+from a GitHub release pinned by checksum in `data/artifacts_v1.json`, fetched
+at build and served from the site. The current release is provisional: it is
+re-exported once the METEOR PRs it depends on merge. A citable Zenodo record
+can archive the same files later. A DOI is a promise you cannot retract.
 
 Schema v1 is documented in
 [`docs/emulator_artifact_schema.md`](https://github.com/benmsanderson/METEOR/blob/integration/meteor-view/docs/emulator_artifact_schema.md)
