@@ -15,7 +15,16 @@ Usage::
 
     PYTHONPATH=<meteor>/src python scripts/make_ensemble_reference.py
 
-Regenerate only when the bundles are re-exported.
+Regenerate only when the bundles are re-exported, from the cache that export
+trained (so keep it: do not run that model with ``CLEAN_CACHE=1``)::
+
+    METEOR_CACHE=<cache> PYTHONPATH=<meteor>/src python scripts/make_ensemble_reference.py
+
+The locations are ones the exporter's land masking (``landmask.py``) leaves
+alone, because this goes through METEOR's own averaging and the bundle does
+not: MED is one of the mixed regions averaged over all points, and Beijing's
+nearest gridbox is already land. A land region or a coastal city would differ
+by the masking, not by any bookkeeping error; the golden fixtures cover those.
 """
 
 import json
@@ -28,13 +37,13 @@ from meteor.meteor_interface import MeteorInterface
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "test", "fixtures", "ensemble_reference.json")
 
-CACHE = "/Users/bensan/GitHub/METEOR/cache"
+CACHE = os.environ.get("METEOR_CACHE", "/Users/bensan/GitHub/METEOR/cache")
 MODEL = "NorESM2-MM"
 SCENARIO = "ssp245"
 START_YEAR = 2015
 END_YEAR = 2100
 N_REALIZATIONS = 200
-LOCATIONS = ["global", "regional:NEU", "point:19.1,72.9"]
+LOCATIONS = ["global", "regional:MED", "point:39.9,116.4"]
 
 
 def main():

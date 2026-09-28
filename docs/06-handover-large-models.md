@@ -1,5 +1,9 @@
 # Handover: training the eleven large models
 
+**Done 2026-09-28**: seven succeeded and are on `data-staging`; four fail in
+METEOR. Results and measured memory are in
+[`05-training-run.md`](05-training-run.md). Kept as the recipe for re-running.
+
 Everything needed to finish the forty-model run on a machine with more memory.
 Background is in [`05-training-run.md`](05-training-run.md); this is the how.
 
@@ -25,7 +29,7 @@ first: [benmsanderson/METEOR#106](https://github.com/benmsanderson/METEOR/issues
 
 | | Needed | Why |
 |---|---|---|
-| Memory | **32 GB** (more for the finest grids) | Noise training peaked above 13.4 GB before the 15.7 GB container killed it; NorESM2-MM alone measured 12.2–12.7 GB. EC-Earth3 and CNRM-CM6-1-HR are finer still. |
+| Memory | **32 GB**; **70 GB** for CNRM-CM6-1-HR (measured; see `05-training-run.md`) | Noise training peaked above 13.4 GB before the 15.7 GB container killed it; NorESM2-MM alone measured 12.2–12.7 GB. EC-Earth3 and CNRM-CM6-1-HR are finer still. |
 | Disk | ~30 GB free | ~2 GB of CMIP6 per model plus fitted caches; `CLEAN_CACHE=1` deletes each model's after it succeeds. The fine grids take more. |
 | Network | Outbound HTTPS to `storage.googleapis.com` | Anonymous reads of the Pangeo CMIP6 store; no credentials. |
 | Software | Python 3.11, Node 20+, git | |
