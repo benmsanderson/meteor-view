@@ -6,7 +6,7 @@
  * independent map route, and by the linearity the map baseline relies on.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { Bundle } from '../src/lib/bundle.js';
@@ -16,9 +16,15 @@ import { BASELINES, Explorer } from '../src/app/explorer.js';
 
 const DATA = new URL('../data/', import.meta.url);
 const MODEL = 'CanESM5';
+// CanESM5 comes from the artifact release, not git: run
+// `node scripts/fetch-artifacts.mjs`. Skipped locally without it; CI fetches
+// before testing, so there it fails rather than skipping.
+const SKIP =
+  !process.env.CI && !existsSync(new URL(`meteor_${MODEL}_tas_bundle_v1.nc`, DATA));
 let explorer;
 
 beforeAll(() => {
+  if (SKIP) return;
   const load = (variable) =>
     new Bundle(readFileSync(new URL(`meteor_${MODEL}_${variable}_bundle_v1.nc`, DATA)));
   explorer = new Explorer({ tas: load('tas'), pr: load('pr') });
@@ -33,7 +39,7 @@ beforeAll(() => {
   }
 });
 
-describe('baselines', () => {
+describe.skipIf(SKIP)('baselines', () => {
   it('are taken from CMIP7 Medium', () => {
     expect(explorer.baselineScenario).toBe('cmip7-medium');
   });
@@ -102,7 +108,7 @@ describe('baselines', () => {
   });
 });
 
-describe('absolute values', () => {
+describe.skipIf(SKIP)('absolute values', () => {
   it('turn a temperature run into temperatures a reader would recognise', () => {
     const at = (location) => explorer.absoluteOffset({ variable: 'tas', location });
     // The unforced annual-mean level: a global mean near 14 °C, the Sahara
@@ -118,7 +124,7 @@ describe('absolute values', () => {
   });
 });
 
-describe('drawn regions over land', () => {
+describe.skipIf(SKIP)('drawn regions over land', () => {
   // A synthetic land mask rather than a model's: these test the weighting,
   // and the model data lives off this branch (docs/05-training-run.md). Land
   // is 0-60 E between the equator and 70 N; everything else is sea.
