@@ -37,6 +37,7 @@ import {
   sortScenarios,
 } from './scenarios.js';
 import {
+  DEFAULTS,
   DEFAULT_SEED,
   MAX_MODELS,
   MAX_SCENARIOS,
@@ -163,7 +164,7 @@ let coastlines = [];
 /** Which gesture the plain drag performs; shift does the other. */
 let mapMode = 'pan';
 /** The selected scenarios, in menu order. Never empty. */
-let selection = ['ssp245'];
+let selection = [...DEFAULTS.scenarios];
 /** The two scenarios or models the maps compare, or null with only one. */
 let compare = null;
 /** What part of the world the map shows. */
@@ -756,7 +757,10 @@ function applyState(state) {
   elements.variable.value = state.variable;
   if (explorer.locations.includes(state.location)) elements.location.value = state.location;
   selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
-  if (!selection.length) selection = [explorer.scenarios.includes('ssp245') ? 'ssp245' : explorer.scenarios[0]];
+  if (!selection.length) {
+    const fallback = DEFAULTS.scenarios.filter((name) => explorer.scenarios.includes(name));
+    selection = fallback.length ? fallback : [explorer.scenarios[0]];
+  }
   compare = state.compare;
   showSelection();
   elements.realizations.value = String(state.nRealizations);
