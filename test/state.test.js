@@ -21,7 +21,7 @@ const CONTEXT = {
   locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
   scenarios: [
     'ssp126', 'ssp245', 'ssp370', 'ssp585', 'ssp119', 'ssp434', 'ssp460',
-    'cmip7-low', 'cmip7-high',
+    'cmip7-very-low', 'cmip7-low', 'cmip7-medium-to-low', 'cmip7-high',
   ],
   models: ['NorESM2-MM', 'CanESM5', 'MIROC6', 'INM-CM5-0', 'IPSL-CM6A-LR', 'MPI-ESM1-2-LR', 'MRI-ESM2-0'],
 };
@@ -68,6 +68,19 @@ describe('URL state', () => {
     expect(toQuery({ ...DEFAULTS, baseline: 'pi' })).toBe('');
   });
 
+  it('opens on three CMIP7 markers, but keeps old links on SSP2-4.5', () => {
+    expect(fromQuery('', CONTEXT).scenarios).toEqual([
+      'cmip7-very-low', 'cmip7-medium-to-low', 'cmip7-high',
+    ]);
+    // Before 2026-09-29 a link without scn= meant SSP2-4.5, the old default.
+    expect(fromQuery('?v=pr&loc=regional:NEU', CONTEXT).scenarios).toEqual(['ssp245']);
+    expect(fromQuery('?by=models&m=CanESM5,MIROC6', CONTEXT).scenarios).toEqual(['ssp245']);
+    // So a new link that says anything says its scenarios too.
+    const state = { ...DEFAULTS, variable: 'pr' };
+    expect(toQuery(state)).toContain('scn=');
+    expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
+  });
+
   it('reads a single-scenario link from before multi-selection', () => {
     const parsed = fromQuery('?scn=ssp370', CONTEXT);
     expect(parsed.scenarios).toEqual(['ssp370']);
@@ -101,7 +114,9 @@ describe('URL state', () => {
   });
 
   it('names the model only when it is not the default', () => {
-    expect(toQuery({ ...DEFAULTS, models: ['CanESM5'] })).toBe('?m=CanESM5');
+    expect(toQuery({ ...DEFAULTS, models: ['CanESM5'] })).toBe(
+      '?m=CanESM5&scn=cmip7-very-low%2Ccmip7-medium-to-low%2Ccmip7-high'
+    );
     expect(toQuery({ ...DEFAULTS, models: DEFAULTS.models })).toBe('');
   });
 

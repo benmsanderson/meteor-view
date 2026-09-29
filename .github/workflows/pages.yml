@@ -37,6 +37,16 @@ jobs:
 
       - run: npm ci
 
+      # Every model but the default comes from the GitHub release pinned in
+      # data/artifacts_v1.json. Cached on that file, so a build downloads only
+      # when the release changes; the script verifies each zip's SHA-256.
+      - uses: actions/cache@v4
+        with:
+          path: .artifacts-cache
+          key: artifacts-${{ hashFiles('data/artifacts_v1.json') }}
+
+      - run: node scripts/fetch-artifacts.mjs
+
       # Never publish a build that cannot reproduce METEOR's output.
       - run: npm test
 

@@ -20,6 +20,11 @@
  * CanESM5`, run one scenario. With two or more, the maps compare a pair of
  * whichever is being compared, `cmp=a,b`. Links from before any of this —
  * `scn=ssp370`, `m=CanESM5` — are selections of one.
+ *
+ * The default scenarios changed on 2026-09-29, from SSP2-4.5 alone to three
+ * CMIP7 markers. A link from before then that left `scn` out meant SSP2-4.5,
+ * and still does; so a link that says anything also says its scenarios, and
+ * only the bare URL gets the new default.
  */
 
 /**
@@ -34,6 +39,9 @@ export const MAX_SCENARIOS = 6;
 /** Most models a view can compare, for the same reasons. */
 export const MAX_MODELS = 6;
 
+/** What a link that names no scenarios meant before the default changed. */
+export const LEGACY_SCENARIOS = ['ssp245'];
+
 /** Fixed default seed, so a link without one is still reproducible. */
 export const DEFAULT_SEED = 20260921;
 
@@ -42,8 +50,10 @@ export const DEFAULTS = {
   models: ['NorESM2-MM'],
   variable: 'tas',
   location: 'global',
-  scenarios: ['ssp245'],
-  compare: null,
+  // Very Low, Medium to Low and High: the spread of the CMIP7 markers, in
+  // menu order.
+  scenarios: ['cmip7-very-low', 'cmip7-medium-to-low', 'cmip7-high'],
+  compare: ['cmip7-very-low', 'cmip7-medium-to-low'],
   nRealizations: 20,
   seed: DEFAULT_SEED,
   baseline: 'pi',
@@ -74,6 +84,9 @@ export function toQuery(state) {
   }
   if (state.seed !== DEFAULTS.seed) params.set('seed', String(state.seed));
   if (state.baseline !== DEFAULTS.baseline) params.set('ref', state.baseline);
+  // Any other parameter and the scenarios go in too, since fromQuery reads
+  // their absence as LEGACY_SCENARIOS.
+  if (params.toString() && !params.has('scn')) params.set('scn', state.scenarios.join(','));
 
   const query = params.toString();
   return query ? `?${query}` : '';
@@ -121,6 +134,7 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
 
   const requested = list('scn', scenarios, MAX_SCENARIOS);
   if (requested.length) state.scenarios = requested;
+  else if (!params.has('scn') && params.toString()) state.scenarios = [...LEGACY_SCENARIOS];
 
   // Only what is being compared can be many; the other is a single choice.
   if (state.compareBy === 'models') state.scenarios = state.scenarios.slice(0, 1);
