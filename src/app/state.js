@@ -24,7 +24,14 @@
  * The default scenarios changed on 2026-09-29, from SSP2-4.5 alone to three
  * CMIP7 markers. A link from before then that left `scn` out meant SSP2-4.5,
  * and still does; so a link that says anything also says its scenarios, and
- * only the bare URL gets the new default.
+ * only the bare URL gets the new default. *
+ * There are two views. The simple one, for a general audience, shows the
+ * spread across all the site's models for a variable, a place and some
+ * scenarios, and nothing else; its links carry `view=simple` and only those
+ * three settings. The expert one is everything described above. The bare URL
+ * opens the simple view. Every link from before the simple view existed
+ * carries no `view` and opens the expert view, as it always did; an expert
+ * link that would otherwise be empty carries `view=expert`.
  */
 
 /**
@@ -42,14 +49,22 @@ export const MAX_MODELS = 6;
 /** What a link that names no scenarios meant before the default changed. */
 export const LEGACY_SCENARIOS = ['ssp245'];
 
+/**
+ * Where the expert view opens, and what an expert link without `loc` has
+ * always meant. The simple view opens on a region instead (DEFAULTS).
+ */
+export const EXPERT_LOCATION = 'global';
+
 /** Fixed default seed, so a link without one is still reproducible. */
 export const DEFAULT_SEED = 20260921;
 
 export const DEFAULTS = {
+  mode: 'simple',
   compareBy: 'scenarios',
   models: ['NorESM2-MM'],
   variable: 'tas',
-  location: 'global',
+  // The simple view opens on a region people live in; see EXPERT_LOCATION.
+  location: 'regional:WCE',
   // Very Low, Medium to Low and High: the spread of the CMIP7 markers, in
   // menu order.
   scenarios: ['cmip7-very-low', 'cmip7-medium-to-low', 'cmip7-high'],
@@ -66,11 +81,29 @@ export const DEFAULTS = {
  * @returns {string} e.g. `?v=pr&loc=global`, or `''` when all defaults
  */
 export function toQuery(state) {
+  return state.mode === 'simple' ? simpleQuery(state) : expertQuery(state);
+}
+
+/** The simple view's three settings, marked as such. */
+function simpleQuery(state) {
+  const params = new URLSearchParams();
+  if (state.variable !== DEFAULTS.variable) params.set('v', state.variable);
+  if (state.location !== DEFAULTS.location) params.set('loc', state.location);
+  if (state.scenarios.join(',') !== DEFAULTS.scenarios.join(',')) {
+    params.set('scn', state.scenarios.join(','));
+  }
+  if (!params.toString()) return '';
+  // Scenarios always, since fromQuery reads their absence as LEGACY_SCENARIOS.
+  params.set('scn', state.scenarios.join(','));
+  return `?view=simple&${params.toString()}`;
+}
+
+function expertQuery(state) {
   const params = new URLSearchParams();
   if (state.compareBy !== DEFAULTS.compareBy) params.set('by', state.compareBy);
   if (state.models.join(',') !== DEFAULTS.models.join(',')) params.set('m', state.models.join(','));
   if (state.variable !== DEFAULTS.variable) params.set('v', state.variable);
-  if (state.location !== DEFAULTS.location) params.set('loc', state.location);
+  if (state.location !== EXPERT_LOCATION) params.set('loc', state.location);
   if (state.scenarios.join(',') !== DEFAULTS.scenarios.join(',')) {
     params.set('scn', state.scenarios.join(','));
   }
@@ -88,8 +121,9 @@ export function toQuery(state) {
   // their absence as LEGACY_SCENARIOS.
   if (params.toString() && !params.has('scn')) params.set('scn', state.scenarios.join(','));
 
+  // The bare URL is the simple view, so an all-default expert view says so.
   const query = params.toString();
-  return query ? `?${query}` : '';
+  return query ? `?${query}` : '?view=expert';
 }
 
 /**
@@ -110,6 +144,10 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   const params = new URLSearchParams(search);
   const state = { ...DEFAULTS };
 
+  // A link without `view` predates the simple view unless it is bare.
+  const view = params.get('view');
+  state.mode = view === 'simple' || view === 'expert' ? view : search.replace(/^\?/, '') ? 'expert' : 'simple';
+
   // Unknown names dropped, duplicates dropped, capped; an empty result falls
   // back to the default rather than showing nothing.
   const list = (name, valid, cap) =>
@@ -118,7 +156,7 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
       .filter((item, i, all) => valid.includes(item) && all.indexOf(item) === i)
       .slice(0, cap);
 
-  if (params.get('by') === 'models') state.compareBy = 'models';
+  if (state.mode === 'expert' && params.get('by') === 'models') state.compareBy = 'models';
 
   const requestedModels = list('m', models, MAX_MODELS);
   if (requestedModels.length) state.models = requestedModels;
@@ -127,14 +165,17 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   if (baseline === 'pi' || baseline === 'recent') state.baseline = baseline;
 
   const variable = params.get('v');
-  if (variable === 'tas' || variable === 'pr') state.variable = variable;
+  if (['tas', 'pr', 'hdd', 'cdd'].includes(variable)) state.variable = variable;
 
+  if (state.mode === 'expert') state.location = EXPERT_LOCATION;
   const location = params.get('loc');
   if (location && locations.includes(location)) state.location = location;
 
   const requested = list('scn', scenarios, MAX_SCENARIOS);
   if (requested.length) state.scenarios = requested;
-  else if (!params.has('scn') && params.toString()) state.scenarios = [...LEGACY_SCENARIOS];
+  else if (!params.has('scn') && !params.has('view') && params.toString()) {
+    state.scenarios = [...LEGACY_SCENARIOS];
+  }
 
   // Only what is being compared can be many; the other is a single choice.
   if (state.compareBy === 'models') state.scenarios = state.scenarios.slice(0, 1);
@@ -163,6 +204,11 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
     state.seed = seed;
   }
 
+  // The simple view has three settings; anything else in its link is ignored.
+  if (state.mode === 'simple') {
+    const { variable, location, scenarios } = state;
+    return { ...DEFAULTS, variable, location, scenarios, compare: defaultCompare(scenarios) };
+  }
   return state;
 }
 

@@ -16,11 +16,31 @@
     -->
     <meta name="robots" content="noindex, nofollow" />
     <link rel="stylesheet" href="./src/app/style.css" />
+    <script>
+      // Which view, before anything draws: the rule in src/app/state.js.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var v = q.get('view');
+        document.documentElement.dataset.mode =
+          v === 'simple' || v === 'expert' ? v : location.search.length > 1 ? 'expert' : 'simple';
+      })();
+    </script>
   </head>
   <body>
     <header class="masthead">
-      <h1>METEOR explorer</h1>
-      <p class="tagline">
+      <div class="masthead__top">
+        <h1>METEOR explorer</h1>
+        <div class="view-toggle" role="group" aria-label="View">
+          <button type="button" data-view="simple" aria-pressed="true">Simple</button>
+          <button type="button" data-view="expert" aria-pressed="false">Expert</button>
+        </div>
+      </div>
+      <p class="tagline" data-simple>
+        How much warmer, wetter or drier could it get? See what a family of
+        climate models projects for a place under each scenario, and how far
+        they agree.
+      </p>
+      <p class="tagline" data-expert>
         A climate emulator running entirely in your browser. Pick a scenario and a
         place, and see the spread of monthly outcomes.
       </p>
@@ -33,7 +53,7 @@
 
     <main>
       <form class="controls" id="controls">
-        <div class="control">
+        <div class="control" data-expert>
           <label for="compare-by">Compare</label>
           <select id="compare-by">
             <option value="scenarios">Scenarios</option>
@@ -41,7 +61,7 @@
           </select>
         </div>
 
-        <div class="control">
+        <div class="control" data-expert>
           <span class="control__label" id="model-label">Models</span>
           <details class="multiselect" id="model-picker">
             <summary aria-labelledby="model-label model-summary">
@@ -56,12 +76,29 @@
           <select id="variable">
             <option value="tas">Temperature</option>
             <option value="pr">Precipitation</option>
+            <option value="hdd">Heating degree days</option>
+            <option value="cdd">Cooling degree days</option>
           </select>
         </div>
 
         <div class="control">
-          <label for="location">Place</label>
-          <select id="location"></select>
+          <label for="place-search">Place</label>
+          <div class="place-search">
+            <input
+              type="text"
+              id="place-search"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="place-results"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Search regions and cities"
+            />
+            <ul class="place-results" id="place-results" role="listbox" aria-label="Places" hidden></ul>
+          </div>
+          <!-- The record of the chosen place; the box above searches it. -->
+          <select id="location" hidden aria-hidden="true" tabindex="-1"></select>
         </div>
 
         <div class="control">
@@ -74,7 +111,7 @@
           </details>
         </div>
 
-        <div class="control">
+        <div class="control" data-expert>
           <label for="baseline">Change from</label>
           <select
             id="baseline"
@@ -85,7 +122,7 @@
           </select>
         </div>
 
-        <div class="control">
+        <div class="control" data-expert>
           <label for="realizations">Realizations</label>
           <select id="realizations">
             <option value="10">10</option>
@@ -96,7 +133,25 @@
         </div>
       </form>
 
+      <section class="panel" data-simple>
+        <div class="panel__header">
+          <h2>The world</h2>
+        </div>
+        <p class="summary" id="global-summary" aria-live="polite"></p>
+        <div class="pair">
+          <figure class="pair__cell">
+            <figcaption>CO₂ emissions</figcaption>
+            <canvas id="global-emissions"></canvas>
+          </figure>
+          <figure class="pair__cell">
+            <figcaption>Global warming, across climate models</figcaption>
+            <canvas id="global-temperature"></canvas>
+          </figure>
+        </div>
+      </section>
+
       <section class="panel">
+        <div class="controls controls--inline" id="regional-controls" data-simple></div>
         <div class="panel__header">
           <h2 id="chart-title">Annual means</h2>
           <p class="legend" id="chart-legend">
@@ -105,18 +160,19 @@
             <span class="swatch swatch--wide"></span> 5–95%
           </p>
         </div>
+        <p class="summary" id="summary" data-simple aria-live="polite"></p>
         <canvas id="chart" height="360"></canvas>
         <div class="actions">
           <button type="button" id="copy-link">Copy link to this view</button>
-          <button type="button" id="download-csv">Download CSV</button>
+          <button type="button" id="download-csv" data-expert>Download CSV</button>
           <button type="button" id="download-png">Download chart</button>
-          <button type="button" id="resample" class="actions__spacer">
+          <button type="button" id="resample" class="actions__spacer" data-expert>
             Draw a new sample
           </button>
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-expert>
         <div class="panel__header">
           <h2 id="context-title">Scenario context</h2>
           <p class="legend">
@@ -140,13 +196,23 @@
       <section class="panel">
         <div class="panel__header">
           <h2 id="map-title">Map of the forced response</h2>
-          <p class="legend">
+          <p class="legend" data-simple>
+            <label for="simple-map-scenario">Scenario</label>
+            <select id="simple-map-scenario"></select>
+          </p>
+          <p class="legend" data-expert>
             <label for="map-year">Year</label>
             <input type="range" id="map-year" min="2015" max="2100" value="2100" step="1" />
             <output id="map-year-value">2100</output>
           </p>
         </div>
-        <p class="hint" id="map-hint">
+        <p class="hint" data-simple>
+          The middle of the climate models' answers at every point, for the
+          last twenty years of the century. Click a region to see it above;
+          drag to pan, and scroll, double-click or pinch to zoom. Zoomed in,
+          cities appear as dots: click one to see it above.
+        </p>
+        <p class="hint" id="map-hint" data-expert>
           Drag to pan; scroll, double-click or pinch to zoom; click or tap a
           region to select it. On a phone, a vertical swipe scrolls the page
           until you zoom in, and then drags the map. To draw your own region, switch to
@@ -158,7 +224,7 @@
           With two or more scenarios selected, pick any two to compare: both
           maps and their difference share one year and one view.
         </p>
-        <p class="map-compare" id="map-compare" hidden>
+        <p class="map-compare" id="map-compare" data-expert hidden>
           <label for="compare-a">Compare</label>
           <select id="compare-a"></select>
           <label for="compare-b">with</label>
@@ -183,8 +249,8 @@
           <div class="map-cell map-readout" id="map-readout" aria-live="polite"></div>
         </div>
         <div class="actions">
-          <button type="button" id="load-map">Load map (2 MB)</button>
-          <div class="modes" id="map-modes" hidden role="group" aria-label="Map mode">
+          <button type="button" id="load-map" data-expert>Load map (2 MB)</button>
+          <div class="modes" id="map-modes" data-expert hidden role="group" aria-label="Map mode">
             <button type="button" id="mode-pan" data-mode="pan" aria-pressed="true">
               Pan
             </button>
@@ -193,15 +259,15 @@
             </button>
           </div>
           <button type="button" id="reset-view" hidden>Reset view</button>
-          <button type="button" id="clear-box" hidden>Clear custom region</button>
-          <label class="box-land" id="box-land-label" hidden>
+          <button type="button" id="clear-box" data-expert hidden>Clear custom region</button>
+          <label class="box-land" id="box-land-label" data-expert hidden>
             <input type="checkbox" id="box-land" checked />
             Land only
           </label>
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-expert>
         <div class="panel__header">
           <h2>Seasonal cycle</h2>
           <p class="legend" id="seasonal-legend">
@@ -221,7 +287,26 @@
           CMIP6 output. The whole payload is about 300 KB and there is no server: the
           emulator runs on your machine.
         </p>
-        <p>
+        <p data-simple>
+          <strong>What the range shows.</strong> Each climate model gives a
+          somewhat different answer, and the chart shows how much they agree:
+          the line is the middle model, the darker band the middle half of the
+          models, and the lighter band the middle 90%. These are the models'
+          long-term responses to each scenario, without the ups and downs of
+          individual years, measured from each model's own 1850–1900 level.
+          Precipitation change is a percentage of that level. The
+          <em>Expert</em> view shows year-to-year variability, one model at a
+          time, with maps, other baselines and more.
+        </p>
+        <p data-simple>
+          <strong>Places.</strong> The 58 AR6 reference regions, and 252
+          cities: every national capital of more than half a million people,
+          and every other city of more than 2.5 million. A city is the
+          nearest gridbox of each model that is more than half land, one to
+          three degrees across, so it describes the city's surroundings rather
+          than its streets.
+        </p>
+        <p data-expert>
           <strong>Two generations of scenario.</strong> The CMIP6 SSPs and the
           CMIP7 ScenarioMIP markers were built years apart and harmonized to
           different vintages of history, so they are not interchangeable. Both
@@ -231,7 +316,7 @@
           0.74 W/m² model difference inside what looks like a scenario
           difference.
         </p>
-        <p>
+        <p data-expert>
           <strong>Baselines.</strong> Temperature, and the maps, are shown as
           change from a reference period: 1850–1900, the pre-industrial
           convention warming levels are defined against, or 2005–2024, recent
@@ -246,6 +331,17 @@
           The precipitation timeseries stays in absolute mm/day.
         </p>
         <p>
+          <strong>Degree days.</strong> Heating and cooling degree days, base
+          18 °C, count how far daily temperatures fall below or rise above the
+          point where buildings need heating or cooling. They start from the
+          observed climate of 1995–2014 (W5E5, daily) and add each model's
+          warming for each month, so they do not inherit a model's biases in
+          absolute temperature or in how much days vary. For a region they
+          average its land gridboxes' degree days; for a city they use the
+          nearest land gridbox of the observations, half a degree across. They
+          are not offered for the sea or the global mean.
+        </p>
+        <p data-expert>
           <strong>What it is not.</strong> The band around any one model is that
           model's internal variability — not model uncertainty, and not the
           full uncertainty in a projection. Compare models to see how much they
@@ -274,7 +370,12 @@
           Coupled Model Intercomparison Project. AR6 reference regions from
           Iturbide et al. (2020),
           <a href="https://doi.org/10.5194/essd-12-2959-2020">ESSD 12, 2959–2970</a>;
-          coastlines from Natural Earth.
+          coastlines and cities from Natural Earth. Degree days are corrected with W5E5
+          v2.0 (Lange et al. 2021,
+          <a href="https://doi.org/10.48364/ISIMIP.342217">10.48364/ISIMIP.342217</a>;
+          Cucchi et al. 2020,
+          <a href="https://doi.org/10.5194/essd-12-2097-2020">ESSD 12, 2097–2120</a>),
+          CC BY 4.0.
         </p>
         <p class="provenance" id="provenance"></p>
         <!--

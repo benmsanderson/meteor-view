@@ -303,10 +303,49 @@ def register_model(out, model):
     print(f"registered {model} in {path}")
 
 
+#: Trace precipitation, kg m-2 s-1 (about 0.03 mm a year): the least a month
+#: is taken to have when fitting the gamma distribution (see below).
+TRACE_PRECIPITATION = 1e-9
+
+
+def floor_transform_reference():
+    """
+    Let the precipitation transform fit every city.
+
+    METEOR fits a gamma distribution to each location's monthly precipitation
+    and refuses any negative value. CMIP6 output has a few: round-off of order
+    -1e-25 kg m-2 s-1 at a hundred or so dry gridboxes per model, which the
+    cities N'Djamena, Muscat, Tripoli, Abu Dhabi, Ashgabat and Baghdad land on
+    in one model or another. Such a value is raised to a trace amount instead,
+    for the fit only: patterns and noise, which are anomalies, are untouched,
+    and no value above the trace changes, so any location that fitted before
+    fits the same.
+    """
+    from meteor import timeseries_bundle as tb
+
+    original = tb._fit_transform_parameters
+
+    def fit(reference, parsed, project):
+        return original(
+            reference, parsed, lambda field, location: np.maximum(project(field, location), TRACE_PRECIPITATION)
+        )
+
+    tb._fit_transform_parameters = fit
+
+
 def locations():
+    """
+    The global mean, the 58 AR6 regions and the cities: the eight below, and
+    every city in data/cities_v1.json, whose specifiers are used exactly as
+    written there, since they are what the site looks them up by.
+    """
     locs = ["global"]
     locs += [f"regional:{r.abbrev}" for r in regionmask.defined_regions.ar6.all]
     locs += [f"point:{lat},{lon}" for lat, lon in CITIES.values()]
+    cities = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "cities_v1.json")
+    if os.path.exists(cities):
+        with open(cities, encoding="utf-8") as handle:
+            locs += [c["spec"] for c in json.load(handle)["cities"] if c["spec"] not in locs]
     return locs
 
 
@@ -325,6 +364,7 @@ def main():
     # Land-aware location weights, as the AR6 Atlas: see landmask.py. Installed
     # after training, since they change only how fields reduce to locations.
     masks = landmask.install(MODEL, CACHE)
+    floor_transform_reference()
 
     for var in ("tas", "pr"):
         noise = emu.noise_models[var]

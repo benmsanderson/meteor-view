@@ -97,3 +97,15 @@ export function placeLabel(spec) {
   }
   return spec;
 }
+
+/**
+ * Name the simple view's cities (data/cities_v1.json) alongside the bundles'
+ * own, which keep their names.
+ *
+ * @param {Array<{spec: string, label: string}>} cities
+ */
+export function registerCities(cities) {
+  for (const { spec, label } of cities) {
+    if (!(spec in CITY_NAMES)) CITY_NAMES[spec] = label;
+  }
+}

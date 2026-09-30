@@ -8,6 +8,9 @@
 import { describe, expect, it } from 'vitest';
 
 import { DEFAULTS, MAX_MODELS, MAX_SCENARIOS, fromQuery, toQuery } from '../src/app/state.js';
+
+/** The defaults as the expert view has them: every setting in play. */
+const EXPERT = { ...DEFAULTS, mode: 'expert', location: 'global' };
 import { filenameStem, toCsv } from '../src/app/export.js';
 import {
   groupScenarios,
@@ -18,7 +21,7 @@ import {
 } from '../src/app/scenarios.js';
 
 const CONTEXT = {
-  locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
+  locations: ['global', 'regional:NEU', 'regional:WCE', 'point:19.1,72.9'],
   scenarios: [
     'ssp126', 'ssp245', 'ssp370', 'ssp585', 'ssp119', 'ssp434', 'ssp460',
     'cmip7-very-low', 'cmip7-low', 'cmip7-medium-to-low', 'cmip7-high',
@@ -33,6 +36,7 @@ describe('URL state', () => {
 
   it('round-trips a full state', () => {
     const state = {
+      mode: 'expert',
       compareBy: 'scenarios',
       models: ['CanESM5'],
       variable: 'pr',
@@ -59,13 +63,51 @@ describe('URL state', () => {
       '?m=HadGEM9&v=nonsense&loc=regional:NOWHERE&scn=ssp999&n=abc',
       CONTEXT
     );
-    expect(parsed).toEqual(DEFAULTS);
+    expect(parsed).toEqual(EXPERT);
   });
 
   it('accepts only the baselines the page offers', () => {
     expect(fromQuery('?ref=recent', CONTEXT).baseline).toBe('recent');
     expect(fromQuery('?ref=1750', CONTEXT).baseline).toBe(DEFAULTS.baseline);
     expect(toQuery({ ...DEFAULTS, baseline: 'pi' })).toBe('');
+  });
+
+  it('opens the simple view bare, and every older link in the expert view', () => {
+    expect(fromQuery('', CONTEXT).mode).toBe('simple');
+    expect(fromQuery('?v=pr&loc=regional:NEU', CONTEXT).mode).toBe('expert');
+    expect(fromQuery('?view=expert', CONTEXT)).toEqual(EXPERT);
+    expect(toQuery(EXPERT)).toBe('?view=expert');
+    expect(toQuery(DEFAULTS)).toBe('');
+  });
+
+  it('offers degree days in both views', () => {
+    expect(fromQuery('?v=hdd', CONTEXT).variable).toBe('hdd');
+    expect(fromQuery('?view=expert&v=cdd', CONTEXT).variable).toBe('cdd');
+    expect(fromQuery('?view=simple&v=hdd', CONTEXT).variable).toBe('hdd');
+    const state = { ...EXPERT, variable: 'hdd', location: 'point:19.1,72.9' };
+    expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
+  });
+
+  it('opens the simple view on West & Central Europe, and the expert view on the globe', () => {
+    expect(fromQuery('', CONTEXT).location).toBe('regional:WCE');
+    expect(fromQuery('?view=expert', CONTEXT).location).toBe('global');
+    // An older expert link without loc= meant the globe, and still does.
+    expect(fromQuery('?v=pr', CONTEXT).location).toBe('global');
+    expect(toQuery({ ...EXPERT, location: 'regional:WCE' })).toContain('loc=regional%3AWCE');
+    expect(toQuery({ ...DEFAULTS, variable: 'pr' })).not.toContain('loc=');
+  });
+
+  it('keeps a simple link to its three settings', () => {
+    const state = { ...DEFAULTS, variable: 'pr', location: 'regional:NEU' };
+    const query = toQuery({ ...state, models: ['CanESM5'], nRealizations: 50, seed: 7 });
+    expect(query).toBe(
+      '?view=simple&v=pr&loc=regional%3ANEU&scn=cmip7-very-low%2Ccmip7-medium-to-low%2Ccmip7-high'
+    );
+    expect(fromQuery(query, CONTEXT)).toEqual(state);
+    // Expert settings in a simple link are ignored rather than half-applied.
+    expect(fromQuery('?view=simple&m=CanESM5&n=50&by=models', CONTEXT)).toEqual(DEFAULTS);
+    // A simple link without scn= is not an old link: it gets the default.
+    expect(fromQuery('?view=simple&v=pr', CONTEXT).scenarios).toEqual(DEFAULTS.scenarios);
   });
 
   it('opens on three CMIP7 markers, but keeps old links on SSP2-4.5', () => {
@@ -76,7 +118,7 @@ describe('URL state', () => {
     expect(fromQuery('?v=pr&loc=regional:NEU', CONTEXT).scenarios).toEqual(['ssp245']);
     expect(fromQuery('?by=models&m=CanESM5,MIROC6', CONTEXT).scenarios).toEqual(['ssp245']);
     // So a new link that says anything says its scenarios too.
-    const state = { ...DEFAULTS, variable: 'pr' };
+    const state = { ...EXPERT, variable: 'pr' };
     expect(toQuery(state)).toContain('scn=');
     expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
   });
@@ -91,7 +133,7 @@ describe('URL state', () => {
     expect(fromQuery('?scn=ssp126,ssp585', CONTEXT).compare).toEqual(['ssp126', 'ssp585']);
     // And the default pair is not written out.
     expect(
-      toQuery({ ...DEFAULTS, scenarios: ['ssp126', 'ssp585'], compare: ['ssp126', 'ssp585'] })
+      toQuery({ ...EXPERT, scenarios: ['ssp126', 'ssp585'], compare: ['ssp126', 'ssp585'] })
     ).toBe('?scn=ssp126%2Cssp585');
   });
 
@@ -114,7 +156,7 @@ describe('URL state', () => {
   });
 
   it('names the model only when it is not the default', () => {
-    expect(toQuery({ ...DEFAULTS, models: ['CanESM5'] })).toBe(
+    expect(toQuery({ ...EXPERT, models: ['CanESM5'] })).toBe(
       '?m=CanESM5&scn=cmip7-very-low%2Ccmip7-medium-to-low%2Ccmip7-high'
     );
     expect(toQuery({ ...DEFAULTS, models: DEFAULTS.models })).toBe('');
@@ -130,7 +172,7 @@ describe('URL state', () => {
 
   it('round-trips a model comparison', () => {
     const state = {
-      ...DEFAULTS,
+      ...EXPERT,
       compareBy: 'models',
       models: ['CanESM5', 'MIROC6', 'NorESM2-MM'],
       scenarios: ['cmip7-high'],
@@ -296,9 +338,9 @@ describe('seed handling', () => {
   });
 
   it('round-trips a resampled seed', () => {
-    const state = { ...DEFAULTS, seed: 0 };
+    const state = { ...EXPERT, seed: 0 };
     expect(fromQuery(toQuery(state), CONTEXT).seed).toBe(0);
-    const big = { ...DEFAULTS, seed: 4294967295 };
+    const big = { ...EXPERT, seed: 4294967295 };
     expect(fromQuery(toQuery(big), CONTEXT).seed).toBe(4294967295);
   });
 });
@@ -330,7 +372,7 @@ describe('scenario families', () => {
 
   it('gives readable names', () => {
     expect(scenarioLabel('ssp534-over')).toBe('SSP5-3.4-OS');
-    expect(scenarioLabel('cmip7-medium-to-low')).toBe('Medium to Low (SSP2)');
+    expect(scenarioLabel('cmip7-medium-to-low')).toBe('Medium to Low');
     expect(scenarioFamily('cmip7-high')).toBe('CMIP7 ScenarioMIP');
     expect(scenarioFamily('ssp245')).toBe('CMIP6 SSPs');
   });

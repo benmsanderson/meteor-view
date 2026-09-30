@@ -71,7 +71,7 @@ npm test
 ```bash
 npm install
 node scripts/fetch-artifacts.mjs   # every model but NorESM2-MM; optional
-npm run dev
+npm run dev                        # builds the simple view's summaries first
 ```
 
 `npm run build` produces `dist/`, which is what Pages serves. Without the
@@ -104,6 +104,38 @@ a fiction".
 
 The exporter depends on `series_transformed` and `locations=`, both added by
 [METEOR#101](https://github.com/benmsanderson/METEOR/pull/101).
+
+## Two views
+
+The page opens in a **simple view** for a general audience, in three parts,
+all showing the spread across every model the site carries:
+
+- **The world**: CO₂ emissions of the chosen scenarios beside global warming
+  under them, with a sentence reading the result.
+- **A place**, West & Central Europe to begin with, or any of 252 cities
+  (`data/cities_v1.json`): temperature,
+  precipitation or degree days, with its own chart and sentence.
+- **A map** of the middle model's change by 2081–2100 under one of the
+  scenarios. Clicking a region on it shows that region above.
+
+Each model contributes its forced change from its own 1850–1900 level
+(precipitation as a percentage of that level). The spread and the maps are
+computed at build time by `scripts/build-summary.mjs` into
+`data/summary_v1/` (one small file per place and per scenario), so the
+browser never loads thirty models' data.
+
+Both views offer **heating and cooling degree days** (base 18 °C) for cities
+and land regions, bias-corrected against observations: each model's warming
+for each month is applied to the observed daily temperatures of 1995–2014
+(W5E5 v2.0), through curves precomputed by
+`scripts/make_degree_day_curves.py` into `data/degree_days_v1/`. The simple
+view shows the spread across models; the expert view runs each realization
+through the same curves. Details in `src/lib/degree-days.js`.
+
+The **expert view** is everything below: one model's internal variability,
+model comparison, baselines, maps, drawn regions and exports. The bare URL
+opens the simple view; every earlier link carries no `view=` and opens the
+expert view unchanged. Details in `src/app/state.js`.
 
 ## Maps and your own regions
 

@@ -175,6 +175,15 @@ export class Bundle extends Artifact {
    * @returns {Map<string, Float64Array>} forcing by experiment name
    */
   forcing(scenario) {
+    // The same Map for the same scenario, so the kernel can cache what it
+    // derives from it (kernel.js, forcedResponse).
+    this._forcing ??= new Map();
+    if (!this._forcing.has(scenario)) this._forcing.set(scenario, this.forcingFresh(scenario));
+    return this._forcing.get(scenario);
+  }
+
+  /** The forcing for one scenario, read from the file. */
+  forcingFresh(scenario) {
     if (!this.has('scenario_forcing')) {
       throw new Error('bundle carries no scenario forcing');
     }

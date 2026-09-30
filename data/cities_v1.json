@@ -1,0 +1,2528 @@
+{
+ "format": "meteor-view-cities",
+ "schema_version": 1,
+ "source": "Natural Earth 10m populated places (public domain)",
+ "rule": "capitals of more than 500,000, other cities of more than 2,500,000 (pop_max)",
+ "cities": [
+  {
+   "spec": "point:5.32,-4.04",
+   "name": "Abidjan",
+   "country": "Ivory Coast",
+   "continent": "Africa",
+   "capital": true,
+   "population": 3802000,
+   "builtin": false,
+   "label": "Abidjan"
+  },
+  {
+   "spec": "point:9.09,7.53",
+   "name": "Abuja",
+   "country": "Nigeria",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1576000,
+   "builtin": false,
+   "label": "Abuja"
+  },
+  {
+   "spec": "point:5.55,-0.22",
+   "name": "Accra",
+   "country": "Ghana",
+   "continent": "Africa",
+   "capital": true,
+   "population": 2121000,
+   "builtin": false,
+   "label": "Accra"
+  },
+  {
+   "spec": "point:9.04,38.70",
+   "name": "Addis Ababa",
+   "country": "Ethiopia",
+   "continent": "Africa",
+   "capital": true,
+   "population": 3100000,
+   "builtin": false,
+   "label": "Addis Ababa"
+  },
+  {
+   "spec": "point:31.20,29.95",
+   "name": "Alexandria",
+   "country": "Egypt",
+   "continent": "Africa",
+   "capital": false,
+   "population": 4165000,
+   "builtin": false,
+   "label": "Alexandria"
+  },
+  {
+   "spec": "point:36.77,3.05",
+   "name": "Algiers",
+   "country": "Algeria",
+   "continent": "Africa",
+   "capital": true,
+   "population": 3354000,
+   "builtin": false,
+   "label": "Algiers"
+  },
+  {
+   "spec": "point:-18.91,47.51",
+   "name": "Antananarivo",
+   "country": "Madagascar",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1697000,
+   "builtin": false,
+   "label": "Antananarivo"
+  },
+  {
+   "spec": "point:15.33,38.93",
+   "name": "Asmara",
+   "country": "Eritrea",
+   "continent": "Africa",
+   "capital": true,
+   "population": 620802,
+   "builtin": false,
+   "label": "Asmara"
+  },
+  {
+   "spec": "point:12.65,-8.00",
+   "name": "Bamako",
+   "country": "Mali",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1494000,
+   "builtin": false,
+   "label": "Bamako"
+  },
+  {
+   "spec": "point:4.37,18.56",
+   "name": "Bangui",
+   "country": "Central African Republic",
+   "continent": "Africa",
+   "capital": true,
+   "population": 831925,
+   "builtin": false,
+   "label": "Bangui"
+  },
+  {
+   "spec": "point:-26.15,28.33",
+   "name": "Benoni",
+   "country": "South Africa",
+   "continent": "Africa",
+   "capital": false,
+   "population": 2986000,
+   "builtin": false,
+   "label": "Benoni"
+  },
+  {
+   "spec": "point:-4.26,15.28",
+   "name": "Brazzaville",
+   "country": "Congo (Brazzaville)",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1355000,
+   "builtin": false,
+   "label": "Brazzaville"
+  },
+  {
+   "spec": "point:30.0,31.2",
+   "name": "Cairo",
+   "country": "Egypt",
+   "continent": "Africa",
+   "capital": true,
+   "population": 11893000,
+   "builtin": true,
+   "label": "Cairo"
+  },
+  {
+   "spec": "point:-33.92,18.43",
+   "name": "Cape Town",
+   "country": "South Africa",
+   "continent": "Africa",
+   "capital": true,
+   "population": 3215000,
+   "builtin": false,
+   "label": "Cape Town"
+  },
+  {
+   "spec": "point:33.60,-7.62",
+   "name": "Casablanca",
+   "country": "Morocco",
+   "continent": "Africa",
+   "capital": false,
+   "population": 3181000,
+   "builtin": false,
+   "label": "Casablanca"
+  },
+  {
+   "spec": "point:9.53,-13.68",
+   "name": "Conakry",
+   "country": "Guinea",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1494000,
+   "builtin": false,
+   "label": "Conakry"
+  },
+  {
+   "spec": "point:6.40,2.52",
+   "name": "Cotonou",
+   "country": "Benin",
+   "continent": "Africa",
+   "capital": true,
+   "population": 762000,
+   "builtin": false,
+   "label": "Cotonou"
+  },
+  {
+   "spec": "point:14.72,-17.48",
+   "name": "Dakar",
+   "country": "Senegal",
+   "continent": "Africa",
+   "capital": true,
+   "population": 2604000,
+   "builtin": false,
+   "label": "Dakar"
+  },
+  {
+   "spec": "point:-6.80,39.27",
+   "name": "Dar es Salaam",
+   "country": "Tanzania",
+   "continent": "Africa",
+   "capital": true,
+   "population": 2930000,
+   "builtin": false,
+   "label": "Dar es Salaam"
+  },
+  {
+   "spec": "point:11.60,43.15",
+   "name": "Djibouti",
+   "country": "Djibouti",
+   "continent": "Africa",
+   "capital": true,
+   "population": 923000,
+   "builtin": false,
+   "label": "Djibouti"
+  },
+  {
+   "spec": "point:-29.86,30.98",
+   "name": "Durban",
+   "country": "South Africa",
+   "continent": "Africa",
+   "capital": false,
+   "population": 2729000,
+   "builtin": false,
+   "label": "Durban"
+  },
+  {
+   "spec": "point:8.47,-13.24",
+   "name": "Freetown",
+   "country": "Sierra Leone",
+   "continent": "Africa",
+   "capital": true,
+   "population": 827000,
+   "builtin": false,
+   "label": "Freetown"
+  },
+  {
+   "spec": "point:30.01,31.19",
+   "name": "Giza",
+   "country": "Egypt",
+   "continent": "Africa",
+   "capital": false,
+   "population": 2681863,
+   "builtin": false,
+   "label": "Giza"
+  },
+  {
+   "spec": "point:-17.82,31.04",
+   "name": "Harare",
+   "country": "Zimbabwe",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1572000,
+   "builtin": false,
+   "label": "Harare"
+  },
+  {
+   "spec": "point:7.38,3.93",
+   "name": "Ibadan",
+   "country": "Nigeria",
+   "continent": "Africa",
+   "capital": false,
+   "population": 2628000,
+   "builtin": false,
+   "label": "Ibadan"
+  },
+  {
+   "spec": "point:-26.17,28.03",
+   "name": "Johannesburg",
+   "country": "South Africa",
+   "continent": "Africa",
+   "capital": true,
+   "population": 3435000,
+   "builtin": false,
+   "label": "Johannesburg"
+  },
+  {
+   "spec": "point:0.32,32.58",
+   "name": "Kampala",
+   "country": "Uganda",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1420000,
+   "builtin": false,
+   "label": "Kampala"
+  },
+  {
+   "spec": "point:12.00,8.52",
+   "name": "Kano",
+   "country": "Nigeria",
+   "continent": "Africa",
+   "capital": false,
+   "population": 3140000,
+   "builtin": false,
+   "label": "Kano"
+  },
+  {
+   "spec": "point:15.59,32.53",
+   "name": "Khartoum",
+   "country": "Sudan",
+   "continent": "Africa",
+   "capital": true,
+   "population": 4754000,
+   "builtin": false,
+   "label": "Khartoum"
+  },
+  {
+   "spec": "point:-1.95,30.06",
+   "name": "Kigali",
+   "country": "Rwanda",
+   "continent": "Africa",
+   "capital": true,
+   "population": 860000,
+   "builtin": false,
+   "label": "Kigali"
+  },
+  {
+   "spec": "point:-4.33,15.31",
+   "name": "Kinshasa",
+   "country": "Congo (Kinshasa)",
+   "continent": "Africa",
+   "capital": true,
+   "population": 7843000,
+   "builtin": false,
+   "label": "Kinshasa"
+  },
+  {
+   "spec": "point:6.5,3.4",
+   "name": "Lagos",
+   "country": "Nigeria",
+   "continent": "Africa",
+   "capital": false,
+   "population": 9466000,
+   "builtin": true,
+   "label": "Lagos"
+  },
+  {
+   "spec": "point:0.39,9.46",
+   "name": "Libreville",
+   "country": "Gabon",
+   "continent": "Africa",
+   "capital": true,
+   "population": 578156,
+   "builtin": false,
+   "label": "Libreville"
+  },
+  {
+   "spec": "point:-13.98,33.78",
+   "name": "Lilongwe",
+   "country": "Malawi",
+   "continent": "Africa",
+   "capital": true,
+   "population": 646750,
+   "builtin": false,
+   "label": "Lilongwe"
+  },
+  {
+   "spec": "point:6.13,1.22",
+   "name": "Lomé",
+   "country": "Togo",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1452000,
+   "builtin": false,
+   "label": "Lomé"
+  },
+  {
+   "spec": "point:-8.84,13.23",
+   "name": "Luanda",
+   "country": "Angola",
+   "continent": "Africa",
+   "capital": true,
+   "population": 5172900,
+   "builtin": false,
+   "label": "Luanda"
+  },
+  {
+   "spec": "point:-15.41,28.28",
+   "name": "Lusaka",
+   "country": "Zambia",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1328000,
+   "builtin": false,
+   "label": "Lusaka"
+  },
+  {
+   "spec": "point:-25.95,32.59",
+   "name": "Maputo",
+   "country": "Mozambique",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1446000,
+   "builtin": false,
+   "label": "Maputo"
+  },
+  {
+   "spec": "point:2.07,45.36",
+   "name": "Mogadishu",
+   "country": "Somalia",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1100000,
+   "builtin": false,
+   "label": "Mogadishu"
+  },
+  {
+   "spec": "point:6.31,-10.80",
+   "name": "Monrovia",
+   "country": "Liberia",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1041000,
+   "builtin": false,
+   "label": "Monrovia"
+  },
+  {
+   "spec": "point:12.12,15.05",
+   "name": "N'Djamena",
+   "country": "Chad",
+   "continent": "Africa",
+   "capital": true,
+   "population": 989000,
+   "builtin": false,
+   "label": "N'Djamena"
+  },
+  {
+   "spec": "point:-1.28,36.81",
+   "name": "Nairobi",
+   "country": "Kenya",
+   "continent": "Africa",
+   "capital": true,
+   "population": 3010000,
+   "builtin": false,
+   "label": "Nairobi"
+  },
+  {
+   "spec": "point:13.52,2.11",
+   "name": "Niamey",
+   "country": "Niger",
+   "continent": "Africa",
+   "capital": true,
+   "population": 915000,
+   "builtin": false,
+   "label": "Niamey"
+  },
+  {
+   "spec": "point:18.09,-15.98",
+   "name": "Nouakchott",
+   "country": "Mauritania",
+   "continent": "Africa",
+   "capital": true,
+   "population": 742144,
+   "builtin": false,
+   "label": "Nouakchott"
+  },
+  {
+   "spec": "point:12.37,-1.53",
+   "name": "Ouagadougou",
+   "country": "Burkina Faso",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1149000,
+   "builtin": false,
+   "label": "Ouagadougou"
+  },
+  {
+   "spec": "point:-20.17,57.50",
+   "name": "Port Louis",
+   "country": "Mauritius",
+   "continent": "Africa",
+   "capital": true,
+   "population": 595491,
+   "builtin": false,
+   "label": "Port Louis"
+  },
+  {
+   "spec": "point:-25.70,28.23",
+   "name": "Pretoria",
+   "country": "South Africa",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1338000,
+   "builtin": false,
+   "label": "Pretoria"
+  },
+  {
+   "spec": "point:34.03,-6.84",
+   "name": "Rabat",
+   "country": "Morocco",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1705000,
+   "builtin": false,
+   "label": "Rabat"
+  },
+  {
+   "spec": "point:32.89,13.18",
+   "name": "Tripoli",
+   "country": "Libya",
+   "continent": "Africa",
+   "capital": true,
+   "population": 2189000,
+   "builtin": false,
+   "label": "Tripoli"
+  },
+  {
+   "spec": "point:36.80,10.18",
+   "name": "Tunis",
+   "country": "Tunisia",
+   "continent": "Africa",
+   "capital": true,
+   "population": 2412500,
+   "builtin": false,
+   "label": "Tunis"
+  },
+  {
+   "spec": "point:3.87,11.51",
+   "name": "Yaoundé",
+   "country": "Cameroon",
+   "continent": "Africa",
+   "capital": true,
+   "population": 1611000,
+   "builtin": false,
+   "label": "Yaoundé"
+  },
+  {
+   "spec": "point:24.47,54.37",
+   "name": "Abu Dhabi",
+   "country": "United Arab Emirates",
+   "continent": "Asia",
+   "capital": true,
+   "population": 603492,
+   "builtin": false,
+   "label": "Abu Dhabi"
+  },
+  {
+   "spec": "point:23.03,72.58",
+   "name": "Ahmedabad",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 5375000,
+   "builtin": false,
+   "label": "Ahmedabad"
+  },
+  {
+   "spec": "point:36.23,37.17",
+   "name": "Aleppo",
+   "country": "Syria",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2738000,
+   "builtin": false,
+   "label": "Aleppo"
+  },
+  {
+   "spec": "point:16.53,80.52",
+   "name": "Amaravati",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 5800000,
+   "builtin": false,
+   "label": "Amaravati"
+  },
+  {
+   "spec": "point:31.95,35.93",
+   "name": "Amman",
+   "country": "Jordan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1060000,
+   "builtin": false,
+   "label": "Amman"
+  },
+  {
+   "spec": "point:39.93,32.86",
+   "name": "Ankara",
+   "country": "Turkey",
+   "continent": "Asia",
+   "capital": true,
+   "population": 3716000,
+   "builtin": false,
+   "label": "Ankara"
+  },
+  {
+   "spec": "point:37.95,58.38",
+   "name": "Ashgabat",
+   "country": "Turkmenistan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 727700,
+   "builtin": false,
+   "label": "Ashgabat"
+  },
+  {
+   "spec": "point:33.34,44.39",
+   "name": "Baghdad",
+   "country": "Iraq",
+   "continent": "Asia",
+   "capital": true,
+   "population": 5054000,
+   "builtin": false,
+   "label": "Baghdad"
+  },
+  {
+   "spec": "point:40.40,49.86",
+   "name": "Baku",
+   "country": "Azerbaijan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 2122300,
+   "builtin": false,
+   "label": "Baku"
+  },
+  {
+   "spec": "point:13.75,100.51",
+   "name": "Bangkok",
+   "country": "Thailand",
+   "continent": "Asia",
+   "capital": true,
+   "population": 6704000,
+   "builtin": false,
+   "label": "Bangkok"
+  },
+  {
+   "spec": "point:39.9,116.4",
+   "name": "Beijing",
+   "country": "China",
+   "continent": "Asia",
+   "capital": true,
+   "population": 11106000,
+   "builtin": true,
+   "label": "Beijing"
+  },
+  {
+   "spec": "point:33.87,35.51",
+   "name": "Beirut",
+   "country": "Lebanon",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1846000,
+   "builtin": false,
+   "label": "Beirut"
+  },
+  {
+   "spec": "point:12.97,77.56",
+   "name": "Bengaluru",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 6787000,
+   "builtin": false,
+   "label": "Bengaluru"
+  },
+  {
+   "spec": "point:42.88,74.58",
+   "name": "Bishkek",
+   "country": "Kyrgyzstan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 837000,
+   "builtin": false,
+   "label": "Bishkek"
+  },
+  {
+   "spec": "point:35.10,129.01",
+   "name": "Busan",
+   "country": "South Korea",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3480000,
+   "builtin": false,
+   "label": "Busan"
+  },
+  {
+   "spec": "point:43.87,125.34",
+   "name": "Changchun",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3183000,
+   "builtin": false,
+   "label": "Changchun"
+  },
+  {
+   "spec": "point:28.20,112.97",
+   "name": "Changsha",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2604000,
+   "builtin": false,
+   "label": "Changsha"
+  },
+  {
+   "spec": "point:22.33,91.80",
+   "name": "Chattogram",
+   "country": "Bangladesh",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4529000,
+   "builtin": false,
+   "label": "Chattogram"
+  },
+  {
+   "spec": "point:30.67,104.07",
+   "name": "Chengdu",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4123000,
+   "builtin": false,
+   "label": "Chengdu"
+  },
+  {
+   "spec": "point:13.09,80.28",
+   "name": "Chennai",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 7163000,
+   "builtin": false,
+   "label": "Chennai"
+  },
+  {
+   "spec": "point:29.57,106.59",
+   "name": "Chongqing",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 6461000,
+   "builtin": false,
+   "label": "Chongqing"
+  },
+  {
+   "spec": "point:38.92,121.63",
+   "name": "Dalian",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3167000,
+   "builtin": false,
+   "label": "Dalian"
+  },
+  {
+   "spec": "point:33.50,36.30",
+   "name": "Damascus",
+   "country": "Syria",
+   "continent": "Asia",
+   "capital": true,
+   "population": 2466000,
+   "builtin": false,
+   "label": "Damascus"
+  },
+  {
+   "spec": "point:28.67,77.23",
+   "name": "Delhi",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 15926000,
+   "builtin": false,
+   "label": "Delhi"
+  },
+  {
+   "spec": "point:23.73,90.41",
+   "name": "Dhaka",
+   "country": "Bangladesh",
+   "continent": "Asia",
+   "capital": true,
+   "population": 12797394,
+   "builtin": false,
+   "label": "Dhaka"
+  },
+  {
+   "spec": "point:25.29,51.53",
+   "name": "Doha",
+   "country": "Qatar",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1450000,
+   "builtin": false,
+   "label": "Doha"
+  },
+  {
+   "spec": "point:23.05,113.74",
+   "name": "Dongguan",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4528000,
+   "builtin": false,
+   "label": "Dongguan"
+  },
+  {
+   "spec": "point:38.56,68.77",
+   "name": "Dushanbe",
+   "country": "Tajikistan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1086244,
+   "builtin": false,
+   "label": "Dushanbe"
+  },
+  {
+   "spec": "point:31.41,73.11",
+   "name": "Faisalabad",
+   "country": "Pakistan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2617000,
+   "builtin": false,
+   "label": "Faisalabad"
+  },
+  {
+   "spec": "point:33.60,130.41",
+   "name": "Fukuoka",
+   "country": "Japan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2792000,
+   "builtin": false,
+   "label": "Fukuoka"
+  },
+  {
+   "spec": "point:26.08,119.30",
+   "name": "Fuzhou",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2606000,
+   "builtin": false,
+   "label": "Fuzhou"
+  },
+  {
+   "spec": "point:5.41,100.33",
+   "name": "George Town",
+   "country": "Malaysia",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2500000,
+   "builtin": false,
+   "label": "George Town"
+  },
+  {
+   "spec": "point:23.15,113.32",
+   "name": "Guangzhou",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 8829000,
+   "builtin": false,
+   "label": "Guangzhou"
+  },
+  {
+   "spec": "point:26.58,106.72",
+   "name": "Guiyang",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3662000,
+   "builtin": false,
+   "label": "Guiyang"
+  },
+  {
+   "spec": "point:30.25,120.17",
+   "name": "Hangzhou",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3007000,
+   "builtin": false,
+   "label": "Hangzhou"
+  },
+  {
+   "spec": "point:21.04,105.85",
+   "name": "Hanoi",
+   "country": "Vietnam",
+   "continent": "Asia",
+   "capital": true,
+   "population": 4378000,
+   "builtin": false,
+   "label": "Hanoi"
+  },
+  {
+   "spec": "point:22.58,88.33",
+   "name": "Haora",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4841638,
+   "builtin": false,
+   "label": "Haora"
+  },
+  {
+   "spec": "point:45.75,126.65",
+   "name": "Harbin",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3621000,
+   "builtin": false,
+   "label": "Harbin"
+  },
+  {
+   "spec": "point:24.70,108.08",
+   "name": "Hechi",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3830000,
+   "builtin": false,
+   "label": "Hechi"
+  },
+  {
+   "spec": "point:10.78,106.69",
+   "name": "Ho Chi Minh City",
+   "country": "Vietnam",
+   "continent": "Asia",
+   "capital": false,
+   "population": 5314000,
+   "builtin": false,
+   "label": "Ho Chi Minh City"
+  },
+  {
+   "spec": "point:22.31,114.18",
+   "name": "Hong Kong",
+   "country": "Hong Kong S.A.R.",
+   "continent": "Asia",
+   "capital": false,
+   "population": 7206000,
+   "builtin": false,
+   "label": "Hong Kong"
+  },
+  {
+   "spec": "point:17.40,78.48",
+   "name": "Hyderabad",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 6376000,
+   "builtin": false,
+   "label": "Hyderabad"
+  },
+  {
+   "spec": "point:37.48,126.64",
+   "name": "Incheon",
+   "country": "South Korea",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2550000,
+   "builtin": false,
+   "label": "Incheon"
+  },
+  {
+   "spec": "point:33.70,73.16",
+   "name": "Islamabad",
+   "country": "Pakistan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 780000,
+   "builtin": false,
+   "label": "Islamabad"
+  },
+  {
+   "spec": "point:41.11,29.01",
+   "name": "Istanbul",
+   "country": "Turkey",
+   "continent": "Asia",
+   "capital": false,
+   "population": 10061000,
+   "builtin": false,
+   "label": "Istanbul"
+  },
+  {
+   "spec": "point:26.92,75.81",
+   "name": "Jaipur",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2917000,
+   "builtin": false,
+   "label": "Jaipur"
+  },
+  {
+   "spec": "point:-6.17,106.83",
+   "name": "Jakarta",
+   "country": "Indonesia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 9125000,
+   "builtin": false,
+   "label": "Jakarta"
+  },
+  {
+   "spec": "point:21.52,39.22",
+   "name": "Jeddah",
+   "country": "Saudi Arabia",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3012000,
+   "builtin": false,
+   "label": "Jeddah"
+  },
+  {
+   "spec": "point:31.78,35.21",
+   "name": "Jerusalem",
+   "country": "Israel",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1029300,
+   "builtin": false,
+   "label": "Jerusalem"
+  },
+  {
+   "spec": "point:36.68,116.99",
+   "name": "Jinan",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2798000,
+   "builtin": false,
+   "label": "Jinan"
+  },
+  {
+   "spec": "point:34.52,69.18",
+   "name": "Kabul",
+   "country": "Afghanistan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 3277000,
+   "builtin": false,
+   "label": "Kabul"
+  },
+  {
+   "spec": "point:26.46,80.32",
+   "name": "Kanpur",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3162000,
+   "builtin": false,
+   "label": "Kanpur"
+  },
+  {
+   "spec": "point:22.63,120.27",
+   "name": "Kaohsiung",
+   "country": "Taiwan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2769072,
+   "builtin": false,
+   "label": "Kaohsiung"
+  },
+  {
+   "spec": "point:24.87,66.99",
+   "name": "Karachi",
+   "country": "Pakistan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 12130000,
+   "builtin": false,
+   "label": "Karachi"
+  },
+  {
+   "spec": "point:27.72,85.31",
+   "name": "Kathmandu",
+   "country": "Nepal",
+   "continent": "Asia",
+   "capital": true,
+   "population": 895000,
+   "builtin": false,
+   "label": "Kathmandu"
+  },
+  {
+   "spec": "point:22.50,88.32",
+   "name": "Kolkata",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 14787000,
+   "builtin": false,
+   "label": "Kolkata"
+  },
+  {
+   "spec": "point:3.17,101.70",
+   "name": "Kuala Lumpur",
+   "country": "Malaysia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1448000,
+   "builtin": false,
+   "label": "Kuala Lumpur"
+  },
+  {
+   "spec": "point:25.07,102.68",
+   "name": "Kunming",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2931000,
+   "builtin": false,
+   "label": "Kunming"
+  },
+  {
+   "spec": "point:29.37,47.98",
+   "name": "Kuwait City",
+   "country": "Kuwait",
+   "continent": "Asia",
+   "capital": true,
+   "population": 2063000,
+   "builtin": false,
+   "label": "Kuwait City"
+  },
+  {
+   "spec": "point:31.56,74.35",
+   "name": "Lahore",
+   "country": "Pakistan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 6577000,
+   "builtin": false,
+   "label": "Lahore"
+  },
+  {
+   "spec": "point:36.06,103.79",
+   "name": "Lanzhou",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2561000,
+   "builtin": false,
+   "label": "Lanzhou"
+  },
+  {
+   "spec": "point:26.86,80.91",
+   "name": "Lucknow",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2695000,
+   "builtin": false,
+   "label": "Lucknow"
+  },
+  {
+   "spec": "point:26.24,50.58",
+   "name": "Manama",
+   "country": "Bahrain",
+   "continent": "Asia",
+   "capital": true,
+   "population": 563920,
+   "builtin": false,
+   "label": "Manama"
+  },
+  {
+   "spec": "point:14.61,120.98",
+   "name": "Manila",
+   "country": "Philippines",
+   "continent": "Asia",
+   "capital": true,
+   "population": 11100000,
+   "builtin": false,
+   "label": "Manila"
+  },
+  {
+   "spec": "point:19.1,72.9",
+   "name": "Mumbai",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 18978000,
+   "builtin": true,
+   "label": "Mumbai"
+  },
+  {
+   "spec": "point:23.61,58.59",
+   "name": "Muscat",
+   "country": "Oman",
+   "continent": "Asia",
+   "capital": true,
+   "population": 734697,
+   "builtin": false,
+   "label": "Muscat"
+  },
+  {
+   "spec": "point:35.16,136.91",
+   "name": "Nagoya",
+   "country": "Japan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3230000,
+   "builtin": false,
+   "label": "Nagoya"
+  },
+  {
+   "spec": "point:32.05,118.78",
+   "name": "Nanjing",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3679000,
+   "builtin": false,
+   "label": "Nanjing"
+  },
+  {
+   "spec": "point:19.77,96.12",
+   "name": "Naypyidaw",
+   "country": "Myanmar",
+   "continent": "Asia",
+   "capital": true,
+   "population": 930000,
+   "builtin": false,
+   "label": "Naypyidaw"
+  },
+  {
+   "spec": "point:25.01,121.47",
+   "name": "New Taipei",
+   "country": "Taiwan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3893740,
+   "builtin": false,
+   "label": "New Taipei"
+  },
+  {
+   "spec": "point:34.75,135.46",
+   "name": "Osaka",
+   "country": "Japan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 11294000,
+   "builtin": false,
+   "label": "Osaka"
+  },
+  {
+   "spec": "point:11.55,104.91",
+   "name": "Phnom Penh",
+   "country": "Cambodia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1466000,
+   "builtin": false,
+   "label": "Phnom Penh"
+  },
+  {
+   "spec": "point:18.53,73.85",
+   "name": "Pune",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4672000,
+   "builtin": false,
+   "label": "Pune"
+  },
+  {
+   "spec": "point:39.02,125.75",
+   "name": "Pyongyang",
+   "country": "North Korea",
+   "continent": "Asia",
+   "capital": true,
+   "population": 3300000,
+   "builtin": false,
+   "label": "Pyongyang"
+  },
+  {
+   "spec": "point:36.09,120.33",
+   "name": "Qingdao",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2866000,
+   "builtin": false,
+   "label": "Qingdao"
+  },
+  {
+   "spec": "point:14.65,121.03",
+   "name": "Quezon City",
+   "country": "Philippines",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2761720,
+   "builtin": false,
+   "label": "Quezon City"
+  },
+  {
+   "spec": "point:24.64,46.77",
+   "name": "Riyadh",
+   "country": "Saudi Arabia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 4465000,
+   "builtin": false,
+   "label": "Riyadh"
+  },
+  {
+   "spec": "point:15.36,44.20",
+   "name": "Sanaa",
+   "country": "Yemen",
+   "continent": "Asia",
+   "capital": true,
+   "population": 2008000,
+   "builtin": false,
+   "label": "Sanaa"
+  },
+  {
+   "spec": "point:43.08,141.34",
+   "name": "Sapporo",
+   "country": "Japan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2544000,
+   "builtin": false,
+   "label": "Sapporo"
+  },
+  {
+   "spec": "point:37.57,127.00",
+   "name": "Seoul",
+   "country": "South Korea",
+   "continent": "Asia",
+   "capital": true,
+   "population": 9796000,
+   "builtin": false,
+   "label": "Seoul"
+  },
+  {
+   "spec": "point:31.22,121.43",
+   "name": "Shanghai",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 14987000,
+   "builtin": false,
+   "label": "Shanghai"
+  },
+  {
+   "spec": "point:41.81,123.45",
+   "name": "Shenyang",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4787000,
+   "builtin": false,
+   "label": "Shenyang"
+  },
+  {
+   "spec": "point:22.55,114.12",
+   "name": "Shenzhen",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 7581000,
+   "builtin": false,
+   "label": "Shenzhen"
+  },
+  {
+   "spec": "point:1.29,103.85",
+   "name": "Singapore",
+   "country": "Singapore",
+   "continent": "Asia",
+   "capital": true,
+   "population": 5183700,
+   "builtin": false,
+   "label": "Singapore"
+  },
+  {
+   "spec": "point:-7.25,112.75",
+   "name": "Surabaya",
+   "country": "Indonesia",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2845000,
+   "builtin": false,
+   "label": "Surabaya"
+  },
+  {
+   "spec": "point:21.20,72.84",
+   "name": "Surat",
+   "country": "India",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3842000,
+   "builtin": false,
+   "label": "Surat"
+  },
+  {
+   "spec": "point:24.15,120.68",
+   "name": "Taichung",
+   "country": "Taiwan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2629323,
+   "builtin": false,
+   "label": "Taichung"
+  },
+  {
+   "spec": "point:25.04,121.57",
+   "name": "Taipei",
+   "country": "Taiwan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 6900273,
+   "builtin": false,
+   "label": "Taipei"
+  },
+  {
+   "spec": "point:37.88,112.54",
+   "name": "Taiyuan",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2913000,
+   "builtin": false,
+   "label": "Taiyuan"
+  },
+  {
+   "spec": "point:41.31,69.29",
+   "name": "Tashkent",
+   "country": "Uzbekistan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 2184000,
+   "builtin": false,
+   "label": "Tashkent"
+  },
+  {
+   "spec": "point:41.73,44.79",
+   "name": "Tbilisi",
+   "country": "Georgia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1100000,
+   "builtin": false,
+   "label": "Tbilisi"
+  },
+  {
+   "spec": "point:35.67,51.42",
+   "name": "Tehran",
+   "country": "Iran",
+   "continent": "Asia",
+   "capital": true,
+   "population": 7873000,
+   "builtin": false,
+   "label": "Tehran"
+  },
+  {
+   "spec": "point:32.08,34.77",
+   "name": "Tel Aviv",
+   "country": "Israel",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3112000,
+   "builtin": false,
+   "label": "Tel Aviv"
+  },
+  {
+   "spec": "point:39.13,117.20",
+   "name": "Tianjin",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 7180000,
+   "builtin": false,
+   "label": "Tianjin"
+  },
+  {
+   "spec": "point:35.69,139.75",
+   "name": "Tokyo",
+   "country": "Japan",
+   "continent": "Asia",
+   "capital": true,
+   "population": 35676000,
+   "builtin": false,
+   "label": "Tokyo"
+  },
+  {
+   "spec": "point:47.92,106.91",
+   "name": "Ulaanbaatar",
+   "country": "Mongolia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 885000,
+   "builtin": false,
+   "label": "Ulaanbaatar"
+  },
+  {
+   "spec": "point:17.97,102.60",
+   "name": "Vientiane",
+   "country": "Laos",
+   "continent": "Asia",
+   "capital": true,
+   "population": 754000,
+   "builtin": false,
+   "label": "Vientiane"
+  },
+  {
+   "spec": "point:30.58,114.27",
+   "name": "Wuhan",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 7243000,
+   "builtin": false,
+   "label": "Wuhan"
+  },
+  {
+   "spec": "point:34.28,108.89",
+   "name": "Xi'an",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 4009000,
+   "builtin": false,
+   "label": "Xi'an"
+  },
+  {
+   "spec": "point:24.45,118.08",
+   "name": "Xiamen",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2519000,
+   "builtin": false,
+   "label": "Xiamen"
+  },
+  {
+   "spec": "point:27.85,112.90",
+   "name": "Xiangtan",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2586948,
+   "builtin": false,
+   "label": "Xiangtan"
+  },
+  {
+   "spec": "point:16.79,96.16",
+   "name": "Yangon",
+   "country": "Myanmar",
+   "continent": "Asia",
+   "capital": true,
+   "population": 4088000,
+   "builtin": false,
+   "label": "Yangon"
+  },
+  {
+   "spec": "point:40.18,44.51",
+   "name": "Yerevan",
+   "country": "Armenia",
+   "continent": "Asia",
+   "capital": true,
+   "population": 1102000,
+   "builtin": false,
+   "label": "Yerevan"
+  },
+  {
+   "spec": "point:35.43,139.60",
+   "name": "Yokohama",
+   "country": "Japan",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3697894,
+   "builtin": false,
+   "label": "Yokohama"
+  },
+  {
+   "spec": "point:24.52,117.67",
+   "name": "Zhangzhou",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3531147,
+   "builtin": false,
+   "label": "Zhangzhou"
+  },
+  {
+   "spec": "point:34.76,113.66",
+   "name": "Zhengzhou",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2636000,
+   "builtin": false,
+   "label": "Zhengzhou"
+  },
+  {
+   "spec": "point:36.80,118.05",
+   "name": "Zibo",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3061000,
+   "builtin": false,
+   "label": "Zibo"
+  },
+  {
+   "spec": "point:43.81,87.57",
+   "name": "Ürümqi",
+   "country": "China",
+   "continent": "Asia",
+   "capital": false,
+   "population": 3575000,
+   "builtin": false,
+   "label": "Ürümqi"
+  },
+  {
+   "spec": "point:38.44,27.15",
+   "name": "İzmir",
+   "country": "Turkey",
+   "continent": "Asia",
+   "capital": false,
+   "population": 2587000,
+   "builtin": false,
+   "label": "İzmir"
+  },
+  {
+   "spec": "point:52.35,4.91",
+   "name": "Amsterdam",
+   "country": "Netherlands",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1031000,
+   "builtin": false,
+   "label": "Amsterdam"
+  },
+  {
+   "spec": "point:37.99,23.73",
+   "name": "Athens",
+   "country": "Greece",
+   "continent": "Europe",
+   "capital": true,
+   "population": 3242000,
+   "builtin": false,
+   "label": "Athens"
+  },
+  {
+   "spec": "point:41.39,2.18",
+   "name": "Barcelona",
+   "country": "Spain",
+   "continent": "Europe",
+   "capital": false,
+   "population": 4920000,
+   "builtin": false,
+   "label": "Barcelona"
+  },
+  {
+   "spec": "point:44.82,20.47",
+   "name": "Belgrade",
+   "country": "Serbia",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1099000,
+   "builtin": false,
+   "label": "Belgrade"
+  },
+  {
+   "spec": "point:52.52,13.40",
+   "name": "Berlin",
+   "country": "Germany",
+   "continent": "Europe",
+   "capital": true,
+   "population": 3406000,
+   "builtin": false,
+   "label": "Berlin"
+  },
+  {
+   "spec": "point:50.84,4.33",
+   "name": "Brussels",
+   "country": "Belgium",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1743000,
+   "builtin": false,
+   "label": "Brussels"
+  },
+  {
+   "spec": "point:44.44,26.10",
+   "name": "Bucharest",
+   "country": "Romania",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1942000,
+   "builtin": false,
+   "label": "Bucharest"
+  },
+  {
+   "spec": "point:47.50,19.08",
+   "name": "Budapest",
+   "country": "Hungary",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1679000,
+   "builtin": false,
+   "label": "Budapest"
+  },
+  {
+   "spec": "point:47.01,28.86",
+   "name": "Chișinău",
+   "country": "Moldova",
+   "continent": "Europe",
+   "capital": true,
+   "population": 688134,
+   "builtin": false,
+   "label": "Chișinău"
+  },
+  {
+   "spec": "point:55.68,12.56",
+   "name": "Copenhagen",
+   "country": "Denmark",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1085000,
+   "builtin": false,
+   "label": "Copenhagen"
+  },
+  {
+   "spec": "point:53.34,-6.25",
+   "name": "Dublin",
+   "country": "Ireland",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1059000,
+   "builtin": false,
+   "label": "Dublin"
+  },
+  {
+   "spec": "point:50.10,8.68",
+   "name": "Frankfurt",
+   "country": "Germany",
+   "continent": "Europe",
+   "capital": false,
+   "population": 2895000,
+   "builtin": false,
+   "label": "Frankfurt"
+  },
+  {
+   "spec": "point:60.18,24.93",
+   "name": "Helsinki",
+   "country": "Finland",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1115000,
+   "builtin": false,
+   "label": "Helsinki"
+  },
+  {
+   "spec": "point:50.26,19.02",
+   "name": "Katowice",
+   "country": "Poland",
+   "continent": "Europe",
+   "capital": false,
+   "population": 2746000,
+   "builtin": false,
+   "label": "Katowice"
+  },
+  {
+   "spec": "point:50.44,30.51",
+   "name": "Kyiv",
+   "country": "Ukraine",
+   "continent": "Europe",
+   "capital": true,
+   "population": 2709000,
+   "builtin": false,
+   "label": "Kyiv"
+  },
+  {
+   "spec": "point:38.72,-9.15",
+   "name": "Lisbon",
+   "country": "Portugal",
+   "continent": "Europe",
+   "capital": true,
+   "population": 2812000,
+   "builtin": false,
+   "label": "Lisbon"
+  },
+  {
+   "spec": "point:51.5,-0.1",
+   "name": "London",
+   "country": "United Kingdom",
+   "continent": "Europe",
+   "capital": true,
+   "population": 8567000,
+   "builtin": true,
+   "label": "London"
+  },
+  {
+   "spec": "point:40.40,-3.69",
+   "name": "Madrid",
+   "country": "Spain",
+   "continent": "Europe",
+   "capital": true,
+   "population": 5567000,
+   "builtin": false,
+   "label": "Madrid"
+  },
+  {
+   "spec": "point:45.47,9.20",
+   "name": "Milan",
+   "country": "Italy",
+   "continent": "Europe",
+   "capital": false,
+   "population": 2945000,
+   "builtin": false,
+   "label": "Milan"
+  },
+  {
+   "spec": "point:53.90,27.56",
+   "name": "Minsk",
+   "country": "Belarus",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1805000,
+   "builtin": false,
+   "label": "Minsk"
+  },
+  {
+   "spec": "point:55.75,37.61",
+   "name": "Moscow",
+   "country": "Russia",
+   "continent": "Europe",
+   "capital": true,
+   "population": 10452000,
+   "builtin": false,
+   "label": "Moscow"
+  },
+  {
+   "spec": "point:59.92,10.75",
+   "name": "Oslo",
+   "country": "Norway",
+   "continent": "Europe",
+   "capital": true,
+   "population": 835000,
+   "builtin": false,
+   "label": "Oslo"
+  },
+  {
+   "spec": "point:48.87,2.33",
+   "name": "Paris",
+   "country": "France",
+   "continent": "Europe",
+   "capital": true,
+   "population": 9904000,
+   "builtin": false,
+   "label": "Paris"
+  },
+  {
+   "spec": "point:50.09,14.46",
+   "name": "Prague",
+   "country": "Czechia",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1162000,
+   "builtin": false,
+   "label": "Prague"
+  },
+  {
+   "spec": "point:56.95,24.10",
+   "name": "Riga",
+   "country": "Latvia",
+   "continent": "Europe",
+   "capital": true,
+   "population": 742572,
+   "builtin": false,
+   "label": "Riga"
+  },
+  {
+   "spec": "point:41.90,12.48",
+   "name": "Rome",
+   "country": "Italy",
+   "continent": "Europe",
+   "capital": true,
+   "population": 3339000,
+   "builtin": false,
+   "label": "Rome"
+  },
+  {
+   "spec": "point:43.85,18.38",
+   "name": "Sarajevo",
+   "country": "Bosnia and Herzegovina",
+   "continent": "Europe",
+   "capital": true,
+   "population": 696731,
+   "builtin": false,
+   "label": "Sarajevo"
+  },
+  {
+   "spec": "point:42.69,23.31",
+   "name": "Sofia",
+   "country": "Bulgaria",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1185000,
+   "builtin": false,
+   "label": "Sofia"
+  },
+  {
+   "spec": "point:59.94,30.31",
+   "name": "St. Petersburg",
+   "country": "Russia",
+   "continent": "Europe",
+   "capital": false,
+   "population": 4553000,
+   "builtin": false,
+   "label": "St. Petersburg"
+  },
+  {
+   "spec": "point:59.35,18.10",
+   "name": "Stockholm",
+   "country": "Sweden",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1264000,
+   "builtin": false,
+   "label": "Stockholm"
+  },
+  {
+   "spec": "point:48.78,9.20",
+   "name": "Stuttgart",
+   "country": "Germany",
+   "continent": "Europe",
+   "capital": false,
+   "population": 2944700,
+   "builtin": false,
+   "label": "Stuttgart"
+  },
+  {
+   "spec": "point:41.33,19.82",
+   "name": "Tirana",
+   "country": "Albania",
+   "continent": "Europe",
+   "capital": true,
+   "population": 895350,
+   "builtin": false,
+   "label": "Tirana"
+  },
+  {
+   "spec": "point:48.20,16.36",
+   "name": "Vienna",
+   "country": "Austria",
+   "continent": "Europe",
+   "capital": true,
+   "population": 2400000,
+   "builtin": false,
+   "label": "Vienna"
+  },
+  {
+   "spec": "point:54.68,25.32",
+   "name": "Vilnius",
+   "country": "Lithuania",
+   "continent": "Europe",
+   "capital": true,
+   "population": 542366,
+   "builtin": false,
+   "label": "Vilnius"
+  },
+  {
+   "spec": "point:52.25,21.00",
+   "name": "Warsaw",
+   "country": "Poland",
+   "continent": "Europe",
+   "capital": true,
+   "population": 1707000,
+   "builtin": false,
+   "label": "Warsaw"
+  },
+  {
+   "spec": "point:45.80,16.00",
+   "name": "Zagreb",
+   "country": "Croatia",
+   "continent": "Europe",
+   "capital": true,
+   "population": 722526,
+   "builtin": false,
+   "label": "Zagreb"
+  },
+  {
+   "spec": "point:33.83,-84.40",
+   "name": "Atlanta",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 4506000,
+   "builtin": false,
+   "label": "Atlanta"
+  },
+  {
+   "spec": "point:42.33,-71.07",
+   "name": "Boston",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 4467000,
+   "builtin": false,
+   "label": "Boston"
+  },
+  {
+   "spec": "point:41.83,-87.75",
+   "name": "Chicago",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 8990000,
+   "builtin": false,
+   "label": "Chicago"
+  },
+  {
+   "spec": "point:32.82,-96.84",
+   "name": "Dallas",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 4798000,
+   "builtin": false,
+   "label": "Dallas"
+  },
+  {
+   "spec": "point:42.33,-83.08",
+   "name": "Detroit",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 4101000,
+   "builtin": false,
+   "label": "Detroit"
+  },
+  {
+   "spec": "point:20.67,-103.33",
+   "name": "Guadalajara",
+   "country": "Mexico",
+   "continent": "North America",
+   "capital": false,
+   "population": 4198000,
+   "builtin": false,
+   "label": "Guadalajara"
+  },
+  {
+   "spec": "point:14.62,-90.53",
+   "name": "Guatemala City",
+   "country": "Guatemala",
+   "continent": "North America",
+   "capital": true,
+   "population": 1024000,
+   "builtin": false,
+   "label": "Guatemala City"
+  },
+  {
+   "spec": "point:23.13,-82.37",
+   "name": "Havana",
+   "country": "Cuba",
+   "continent": "North America",
+   "capital": true,
+   "population": 2174000,
+   "builtin": false,
+   "label": "Havana"
+  },
+  {
+   "spec": "point:29.82,-95.34",
+   "name": "Houston",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 4459000,
+   "builtin": false,
+   "label": "Houston"
+  },
+  {
+   "spec": "point:33.68,-117.83",
+   "name": "Irvine",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 3010232,
+   "builtin": false,
+   "label": "Irvine"
+  },
+  {
+   "spec": "point:17.98,-76.77",
+   "name": "Kingston",
+   "country": "Jamaica",
+   "continent": "North America",
+   "capital": true,
+   "population": 937700,
+   "builtin": false,
+   "label": "Kingston"
+  },
+  {
+   "spec": "point:33.99,-118.18",
+   "name": "Los Angeles",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 12500000,
+   "builtin": false,
+   "label": "Los Angeles"
+  },
+  {
+   "spec": "point:12.15,-86.27",
+   "name": "Managua",
+   "country": "Nicaragua",
+   "continent": "North America",
+   "capital": true,
+   "population": 920000,
+   "builtin": false,
+   "label": "Managua"
+  },
+  {
+   "spec": "point:19.44,-99.13",
+   "name": "Mexico City",
+   "country": "Mexico",
+   "continent": "North America",
+   "capital": true,
+   "population": 19028000,
+   "builtin": false,
+   "label": "Mexico City"
+  },
+  {
+   "spec": "point:25.79,-80.23",
+   "name": "Miami",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 5585000,
+   "builtin": false,
+   "label": "Miami"
+  },
+  {
+   "spec": "point:44.98,-93.25",
+   "name": "Minneapolis",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 2616000,
+   "builtin": false,
+   "label": "Minneapolis"
+  },
+  {
+   "spec": "point:25.67,-100.33",
+   "name": "Monterrey",
+   "country": "Mexico",
+   "continent": "North America",
+   "capital": false,
+   "population": 3712000,
+   "builtin": false,
+   "label": "Monterrey"
+  },
+  {
+   "spec": "point:45.50,-73.59",
+   "name": "Montréal",
+   "country": "Canada",
+   "continent": "North America",
+   "capital": false,
+   "population": 3678000,
+   "builtin": false,
+   "label": "Montréal"
+  },
+  {
+   "spec": "point:40.7,-74.0",
+   "name": "New York",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 19040000,
+   "builtin": true,
+   "label": "New York"
+  },
+  {
+   "spec": "point:45.42,-75.70",
+   "name": "Ottawa",
+   "country": "Canada",
+   "continent": "North America",
+   "capital": true,
+   "population": 1145000,
+   "builtin": false,
+   "label": "Ottawa"
+  },
+  {
+   "spec": "point:8.97,-79.53",
+   "name": "Panama City",
+   "country": "Panama",
+   "continent": "North America",
+   "capital": true,
+   "population": 1281000,
+   "builtin": false,
+   "label": "Panama City"
+  },
+  {
+   "spec": "point:40.00,-75.17",
+   "name": "Philadelphia",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 5492000,
+   "builtin": false,
+   "label": "Philadelphia"
+  },
+  {
+   "spec": "point:33.54,-112.07",
+   "name": "Phoenix",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 3551000,
+   "builtin": false,
+   "label": "Phoenix"
+  },
+  {
+   "spec": "point:18.54,-72.34",
+   "name": "Port-au-Prince",
+   "country": "Haiti",
+   "continent": "North America",
+   "capital": true,
+   "population": 1998000,
+   "builtin": false,
+   "label": "Port-au-Prince"
+  },
+  {
+   "spec": "point:32.82,-117.18",
+   "name": "San Diego",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 2916000,
+   "builtin": false,
+   "label": "San Diego"
+  },
+  {
+   "spec": "point:37.77,-122.42",
+   "name": "San Francisco",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 3450000,
+   "builtin": false,
+   "label": "San Francisco"
+  },
+  {
+   "spec": "point:9.94,-84.09",
+   "name": "San José",
+   "country": "Costa Rica",
+   "continent": "North America",
+   "capital": true,
+   "population": 1284000,
+   "builtin": false,
+   "label": "San José"
+  },
+  {
+   "spec": "point:13.71,-89.20",
+   "name": "San Salvador",
+   "country": "El Salvador",
+   "continent": "North America",
+   "capital": true,
+   "population": 1433000,
+   "builtin": false,
+   "label": "San Salvador"
+  },
+  {
+   "spec": "point:18.47,-69.90",
+   "name": "Santo Domingo",
+   "country": "Dominican Republic",
+   "continent": "North America",
+   "capital": true,
+   "population": 2154000,
+   "builtin": false,
+   "label": "Santo Domingo"
+  },
+  {
+   "spec": "point:47.57,-122.34",
+   "name": "Seattle",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": false,
+   "population": 3074000,
+   "builtin": false,
+   "label": "Seattle"
+  },
+  {
+   "spec": "point:14.10,-87.22",
+   "name": "Tegucigalpa",
+   "country": "Honduras",
+   "continent": "North America",
+   "capital": true,
+   "population": 946000,
+   "builtin": false,
+   "label": "Tegucigalpa"
+  },
+  {
+   "spec": "point:43.70,-79.42",
+   "name": "Toronto",
+   "country": "Canada",
+   "continent": "North America",
+   "capital": false,
+   "population": 5213000,
+   "builtin": false,
+   "label": "Toronto"
+  },
+  {
+   "spec": "point:38.90,-77.01",
+   "name": "Washington, D.C.",
+   "country": "United States of America",
+   "continent": "North America",
+   "capital": true,
+   "population": 4338000,
+   "builtin": false,
+   "label": "Washington, D.C."
+  },
+  {
+   "spec": "point:-37.82,144.97",
+   "name": "Melbourne",
+   "country": "Australia",
+   "continent": "Oceania",
+   "capital": false,
+   "population": 4170000,
+   "builtin": false,
+   "label": "Melbourne"
+  },
+  {
+   "spec": "point:-33.9,151.2",
+   "name": "Sydney",
+   "country": "Australia",
+   "continent": "Oceania",
+   "capital": false,
+   "population": 4630000,
+   "builtin": true,
+   "label": "Sydney"
+  },
+  {
+   "spec": "point:-25.29,-57.64",
+   "name": "Asunción",
+   "country": "Paraguay",
+   "continent": "South America",
+   "capital": true,
+   "population": 1870000,
+   "builtin": false,
+   "label": "Asunción"
+  },
+  {
+   "spec": "point:-19.91,-43.92",
+   "name": "Belo Horizonte",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 5575000,
+   "builtin": false,
+   "label": "Belo Horizonte"
+  },
+  {
+   "spec": "point:4.60,-74.09",
+   "name": "Bogota",
+   "country": "Colombia",
+   "continent": "South America",
+   "capital": true,
+   "population": 7772000,
+   "builtin": false,
+   "label": "Bogota"
+  },
+  {
+   "spec": "point:-15.78,-47.92",
+   "name": "Brasília",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": true,
+   "population": 3716996,
+   "builtin": false,
+   "label": "Brasília"
+  },
+  {
+   "spec": "point:-34.60,-58.40",
+   "name": "Buenos Aires",
+   "country": "Argentina",
+   "continent": "South America",
+   "capital": true,
+   "population": 12795000,
+   "builtin": false,
+   "label": "Buenos Aires"
+  },
+  {
+   "spec": "point:-22.90,-47.10",
+   "name": "Campinas",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 2791000,
+   "builtin": false,
+   "label": "Campinas"
+  },
+  {
+   "spec": "point:10.50,-66.92",
+   "name": "Caracas",
+   "country": "Venezuela",
+   "continent": "South America",
+   "capital": true,
+   "population": 2985000,
+   "builtin": false,
+   "label": "Caracas"
+  },
+  {
+   "spec": "point:-25.42,-49.32",
+   "name": "Curitiba",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 3084000,
+   "builtin": false,
+   "label": "Curitiba"
+  },
+  {
+   "spec": "point:-3.75,-38.58",
+   "name": "Fortaleza",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 3602319,
+   "builtin": false,
+   "label": "Fortaleza"
+  },
+  {
+   "spec": "point:-2.22,-79.92",
+   "name": "Guayaquil",
+   "country": "Ecuador",
+   "continent": "South America",
+   "capital": false,
+   "population": 2514000,
+   "builtin": false,
+   "label": "Guayaquil"
+  },
+  {
+   "spec": "point:-16.50,-68.15",
+   "name": "La Paz",
+   "country": "Bolivia",
+   "continent": "South America",
+   "capital": true,
+   "population": 1590000,
+   "builtin": false,
+   "label": "La Paz"
+  },
+  {
+   "spec": "point:-12.05,-77.05",
+   "name": "Lima",
+   "country": "Peru",
+   "continent": "South America",
+   "capital": true,
+   "population": 8012000,
+   "builtin": false,
+   "label": "Lima"
+  },
+  {
+   "spec": "point:6.28,-75.58",
+   "name": "Medellín",
+   "country": "Colombia",
+   "continent": "South America",
+   "capital": false,
+   "population": 3297000,
+   "builtin": false,
+   "label": "Medellín"
+  },
+  {
+   "spec": "point:-34.86,-56.17",
+   "name": "Montevideo",
+   "country": "Uruguay",
+   "continent": "South America",
+   "capital": true,
+   "population": 1513000,
+   "builtin": false,
+   "label": "Montevideo"
+  },
+  {
+   "spec": "point:-30.05,-51.20",
+   "name": "Porto Alegre",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 3917000,
+   "builtin": false,
+   "label": "Porto Alegre"
+  },
+  {
+   "spec": "point:-0.21,-78.50",
+   "name": "Quito",
+   "country": "Ecuador",
+   "continent": "South America",
+   "capital": true,
+   "population": 1701000,
+   "builtin": false,
+   "label": "Quito"
+  },
+  {
+   "spec": "point:-8.07,-34.92",
+   "name": "Recife",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 3651000,
+   "builtin": false,
+   "label": "Recife"
+  },
+  {
+   "spec": "point:-22.92,-43.23",
+   "name": "Rio de Janeiro",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 11748000,
+   "builtin": false,
+   "label": "Rio de Janeiro"
+  },
+  {
+   "spec": "point:-12.97,-38.48",
+   "name": "Salvador",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 3484000,
+   "builtin": false,
+   "label": "Salvador"
+  },
+  {
+   "spec": "point:-33.45,-70.67",
+   "name": "Santiago",
+   "country": "Chile",
+   "continent": "South America",
+   "capital": true,
+   "population": 5720000,
+   "builtin": false,
+   "label": "Santiago"
+  },
+  {
+   "spec": "point:-23.5,-46.6",
+   "name": "São Paulo",
+   "country": "Brazil",
+   "continent": "South America",
+   "capital": false,
+   "population": 18845000,
+   "builtin": true,
+   "label": "São Paulo"
+  }
+ ]
+}

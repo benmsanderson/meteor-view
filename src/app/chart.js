@@ -102,8 +102,10 @@ function niceStep(range, targetTicks) {
  * @param {HTMLCanvasElement} canvas
  * @param {object} options
  * @param {number[]} options.x x values (years)
- * @param {Array<{label: string, colour: string, series: Float64Array[]}>}
- *   options.groups one per scenario, each one annual series per realization
+ * @param {Array<{label: string, colour: string, series?: Float64Array[], bands?: ArrayLike<number>[]}>}
+ *   options.groups one per scenario, each one annual series per realization,
+ *   or already reduced to its 5, 25, 50, 75 and 95% bands (the simple view's
+ *   spread across models, computed at build time)
  * @param {string} options.yLabel
  * @param {(value: number) => string} options.format tick formatter
  */
@@ -117,8 +119,9 @@ export function drawFanChart(canvas, { x, groups, yLabel, format }) {
   if (plotWidth <= 0 || plotHeight <= 0) return;
 
   const fans = groups.map((group) => {
-    const [p05, p25, p50, p75, p95] = quantiles(group.series, [0.05, 0.25, 0.5, 0.75, 0.95]);
-    return { ...group, p05, p25, p50, p75, p95 };
+    const [p05, p25, p50, p75, p95] =
+      group.bands ?? quantiles(group.series, [0.05, 0.25, 0.5, 0.75, 0.95]);
+    return { ...group, series: group.series ?? [], p05, p25, p50, p75, p95 };
   });
 
   // Scaled to what is drawn: every realization when one ensemble is shown

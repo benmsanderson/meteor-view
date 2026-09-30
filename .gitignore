@@ -10,5 +10,6 @@ scenario-work/
 data/meteor_*_v1.nc
 !data/meteor_NorESM2-MM_*_v1.nc
 data/models_v1.json
+data/summary_v1/
 .artifacts-cache/
 __pycache__/

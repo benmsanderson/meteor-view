@@ -165,10 +165,14 @@ export function projection(view, width, height) {
  * @param {object|null} options.box `{south, north, west, east}` selection
  * @param {string} options.variable which classes to use, a key of {@link CLASSES}
  * @param {object} options.view from {@link defaultView}
+ * @param {Array<{lat: number, lon: number}>} [options.cities] cities to mark
+ *   with a dot, already chosen for the zoom by {@link citiesAtZoom}
+ * @param {{lat: number, lon: number, label: string}|null} [options.selectedCity]
+ *   the city the page is showing, ringed and named at any zoom
  */
 export function drawMap(
   canvas,
-  { field, lat, lon, regions, coastlines = [], highlight, box, variable, view }
+  { field, lat, lon, regions, coastlines = [], highlight, box, variable, view, cities = [], selectedCity = null }
 ) {
   const ratio = window.devicePixelRatio || 1;
   const width = canvas.clientWidth;
@@ -279,6 +283,37 @@ export function drawMap(
       emphasis ? 2 : 0.5,
       emphasis ? 1 : 0.8
     );
+  }
+
+  // Cities: small dots, light on dark so they read on any colour of the
+  // field; the chosen one ringed and named.
+  for (const city of cities) {
+    context.beginPath();
+    context.arc(project.x(city.lon), project.y(city.lat), CITY_DOT, 0, 2 * Math.PI);
+    context.fillStyle = '#f8fafc';
+    context.fill();
+    context.lineWidth = 1;
+    context.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    context.stroke();
+  }
+  if (selectedCity) {
+    const x = project.x(selectedCity.lon);
+    const y = project.y(selectedCity.lat);
+    for (const [colour, lineWidth] of [['rgba(15, 23, 42, 0.9)', 4.5], ['#f8fafc', 2]]) {
+      context.beginPath();
+      context.arc(x, y, CITY_RING, 0, 2 * Math.PI);
+      context.lineWidth = lineWidth;
+      context.strokeStyle = colour;
+      context.stroke();
+    }
+    context.font = '600 12px ui-sans-serif, system-ui, -apple-system, sans-serif';
+    context.textBaseline = 'middle';
+    context.lineJoin = 'round';
+    context.lineWidth = 3;
+    context.strokeStyle = 'rgba(15, 23, 42, 0.85)';
+    context.strokeText(selectedCity.label, x + CITY_RING + 4, y);
+    context.fillStyle = '#f8fafc';
+    context.fillText(selectedCity.label, x + CITY_RING + 4, y);
   }
 
   if (box) {
@@ -443,23 +478,33 @@ export function valueAt({ field, lat, lon }, point) {
  * far too cheap to be worth indexing.
  */
 export function regionAt(regions, { lat, lon }) {
-  const target = wrapLon(lon);
   for (const region of regions) {
     for (const ring of region.rings) {
-      if (pointInRing(ring, target, lat)) return region;
+      if (pointInRing(ring, lon, lat)) return region;
     }
   }
   return null;
 }
 
+/**
+ * Whether a point is inside a ring, in the ring's own longitudes.
+ *
+ * AR6 rings that cross the antimeridian are split in the source data, so each
+ * piece lies within [-180, 180] and a vertex may sit exactly on ±180. Wrapping
+ * the vertices would move those to the other side of the world (wrapLon(180)
+ * is -180) and turn the North Pacific inside out, so the ring is left alone
+ * and the point is tried at its equivalent longitudes instead.
+ */
 function pointInRing(ring, lon, lat) {
+  const base = wrapLon(lon);
+  return [base, base + 360, base - 360].some((x) => pointInRawRing(ring, x, lat));
+}
+
+function pointInRawRing(ring, lon, lat) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i, i += 1) {
-    const [xi, yi] = [wrapLon(ring[i][0]), ring[i][1]];
-    const [xj, yj] = [wrapLon(ring[j][0]), ring[j][1]];
-    // A ring crossing the seam would give a spurious crossing here; AR6 rings
-    // that do are split in the source data, so each piece stays on one side.
-    if (Math.abs(xi - xj) > 180) continue;
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
     if (yi > lat !== yj > lat && lon < ((xj - xi) * (lat - yi)) / (yj - yi) + xi) {
       inside = !inside;
     }
@@ -531,4 +576,79 @@ export function drawColourBar(canvas, { edges, colours, label }) {
 
   context.textAlign = 'left';
   context.fillText(label, 0, barHeight + 16);
+}
+
+/**
+ * The map's own units, which are not the timeseries panel's.
+ *
+ * Temperature is a change in °C either way. Precipitation is a *percent*
+ * change, which is the convention for maps and the only readable choice: an
+ * absolute change of 0.2 mm/day is negligible in the tropics and
+ * transformative in a desert, so an absolute map mostly shows where it already
+ * rains.
+ */
+export function toMapUnits(field, variable, base, climatology) {
+  // Change from the baseline period: the forced response here, less its mean
+  // over the period. Both are relative to the same unforced state, so it
+  // cancels.
+  if (variable === 'tas') return Float64Array.from(field, (v, i) => v - base.mean[i]);
+  return Float64Array.from(field, (v, i) => {
+    // The denominator is the baseline period's own precipitation. The
+    // climatology is the model's 2015 field; the forced response carries it
+    // back or forward to the period.
+    const level = climatology[i] + base.mean[i] - base.at2015[i];
+    // Where there is essentially no rain, a percentage is meaningless rather
+    // than large, so leave it blank instead of rendering a spurious extreme.
+    if (!Number.isFinite(level) || level <= 1e-9) return NaN;
+    return ((v - base.mean[i]) / level) * 100;
+  });
+}
+
+/** A city's dot, and the ring around the chosen one, in CSS pixels. */
+const CITY_DOT = 3;
+const CITY_RING = 7;
+
+/**
+ * Which cities a map marks at a zoom. None over the whole world, where three
+ * hundred dots would bury the field; the capitals and the cities over five
+ * million from twice that; every one from four times.
+ */
+export const CITY_ZOOM = { some: 2, all: 4, population: 5e6 };
+
+/**
+ * @param {Array<{population: number, capital: boolean}>} cities
+ * @param {number} zoom
+ */
+export function citiesAtZoom(cities, zoom) {
+  if (zoom >= CITY_ZOOM.all) return cities;
+  if (zoom >= CITY_ZOOM.some) {
+    return cities.filter((c) => c.capital || c.population >= CITY_ZOOM.population);
+  }
+  return [];
+}
+
+/**
+ * The marked city nearest a point on the canvas, within a radius: what a
+ * click or a pointer near a dot means, ahead of the region under it.
+ *
+ * @param {Array<{lat: number, lon: number}>} cities those marked
+ * @param {object} view
+ * @param {number} width canvas width in CSS pixels
+ * @param {number} height
+ * @param {number} x pointer position in CSS pixels
+ * @param {number} y
+ * @param {number} radius in CSS pixels
+ */
+export function cityNear(cities, view, width, height, x, y, radius) {
+  const project = projection(view, width, height);
+  let best = null;
+  let bestDistance = radius;
+  for (const city of cities) {
+    const distance = Math.hypot(project.x(city.lon) - x, project.y(city.lat) - y);
+    if (distance <= bestDistance) {
+      best = city;
+      bestDistance = distance;
+    }
+  }
+  return best;
 }

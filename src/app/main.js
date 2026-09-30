@@ -11,6 +11,8 @@ import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
 import {
   boxFromDrag,
+  citiesAtZoom,
+  cityNear,
   clampView,
   classedScale,
   defaultView,
@@ -21,18 +23,32 @@ import {
   regrid,
   sameGrid,
   toLatLon,
+  toMapUnits,
   valueAt,
 } from './map.js';
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
+import {
+  loadSummary,
+  mapFromFile,
+  summaryMapFile,
+  summarySentence,
+} from './summary.js';
+import {
+  DEGREE_DAY_BASE,
+  annualSums,
+  loadDegreeDayCurves,
+  monthlyDegreeDays,
+  referenceClimate,
+} from '../lib/degree-days.js';
 import { assignModelColours, modelColour } from './models.js';
-import { placeLabel } from './places.js';
+import { placeLabel, registerCities } from './places.js';
+import { attachPlaceSearch } from './place-search.js';
 import {
   groupScenarios,
   scenarioColour,
   scenarioFamily,
   scenarioLabel,
-  scenarioShortLabel,
   selectedColour,
   sortScenarios,
 } from './scenarios.js';
@@ -70,10 +86,77 @@ const VARIABLES = {
     convert: (v) => v * SECONDS_PER_DAY,
     format: (v) => v.toFixed(1),
   },
+  // Degree days: derived from each temperature realization, bias-corrected
+  // against observations (src/lib/degree-days.js). Only where there are
+  // observed curves, so land regions and cities, and only where a run has a
+  // monthly cycle, so not a drawn region.
+  hdd: {
+    label: 'Heating degree days',
+    source: 'tas',
+    degreeDays: 'hdd',
+    yLabel: `Heating degree days per year (base ${DEGREE_DAY_BASE} °C)`,
+    baselined: false,
+    annual: annualSums,
+    convert: (v) => v,
+    format: (v) => v.toFixed(0),
+    seasonalNote: ' · degree days per month',
+  },
+  cdd: {
+    label: 'Cooling degree days',
+    source: 'tas',
+    degreeDays: 'cdd',
+    yLabel: `Cooling degree days per year (base ${DEGREE_DAY_BASE} °C)`,
+    baselined: false,
+    annual: annualSums,
+    convert: (v) => v,
+    format: (v) => v.toFixed(0),
+    seasonalNote: ' · degree days per month',
+  },
+};
+
+/** The emulated variable behind what is shown: temperature, for degree days. */
+function dataVariable(variable = elements.variable.value) {
+  return VARIABLES[variable]?.source ?? variable;
+}
+
+/**
+ * The simple view's two quantities: change from 1850-1900 across models, in
+ * °C and in percent of the 1850-1900 level (src/app/summary.js).
+ */
+const SIMPLE_VARIABLES = {
+  tas: {
+    label: 'Temperature',
+    yLabel: 'Change from 1850–1900 (°C)',
+    format: (v) => `${v.toFixed(1)}°`,
+  },
+  pr: {
+    label: 'Precipitation',
+    yLabel: 'Change from 1850–1900 (%)',
+    format: (v) => `${v.toFixed(0)}%`,
+  },
+  hdd: {
+    label: 'Heating degree days',
+    title: 'Heating degree days',
+    yLabel: `Heating degree days per year (base ${DEGREE_DAY_BASE} °C)`,
+    format: (v) => v.toFixed(0),
+  },
+  cdd: {
+    label: 'Cooling degree days',
+    title: 'Cooling degree days',
+    yLabel: `Cooling degree days per year (base ${DEGREE_DAY_BASE} °C)`,
+    format: (v) => v.toFixed(0),
+  },
 };
 
 const elements = {
   controls: document.getElementById('controls'),
+  viewButtons: document.querySelectorAll('.view-toggle button'),
+  summary: document.getElementById('summary'),
+  globalSummary: document.getElementById('global-summary'),
+  globalEmissions: document.getElementById('global-emissions'),
+  globalTemperature: document.getElementById('global-temperature'),
+  regionalControls: document.getElementById('regional-controls'),
+  simpleMapScenario: document.getElementById('simple-map-scenario'),
   compareBy: document.getElementById('compare-by'),
   modelPicker: document.getElementById('model-picker'),
   modelList: document.getElementById('model-list'),
@@ -138,6 +221,66 @@ let explorer;
 const explorers = new Map();
 /** Every model the site carries, from the manifest. */
 let availableModelList = [];
+/** Which view: 'simple', the spread across models, or 'expert', everything else. */
+let mode = DEFAULTS.mode;
+/** The simple view's cities (data/cities_v1.json), beyond the bundles' own. */
+let cities = [];
+/**
+ * The cities as the map marks them: where, what they are called, and what
+ * decides whether they show at a zoom. Built once the city list loads.
+ * @type {Array<{spec: string, lat: number, lon: number, label: string,
+ *   population: number, capital: boolean}>}
+ */
+let cityPoints = [];
+
+/** The cities the current view can show: every one in either, once exported. */
+function mapCities() {
+  return mode === 'simple'
+    ? cityPoints
+    : cityPoints.filter((c) => explorer.locations.includes(c.spec));
+}
+
+/** The chosen place, when it is a city, for the map's ring. */
+function selectedCity() {
+  const spec = elements.location.value;
+  if (customBox || !spec.startsWith('point:')) return null;
+  const [lat, lon] = spec.slice('point:'.length).split(',').map(Number);
+  return { lat, lon, label: placeLabel(spec) };
+}
+
+/** The marked city under a pointer, if any: it wins over the region below. */
+function cityUnder(canvas, clientX, clientY, touch) {
+  const rect = canvas.getBoundingClientRect();
+  return cityNear(
+    citiesAtZoom(mapCities(), mapView.zoom),
+    mapView,
+    rect.width,
+    rect.height,
+    clientX - rect.left,
+    clientY - rect.top,
+    touch ? 16 : 10
+  );
+}
+
+/** Show a city chosen on the map. */
+function selectCity(spec) {
+  customBox = null;
+  showBoxControls(false);
+  elements.location.value = spec;
+  run();
+  redrawMap();
+}
+
+/** The searchable box over the place menu; `sync` after the place changes. */
+let placeSearch = null;
+/** One place's multi-model summary per place asked for, fetched once. */
+const summaries = new Map();
+/** What the simple view last drew, kept for redraws and the chart download. */
+let lastSimple = null;
+/** What the simple view's world panel last drew, kept for redraws. */
+let lastGlobal = null;
+/** The simple view's map across models, one file per scenario, fetched once. */
+const summaryMaps = new Map();
 /** Whether a view compares scenarios under one model, or models under one scenario. */
 let compareBy = 'scenarios';
 /** The selected models, in manifest order. Never empty. */
@@ -177,16 +320,35 @@ function setStatus(message, state = '') {
 
 /** Populate the place and scenario menus from the bundle itself. */
 function populateControls() {
-  const groups = {
-    'Global': [],
-    'AR6 regions': [],
-    'Cities': [],
-  };
+  populatePlaces();
+  renderPickers();
+}
+
+/**
+ * The places on offer: the bundles' own in the expert view; in the simple
+ * view the regions and every city in data/cities_v1.json, by continent.
+ * Keeps the current place where it is still on offer; a city the expert view
+ * does not carry falls back to the region around it.
+ */
+function populatePlaces() {
+  const current = elements.location.value;
+  const groups = { 'Global': [], 'AR6 regions': [] };
   for (const spec of explorer.locations) {
     if (spec === 'global') groups['Global'].push(spec);
     else if (spec.startsWith('regional:')) groups['AR6 regions'].push(spec);
-    else groups['Cities'].push(spec);
   }
+  // Cities by continent, in either view: all of them in the simple view, and
+  // in the expert view those the bundles carry, which once they are
+  // exported with the full list is the same set.
+  const offered = new Set(placesOnOffer());
+  const listed = new Set();
+  for (const city of cities) {
+    if (!offered.has(city.spec)) continue;
+    (groups[`Cities: ${city.continent}`] ??= []).push(city.spec);
+    listed.add(city.spec);
+  }
+  const others = explorer.locations.filter((s) => s.startsWith('point:') && !listed.has(s));
+  if (others.length) groups['Cities'] = others;
 
   elements.location.replaceChildren();
   for (const [name, specs] of Object.entries(groups)) {
@@ -201,8 +363,23 @@ function populateControls() {
     }
     elements.location.append(group);
   }
+  if (!current) return;
+  if (placesOnOffer().includes(current)) {
+    elements.location.value = current;
+  } else {
+    const [lat, lon] = current.slice('point:'.length).split(',').map(Number);
+    const region = outlines.length ? regionAt(outlines, { lat, lon }) : null;
+    const spec = region ? `regional:${region.code}` : 'global';
+    elements.location.value = explorer.locations.includes(spec) ? spec : 'global';
+  }
+  placeSearch?.sync();
+}
 
-  renderPickers();
+/** Every place the current view offers. */
+function placesOnOffer() {
+  return mode === 'simple'
+    ? [...explorer.locations, ...cities.map((c) => c.spec)]
+    : explorer.locations;
 }
 
 /**
@@ -303,11 +480,11 @@ function showSelection() {
     swatch.style.background = on ? modelColour(swatch.dataset.item) : '';
   }
 
-  const summary = (chosen, label, short) =>
-    chosen.length === 1 ? label(chosen[0]) : `${short(chosen[0])} + ${chosen.length - 1} more`;
-  elements.scenarioSummary.textContent = summary(selection, scenarioLabel, scenarioShortLabel);
+  const summary = (chosen, label) =>
+    chosen.length === 1 ? label(chosen[0]) : `${label(chosen[0])} + ${chosen.length - 1} more`;
+  elements.scenarioSummary.textContent = summary(selection, scenarioLabel);
   elements.scenarioPicker.title = selection.map(scenarioLabel).join(', ');
-  elements.modelSummary.textContent = summary(models, (m) => m, (m) => m);
+  elements.modelSummary.textContent = summary(models, (m) => m);
   elements.modelPicker.title = models.join(', ');
 
   const items = comparedItems();
@@ -391,7 +568,7 @@ function seriesSpecs() {
     key: scenario,
     model,
     scenario,
-    label: scenarioShortLabel(scenario),
+    label: scenarioLabel(scenario),
     colour: selectedColour(scenario),
   }));
 }
@@ -411,7 +588,13 @@ function seriesSpecs() {
  */
 async function run() {
   if (!explorer) return;
+  // Whatever changed the place, the search box shows it.
+  placeSearch?.sync();
   const request = ++runRequest;
+  if (mode === 'simple') {
+    runSimple(request);
+    return;
+  }
   if (customBox) {
     runCustomRegion(request);
     return;
@@ -423,6 +606,16 @@ async function run() {
   const nRealizations = Number(elements.realizations.value);
   const specs = seriesSpecs();
   const noun = compareBy === 'models' ? 'models' : 'scenarios';
+
+  let curves = null;
+  if (spec.degreeDays) {
+    curves = await curvesFor(location);
+    if (request !== runRequest) return;
+    if (!curves) {
+      setStatus(DEGREE_DAYS_WHERE, 'error');
+      return;
+    }
+  }
 
   const started = performance.now();
   let done = 0;
@@ -440,11 +633,13 @@ async function run() {
     // Every series at once: the pool spreads them over its workers.
     results = await Promise.all(
       specs.map(({ model, scenario }) =>
-        runner.run(model, { variable, location, scenario, nRealizations, seed }).then((r) => {
-          done += 1;
-          progress();
-          return r;
-        })
+        runner
+          .run(model, { variable: dataVariable(variable), location, scenario, nRealizations, seed })
+          .then((r) => {
+            done += 1;
+            progress();
+            return r;
+          })
       )
     );
   } catch (error) {
@@ -461,6 +656,19 @@ async function run() {
     // is what takes out the part of two models' difference inherited from the
     // past.
     const own = loaded[i];
+    if (spec.degreeDays) {
+      // Each month's warming from the model's own 1995-2014 climate, read
+      // off the observed curve; `within`, since a realization brings its own
+      // year-to-year variability.
+      const reference = referenceClimate(own, location);
+      return {
+        ...specs[i],
+        series: result.series.map((series) =>
+          monthlyDegreeDays(curves, 'within', spec.degreeDays, series, reference)
+        ),
+        toAbsolute: 0,
+      };
+    }
     const offset = spec.baselined
       ? spec.convert(own.baselineOffset({ variable, location, baseline: elements.baseline.value }))
       : 0;
@@ -489,6 +697,281 @@ async function run() {
   );
 }
 
+/** Degree days need observations to correct them with, which only land has. */
+const DEGREE_DAYS_WHERE =
+  'Degree days are computed for cities and land regions, where observations ' +
+  'correct them; pick one of those, or another variable.';
+
+/** One place's observed degree-day curves, fetched once; null for none. */
+const degreeDayCurves = new Map();
+function curvesFor(location) {
+  if (!degreeDayCurves.has(location)) {
+    const pending = loadDegreeDayCurves(dataBase, location).catch((error) => {
+      degreeDayCurves.delete(location);
+      throw error;
+    });
+    degreeDayCurves.set(location, pending);
+  }
+  return degreeDayCurves.get(location);
+}
+
+/** One place's summary, fetched once; a failed fetch is retried next time. */
+function summaryFor(location) {
+  if (!summaries.has(location)) {
+    const pending = loadSummary(dataBase, location).catch((error) => {
+      summaries.delete(location);
+      throw error;
+    });
+    summaries.set(location, pending);
+  }
+  return summaries.get(location);
+}
+
+/**
+ * The simple view: the spread across every model of the change since
+ * 1850-1900, from summaries computed at build time, so nothing is generated
+ * here and no model's bundles beyond the first are fetched.
+ */
+async function runSimple(request) {
+  const variable = elements.variable.value;
+  const location = elements.location.value;
+  let summary;
+  try {
+    summary = await summaryFor(location);
+  } catch (error) {
+    if (request === runRequest) setStatus(error.message, 'error');
+    return;
+  }
+  if (request !== runRequest) return;
+  if (!summary) {
+    setStatus(
+      'The summary across models is missing: run `node scripts/build-summary.mjs`, ' +
+        'or use the Expert view.',
+      'error'
+    );
+    return;
+  }
+  const spec = SIMPLE_VARIABLES[variable];
+  const place = placeLabel(location);
+  if (!summary[variable]) {
+    // Degree days at sea or for the whole globe: say why rather than draw.
+    lastSimple = null;
+    syncUrl();
+    elements.chartTitle.textContent = `${spec.label} at ${place}`;
+    elements.summary.textContent = DEGREE_DAYS_WHERE;
+    elements.chartLegend.textContent = '';
+    elements.chart.getContext('2d').clearRect(0, 0, elements.chart.width, elements.chart.height);
+    setStatus('');
+    return;
+  }
+  const scenarios = selection.filter((name) => summary[variable][name]);
+  lastSimple = { variable, location, summary, scenarios };
+  syncUrl();
+
+  elements.chartTitle.textContent = spec.title
+    ? `${spec.title} at ${place}`
+    : `${spec.label} change at ${place}`;
+  elements.summary.textContent = summarySentence({
+    summary,
+    variable,
+    scenarios,
+    label: scenarioLabel,
+    place: location === 'global' ? 'global' : place,
+  });
+  drawChart();
+  showProvenance();
+  const [start, end] = summary.years;
+  setStatus(
+    `${elements.chartTitle.textContent} across ${summary.models.length} climate models, ` +
+      `${start}–${end}, under ${listOf(scenarios.map(scenarioLabel))}.`
+  );
+}
+
+/** The simple view's chart and legend, from the last summary drawn. */
+function drawSimpleChart() {
+  if (!lastSimple) return;
+  const { variable, summary, scenarios } = lastSimple;
+  const spec = SIMPLE_VARIABLES[variable];
+  const [start, end] = summary.years;
+  drawFanChart(elements.chart, {
+    x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
+    groups: scenarios.map((scenario) => ({
+      label: scenarioLabel(scenario),
+      colour: selectedColour(scenario),
+      bands: summary[variable][scenario].bands,
+    })),
+    yLabel: spec.yLabel,
+    format: spec.format,
+  });
+
+  const n = summary.models.length;
+  const colour = selectedColour(scenarios[0]);
+  const swatch = (kind, text) => {
+    const span = document.createElement('span');
+    span.className = `swatch swatch--${kind}`;
+    span.style.background = colour;
+    return [span, ` ${text} `];
+  };
+  if (scenarios.length === 1) {
+    elements.chartLegend.replaceChildren(
+      ...swatch('median', 'middle model'),
+      ...swatch('band', 'middle half'),
+      ...swatch('wide', `middle 90% of ${n} models`)
+    );
+  } else {
+    elements.chartLegend.textContent = `Middle model (line) and middle 90% of ${n} models (band)`;
+  }
+}
+
+/** Switch view, keeping every setting either view has for when it comes back. */
+function setMode(next) {
+  if (next === mode) return;
+  mode = next;
+  if (mode === 'simple' && compareBy === 'models') {
+    // The simple view compares scenarios; carry over the one being shown.
+    compareBy = 'scenarios';
+    elements.compareBy.value = compareBy;
+    models = models.slice(0, 1);
+    renderPickers();
+    showSelection();
+  }
+  showMode();
+  selectionChanged();
+}
+
+/** Show the controls and panels of the current view, and say which it is. */
+function showMode() {
+  document.documentElement.dataset.mode = mode;
+  // The simple view asks for the region's variable and place in the regional
+  // panel, under the world view; the expert view keeps every control together.
+  const moving = [elements.variable, elements.location].map((el) => el.closest('.control'));
+  if (mode === 'simple') {
+    elements.regionalControls.append(...moving);
+  } else {
+    const before = elements.scenarioPicker.closest('.control');
+    for (const control of moving) elements.controls.insertBefore(control, before);
+  }
+  if (explorer) populatePlaces();
+  if (mode === 'simple') setMapMode('pan');
+  else if (elements.mapPanel.dataset.map === 'ready') {
+    elements.loadMap.hidden = true;
+    elements.mapModes.hidden = false;
+  }
+  for (const button of elements.viewButtons) {
+    button.setAttribute('aria-pressed', String(button.dataset.view === mode));
+  }
+}
+
+/**
+ * The simple view's world panel: CO2 emissions of the selected scenarios, and
+ * global warming across models under each.
+ */
+async function renderGlobal() {
+  if (mode !== 'simple') return;
+  let summary;
+  try {
+    if (!scenarioEmissions) scenarioEmissions = await explorer.emissions();
+    summary = await summaryFor('global');
+  } catch (error) {
+    setStatus(error.message, 'error');
+    return;
+  }
+  if (!summary) return;
+  const scenarios = selection.filter((name) => summary.tas[name]);
+  lastGlobal = { summary, scenarios };
+  elements.globalSummary.textContent = summarySentence({
+    summary,
+    variable: 'tas',
+    scenarios,
+    label: scenarioLabel,
+    place: 'global',
+  });
+  drawGlobal();
+}
+
+function drawGlobal() {
+  if (mode !== 'simple' || !lastGlobal || !scenarioEmissions) return;
+  const { summary, scenarios } = lastGlobal;
+  const { years } = scenarioEmissions;
+  const shown = scenarios.filter((name) => scenarioEmissions.scenarios[name]);
+  drawScenarioContext(elements.globalEmissions, {
+    scenarios: shown.map((name) => ({
+      name,
+      years,
+      values: scenarioEmissions.scenarios[name].CO2,
+      label: scenarioLabel(name),
+      colour: selectedColour(name),
+      selectedColour: selectedColour(name),
+      labelled: true,
+    })),
+    selected: shown,
+    range: [years[0], years[years.length - 1]],
+    yLabel: CONTEXT_SERIES.CO2.label,
+    format: CONTEXT_SERIES.CO2.format,
+  });
+  const [start, end] = summary.years;
+  drawFanChart(elements.globalTemperature, {
+    x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
+    groups: scenarios.map((scenario) => ({
+      label: scenarioLabel(scenario),
+      colour: selectedColour(scenario),
+      bands: summary.tas[scenario].bands,
+    })),
+    yLabel: SIMPLE_VARIABLES.tas.yLabel,
+    format: SIMPLE_VARIABLES.tas.format,
+  });
+}
+
+/**
+ * The simple view's map: the middle model's change by 2081-2100 at every
+ * point, under one of the selected scenarios, computed at build time and
+ * drawn by the same code as the expert maps. Temperature, or precipitation
+ * when the region shows it; degree days map as the temperature behind them.
+ */
+async function renderSimpleMap() {
+  const menu = elements.simpleMapScenario;
+  const keep = selection.includes(menu.value) ? menu.value : selection[selection.length - 1];
+  menu.replaceChildren(
+    ...selection.map((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = scenarioLabel(name);
+      return option;
+    })
+  );
+  menu.value = keep;
+  const scenario = keep;
+  const variable = elements.variable.value === 'pr' ? 'pr' : 'tas';
+  const request = ++mapRequest;
+  let file;
+  try {
+    if (!outlines.length) [outlines, coastlines] = await Promise.all([explorer.regions(), explorer.coastlines()]);
+    if (!summaryMaps.has(scenario)) {
+      const response = await fetch(`${dataBase}${summaryMapFile(scenario)}`);
+      if (!response.ok) throw new Error(`no map across models for ${scenarioLabel(scenario)}`);
+      summaryMaps.set(scenario, await response.json());
+    }
+    file = summaryMaps.get(scenario);
+  } catch (error) {
+    setStatus(`Could not draw the map: ${error.message}`, 'error');
+    return;
+  }
+  if (request !== mapRequest || mode !== 'simple') return;
+  elements.mapPanel.dataset.map = 'ready';
+  lastMap = {
+    fields: [mapFromFile(file, variable)],
+    difference: null,
+    specs: [{ scenario, label: scenarioLabel(scenario) }],
+    variable,
+    year: `${file.period.from}–${file.period.to}`,
+    baseline: 'pi',
+  };
+  elements.mapTitle.textContent =
+    `${variable === 'tas' ? 'Temperature' : 'Precipitation'} change by ` +
+    `${file.period.from}–${file.period.to}, middle of ${file.models.length} models`;
+  redrawMap();
+}
+
 /** "Temperature at Global mean", naming the one scenario when models vary. */
 function chartTitle(spec, place, preposition) {
   const title = `${spec.label} ${preposition} ${place}`;
@@ -511,6 +994,9 @@ function yLabel(variable) {
 
 /** What a run's numbers are measured from, for captions and the CSV. */
 function baselineNote(variable) {
+  if (VARIABLES[variable].degreeDays) {
+    return `degree days per year, base ${DEGREE_DAY_BASE} °C, bias-corrected against W5E5 1995–2014`;
+  }
   if (!VARIABLES[variable].baselined) return 'absolute (no baseline)';
   const { label } = BASELINES[elements.baseline.value];
   const own = compareBy === 'models' ? ", each model's own" : '';
@@ -539,6 +1025,14 @@ function showBoxControls(visible) {
 async function runCustomRegion(request) {
   const variable = elements.variable.value;
   const spec = VARIABLES[variable];
+  if (spec.degreeDays) {
+    setStatus(
+      `${spec.label} need the monthly cycle, which a drawn region does not have: ` +
+        'pick a listed place, or choose Temperature.',
+      'error'
+    );
+    return;
+  }
   const { boxRegion } = await import('../lib/pattern.js');
 
   const runs = [];
@@ -603,6 +1097,10 @@ async function runCustomRegion(request) {
 
 /** The fan chart and its legend, from the last run. */
 function drawChart() {
+  if (mode === 'simple') {
+    drawSimpleChart();
+    return;
+  }
   if (!lastRun) return;
   const spec = VARIABLES[lastRun.variable];
   drawFanChart(elements.chart, {
@@ -610,7 +1108,7 @@ function drawChart() {
     groups: lastRun.runs.map(({ label, colour, series }) => ({
       label,
       colour,
-      series: series.map(annualMeans),
+      series: series.map(spec.annual ?? annualMeans),
     })),
     yLabel: yLabel(lastRun.variable),
     format: spec.format,
@@ -715,13 +1213,16 @@ function drawSeasonalPanel() {
   }
   if (lastRun.runs.length > 1) items.push('(2081–2100)');
   // Says so, because the chart above is a change and this is not.
-  items.push(lastRun.variable === 'tas' ? ' · absolute, °C' : ' · absolute, mm/day');
+  items.push(
+    spec.seasonalNote ?? (lastRun.variable === 'tas' ? ' · absolute, °C' : ' · absolute, mm/day')
+  );
   elements.seasonalLegend.replaceChildren(...items);
 }
 
 /** The current control state, as the URL records it. */
 function currentState() {
   return {
+    mode,
     compareBy,
     models,
     variable: elements.variable.value,
@@ -748,6 +1249,8 @@ function syncUrl() {
 
 /** Apply state parsed from the URL to the controls. */
 function applyState(state) {
+  mode = state.mode;
+  showMode();
   compareBy = state.compareBy;
   elements.compareBy.value = compareBy;
   models = availableModelList.filter((m) => state.models.includes(m));
@@ -755,7 +1258,8 @@ function applyState(state) {
   renderPickers();
   elements.baseline.value = state.baseline;
   elements.variable.value = state.variable;
-  if (explorer.locations.includes(state.location)) elements.location.value = state.location;
+  populatePlaces();
+  if (placesOnOffer().includes(state.location)) elements.location.value = state.location;
   selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
   if (!selection.length) {
     const fallback = DEFAULTS.scenarios.filter((name) => explorer.scenarios.includes(name));
@@ -806,7 +1310,7 @@ function attachActions() {
     const csv = toCsv({
       years: lastRun.years,
       runs: lastRun.runs,
-      bundle: explorer.bundles[lastRun.variable],
+      bundle: explorer.bundles[dataVariable(lastRun.variable)],
       models: [...new Set(lastRun.runs.map((r) => r.model))],
       variable: lastRun.variable,
       location: lastRun.location,
@@ -820,6 +1324,22 @@ function attachActions() {
   });
 
   elements.downloadPng.addEventListener('click', async () => {
+    if (mode === 'simple') {
+      if (!lastSimple) return;
+      const { variable, location, summary, scenarios } = lastSimple;
+      const blob = await chartToPng(elements.chart, {
+        title: elements.chartTitle.textContent,
+        subtitle:
+          `${summary.models.length} climate models · ${scenarios.map(scenarioLabel).join(', ')} · ` +
+          `change from 1850–1900 · METEOR explorer`,
+      });
+      download(
+        `${filenameStem({ cmip6Model: 'multimodel', variable, location, scenario: scenarios })}.png`,
+        blob
+      );
+      flash(elements.downloadPng, 'Chart saved');
+      return;
+    }
     if (!lastRun) return;
     const spec = VARIABLES[lastRun.variable];
     const blob = await chartToPng(elements.chart, {
@@ -867,7 +1387,7 @@ async function loadMap() {
       explorer.regions(),
       explorer.coastlines(),
     ]);
-    await explorer.patterns(elements.variable.value);
+    await explorer.patterns(dataVariable());
     elements.mapPanel.dataset.map = 'ready';
     elements.loadMap.hidden = true;
     elements.mapModes.hidden = false;
@@ -878,32 +1398,6 @@ async function loadMap() {
     elements.loadMap.disabled = false;
     elements.loadMap.textContent = 'Load map (2 MB)';
   }
-}
-
-/**
- * The map's own units, which are not the timeseries panel's.
- *
- * Temperature is a change in °C either way. Precipitation is a *percent*
- * change, which is the convention for maps and the only readable choice: an
- * absolute change of 0.2 mm/day is negligible in the tropics and
- * transformative in a desert, so an absolute map mostly shows where it already
- * rains.
- */
-function toMapUnits(field, variable, base, climatology) {
-  // Change from the baseline period: the forced response here, less its mean
-  // over the period. Both are relative to the same unforced state, so it
-  // cancels.
-  if (variable === 'tas') return Float64Array.from(field, (v, i) => v - base.mean[i]);
-  return Float64Array.from(field, (v, i) => {
-    // The denominator is the baseline period's own precipitation. The
-    // climatology is the model's 2015 field; the forced response carries it
-    // back or forward to the period.
-    const level = climatology[i] + base.mean[i] - base.at2015[i];
-    // Where there is essentially no rain, a percentage is meaningless rather
-    // than large, so leave it blank instead of rendering a spurious extreme.
-    if (!Number.isFinite(level) || level <= 1e-9) return NaN;
-    return ((v - base.mean[i]) / level) * 100;
-  });
 }
 
 /** Every map canvas, in grid order. */
@@ -924,10 +1418,15 @@ let mapRequest = 0;
  * so B is interpolated onto A's before the difference is taken.
  */
 async function renderMap() {
+  if (mode === 'simple') {
+    await renderSimpleMap();
+    return;
+  }
   if (elements.mapPanel.dataset.map !== 'ready') return;
   const request = ++mapRequest;
 
-  const variable = elements.variable.value;
+  // Degree days map as the temperature they come from.
+  const variable = dataVariable();
   const year = Number(elements.mapYear.value);
   const baseline = elements.baseline.value;
   const specs = seriesSpecs();
@@ -1145,7 +1644,11 @@ function attachMap() {
       }
 
       if (!gesture) {
-        if (event.pointerType === 'mouse') showReadout(toLatLon(canvas, event, mapView));
+        if (event.pointerType === 'mouse') {
+          const city = cityUnder(canvas, event.clientX, event.clientY, false);
+          canvas.style.cursor = city ? 'pointer' : mapMode === 'pan' ? 'grab' : 'crosshair';
+          showReadout(toLatLon(canvas, event, mapView), city);
+        }
         return;
       }
       if (gesture.canvas !== canvas) return;
@@ -1242,8 +1745,10 @@ function attachMap() {
         clientY: event.clientY,
         timer: setTimeout(() => {
           pendingTap = null;
-          selectRegionAt(to);
-          if (touch) showReadout(to);
+          const city = cityUnder(canvas, event.clientX, event.clientY, touch);
+          if (city) selectCity(city.spec);
+          else selectRegionAt(to);
+          if (touch) showReadout(to, city);
         }, DOUBLE_TAP_MS),
       };
     });
@@ -1304,9 +1809,11 @@ function mapValueText(value, variable, difference = false) {
  * In a comparison it reads all three at once, which is the point of having
  * them side by side: the colours say roughly, this says exactly.
  */
-function showReadout(point) {
+function showReadout(point, city = null) {
   if (!lastMap) return;
-  const prompt = compare ? 'Point at any map to read all three.' : '';
+  // Near a city's dot, read the city: its name, and the values where it is.
+  if (point && city) point = { lat: city.lat, lon: city.lon };
+  const prompt = lastMap.fields.length === 2 ? 'Point at any map to read all three.' : '';
   if (!point) {
     elements.mapReadout.textContent = prompt;
     return;
@@ -1328,7 +1835,7 @@ function showReadout(point) {
     dd.textContent = value;
     list.append(dt, dd);
   }
-  elements.mapReadout.replaceChildren(`${ns} ${ew}`, list);
+  elements.mapReadout.replaceChildren(city ? `${city.label}, ${ns} ${ew}` : `${ns} ${ew}`, list);
 }
 
 /**
@@ -1395,7 +1902,7 @@ async function renderContext() {
   drawScenarioContext(elements.context, {
     scenarios: series.map((s) => ({
       ...s,
-      label: scenarioShortLabel(s.name),
+      label: scenarioLabel(s.name),
       colour: scenarioColour(s.name, neutral),
       selectedColour: selectedColour(s.name, neutral),
       // The CMIP7 markers are the subject and get named; the SSPs are the
@@ -1437,6 +1944,8 @@ function redrawMap() {
       : null,
     box: customBox,
     view: mapView,
+    cities: citiesAtZoom(mapCities(), mapView.zoom),
+    selectedCity: selectedCity(),
   };
   const units = lastMap.variable === 'tas' ? '°C' : '%';
   const noun = lastMap.variable === 'tas' ? 'Temperature' : 'Precipitation';
@@ -1486,6 +1995,7 @@ function redrawMap() {
 
 /** Redraw everything from the last run, without regenerating it. */
 function redraw() {
+  drawGlobal();
   redrawMap();
   renderContext();
   drawChart();
@@ -1509,10 +2019,15 @@ async function selectionChanged() {
   }
   run();
   renderContext();
+  renderGlobal();
   renderMap();
 }
 
 function attachControls() {
+  for (const button of elements.viewButtons) {
+    button.addEventListener('click', () => setMode(button.dataset.view));
+  }
+
   // The compare menus pick which two of the selection the maps show. Choosing
   // the scenario already in the other slot swaps the two rather than
   // comparing a scenario with itself.
@@ -1543,7 +2058,7 @@ function attachControls() {
     });
   }
 
-  elements.controls.addEventListener('change', async (event) => {
+  const onChange = async (event) => {
     if (event.target === elements.compareBy) {
       // Switching what is compared keeps the first of each: the first model,
       // and the first scenario, carry over as the single choice.
@@ -1569,7 +2084,11 @@ function attachControls() {
     }
     run();
     renderMap();
-  });
+  };
+  // The variable and place live in the regional panel in the simple view.
+  elements.controls.addEventListener('change', onChange);
+  elements.regionalControls.addEventListener('change', onChange);
+  elements.simpleMapScenario.addEventListener('change', renderSimpleMap);
 
   // Redraw whenever a canvas changes size, which covers window resizes and,
   // more importantly, the first paint: a canvas measured before its
@@ -1586,11 +2105,21 @@ function attachControls() {
   observer.observe(elements.seasonal);
   for (const canvas of mapCanvases()) observer.observe(canvas);
   observer.observe(elements.context);
+  observer.observe(elements.globalEmissions);
+  observer.observe(elements.globalTemperature);
 }
 
 /** Which models, trained how, from which version of METEOR. */
 function showProvenance() {
   const bundle = explorer.bundles.tas;
+  if (mode === 'simple') {
+    const list = lastSimple?.summary.models ?? [];
+    elements.provenance.textContent = list.length
+      ? `Models: ${list.join(', ')}. Forced responses from METEOR ${bundle.attrs.meteor_version}, ` +
+        `schema v${bundle.schemaVersion}, each measured from its own 1850–1900 level.`
+      : '';
+    return;
+  }
   const which = compareBy === 'models' ? models.join(', ') : bundle.attrs.cmip6_model;
   elements.provenance.textContent =
     `Bundles: ${which}, trained on ${bundle.attrs.training_scenario}, ` +
@@ -1621,6 +2150,19 @@ async function start() {
   // locations and scenarios exist.
   const first = fromQuery(window.location.search, { models: availableModelList });
   compareBy = first.compareBy;
+  mode = first.mode;
+  // The simple view's cities; without the file, the bundles' own.
+  try {
+    const response = await fetch(`${dataBase}cities_v1.json`);
+    cities = response.ok ? (await response.json()).cities : [];
+  } catch {
+    cities = [];
+  }
+  registerCities(cities);
+  cityPoints = cities.map((c) => {
+    const [lat, lon] = c.spec.slice('point:'.length).split(',').map(Number);
+    return { spec: c.spec, lat, lon, label: c.label, population: c.population, capital: c.capital };
+  });
   try {
     explorer = await explorerFor(first.models[0]);
   } catch (error) {
@@ -1629,12 +2171,21 @@ async function start() {
   }
 
   populateControls();
+  const byCity = new Map(cities.map((c) => [c.spec, `${c.country}, ${c.continent}`]));
+  const population = new Map(cities.map((c) => [c.spec, c.population]));
+  placeSearch = attachPlaceSearch({
+    select: elements.location,
+    input: document.getElementById('place-search'),
+    list: document.getElementById('place-results'),
+    keywords: (spec) => byCity.get(spec) ?? '',
+    weight: (spec) => population.get(spec) ?? 0,
+  });
 
   // Apply the shared link before the first run, so a link opens on what it
   // describes rather than flashing the default view first.
   applyState(
     fromQuery(window.location.search, {
-      locations: explorer.locations,
+      locations: [...explorer.locations, ...cities.map((c) => c.spec)],
       scenarios: explorer.scenarios,
       models: availableModelList,
     })
@@ -1650,6 +2201,10 @@ async function start() {
 
   run();
   renderContext();
+  // The simple view opens with its world panel and map; the expert map waits
+  // for its button, since it is 2 MB.
+  renderGlobal();
+  if (mode === 'simple') renderMap();
 }
 
 start();
