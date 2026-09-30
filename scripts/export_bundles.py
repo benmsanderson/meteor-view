@@ -304,20 +304,22 @@ def register_model(out, model):
 
 
 #: Trace precipitation, kg m-2 s-1 (about 0.03 mm a year): the least a month
-#: is taken to have when fitting the gamma distribution.
+#: is taken to have when fitting the gamma distribution (see below).
 TRACE_PRECIPITATION = 1e-9
 
 
 def floor_transform_reference():
     """
-    Let the precipitation transform fit a hyper-arid city.
+    Let the precipitation transform fit every city.
 
-    METEOR fits a gamma distribution to each location's monthly precipitation,
-    and a gamma cannot take a month of exactly zero, which a model can have at
-    a desert gridbox (Doha, Riyadh, Lima). Such a month is given a trace
-    amount instead, for the fit only: patterns and noise, which are
-    anomalies, are untouched, and no value above the trace changes, so any
-    location that fitted before fits the same.
+    METEOR fits a gamma distribution to each location's monthly precipitation
+    and refuses any negative value. CMIP6 output has a few: round-off of order
+    -1e-25 kg m-2 s-1 at a hundred or so dry gridboxes per model, which the
+    cities N'Djamena, Muscat, Tripoli, Abu Dhabi, Ashgabat and Baghdad land on
+    in one model or another. Such a value is raised to a trace amount instead,
+    for the fit only: patterns and noise, which are anomalies, are untouched,
+    and no value above the trace changes, so any location that fitted before
+    fits the same.
     """
     from meteor import timeseries_bundle as tb
 
