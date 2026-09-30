@@ -211,3 +211,34 @@ describe('a city beyond the bundles', async () => {
     expect(explorer.landPercent[nearest]).toBeLessThan(50);
   });
 });
+
+describe('the expert view\'s multi-model mean', async () => {
+  const { summarizeExpert, EXPERT_YEARS } = await import('../src/app/summary.js');
+  const { degreeDayFile } = await import('../src/lib/degree-days.js');
+  const curves = JSON.parse(readFileSync(new URL(degreeDayFile(LONDON), DATA)));
+  const one = new Map([['NorESM2-MM', explorer]]);
+  const file = summarizeExpert(one, LONDON, curves);
+  const entry = file.scenarios['cmip7-high'];
+
+  it('is the model itself when there is only one', () => {
+    const change = modelChange(explorer, { variable: 'tas', location: LONDON, scenario: 'cmip7-high' });
+    const at = (year) => change[year - start];
+    expect(entry.tas_pi.mean[0]).toBeCloseTo(at(EXPERT_YEARS.start), 3);
+    expect(entry.tas_pi.mean.at(-1)).toBeCloseTo(at(EXPERT_YEARS.end), 3);
+    for (const band of entry.tas_pi.bands) expect(band.at(-1)).toBeCloseTo(at(EXPERT_YEARS.end), 3);
+  });
+
+  it('measures from 2005-2024 by a constant shift, as the expert view does', () => {
+    const shift = entry.tas_pi.mean.map((v, t) => v - entry.tas_recent.mean[t]);
+    for (const s of shift) expect(s).toBeCloseTo(shift[0], 2);
+    expect(shift[0]).toBeGreaterThan(0.3); // 2005-2024 was already warmer than 1850-1900
+  });
+
+  it('carries precipitation in mm/day, degree days, and seasonal climatologies', () => {
+    expect(entry.pr.mean[0]).toBeGreaterThan(1);
+    expect(entry.pr.mean[0]).toBeLessThan(4); // London, a couple of mm a day
+    expect(entry.hdd.mean[0]).toBeGreaterThan(1500);
+    expect(entry.seasonal.tas.late[6]).toBeGreaterThan(entry.seasonal.tas.early[6]); // July warms
+    expect(entry.seasonal.tas.early).toHaveLength(12);
+  });
+});

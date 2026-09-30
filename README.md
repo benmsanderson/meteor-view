@@ -132,6 +132,14 @@ for each month is applied to the observed daily temperatures of 1995–2014
 view shows the spread across models; the expert view runs each realization
 through the same curves. Details in `src/lib/degree-days.js`.
 
+The expert view's model menu also offers the **multi-model mean**: the
+mean of every model's forced response as the line and their spread as the
+band, on the expert view's terms (either baseline, precipitation in mm/day,
+degree days, the seasonal panel, maps at any year, CSV). It can be shown on
+its own or compared with individual models. It too is precomputed by
+`scripts/build-summary.mjs` (`data/summary_v1/expert/`), which skips itself
+when none of its inputs has changed.
+
 The **expert view** is everything below: one model's internal variability,
 model comparison, baselines, maps, drawn regions and exports. The bare URL
 opens the simple view; every earlier link carries no `view=` and opens the

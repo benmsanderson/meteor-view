@@ -224,7 +224,7 @@ export async function summarizeCity(explorers, city, curves = null) {
  * pattern loadings, read directly rather than projected over the whole grid.
  */
 const pcsCache = new WeakMap();
-async function cachedPoint(explorer, variable, scenario, index) {
+async function cachedPcs(explorer, variable, scenario) {
   const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
   const artifact = await explorer.patterns(variable);
   if (!pcsCache.has(artifact)) pcsCache.set(artifact, new Map());
@@ -235,7 +235,11 @@ async function cachedPoint(explorer, variable, scenario, index) {
       stepResponsePcs(patternKernel(artifact), explorer.bundles[variable].forcing(scenario))
     );
   }
-  const { pcs, nTimes } = byScenario.get(scenario);
+  return { artifact, ...byScenario.get(scenario) };
+}
+
+async function cachedPoint(explorer, variable, scenario, index) {
+  const { artifact, pcs, nTimes } = await cachedPcs(explorer, variable, scenario);
   const nExp = artifact.dims.exp;
   const nModes = artifact.nModes;
   const space = artifact.nLat * artifact.nLon;
@@ -406,11 +410,9 @@ export function summaryMapFile(scenario) {
  * @returns {Promise<{field: Float64Array, lat: Float64Array, lon: Float64Array}>}
  */
 export async function modelMapChange(explorer, { variable, scenario, period = SUMMARY_PERIODS.end }) {
-  const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
   const { toMapUnits } = await import('./map.js');
-  const artifact = await explorer.patterns(variable);
   const bundle = explorer.bundles[variable];
-  const { pcs } = stepResponsePcs(patternKernel(artifact), bundle.forcing(scenario));
+  const { artifact, pcs } = await cachedPcs(explorer, variable, scenario);
   const stride = artifact.dims.exp * artifact.nModes;
   const mean = new Float64Array(stride);
   for (let year = period.from; year <= period.to; year += 1) {
@@ -481,4 +483,223 @@ export function mapFromFile(file, variable) {
     lat: axis(file.lat),
     lon: axis(file.lon),
   };
+}
+
+
+/*
+ * The expert view's multi-model mean.
+ *
+ * The expert view offers the mean across models as one more "model": its line
+ * is the mean of the models' forced responses and its band their spread, on
+ * the expert view's own terms (either baseline, precipitation in mm/day,
+ * degree days, a seasonal panel and maps at any year). Like the simple view's
+ * spread it is computed at build time, so the page never loads every model.
+ */
+
+/** The expert view's window. */
+export const EXPERT_YEARS = { start: 2015, end: 2100 };
+
+/** The years the mean maps are stored at; the page interpolates between. */
+export const EXPERT_MAP_YEARS = [2015, 2020, 2030, 2040, 2050, 2060, 2070, 2080, 2090, 2100];
+
+/** The expert-view files: one per place, one per scenario's maps, one of baselines. */
+export function expertFile(location) {
+  return `summary_v1/expert/${location.replace(/[^A-Za-z0-9.-]/g, '_')}.json`;
+}
+export function expertMapFile(scenario) {
+  return `summary_v1/expert/map_${scenario.replace(/[^A-Za-z0-9.-]/g, '_')}.json`;
+}
+export const EXPERT_BASELINE_MAP = 'summary_v1/expert/map_baseline_recent.json';
+
+const SECONDS_PER_DAY = 86400;
+
+/** Mean and quantiles across models, per year. */
+function meanAndBands(series, digits) {
+  const n = series[0].length;
+  const mean = Array.from({ length: n }, (_, t) => series.reduce((s, x) => s + x[t], 0) / series.length);
+  return {
+    mean: mean.map(round(digits)),
+    bands: quantiles(series, SUMMARY_QUANTILES).map((q) => Array.from(q, round(digits))),
+  };
+}
+
+/**
+ * One place's multi-model mean for the expert view, every scenario.
+ *
+ * Per model: temperature change from 1850-1900 and from 2005-2024 (each from
+ * the model's own period mean under the baseline scenario, as the expert view
+ * takes a baseline); precipitation as the model's absolute level in mm/day
+ * (its 2015 level carried by the forced response), as the expert view shows
+ * precipitation; and, where there are observations, bias-corrected degree
+ * days. Then the monthly climatology of 2015-2034 and 2081-2100 for the
+ * seasonal panel: absolute temperature and degree days.
+ *
+ * @param {Map<string, import('./explorer.js').Explorer>} explorers
+ * @param {string} location a place the bundles carry
+ * @param {object|null} curves its observed degree-day curves
+ */
+export function summarizeExpert(explorers, location, curves = null) {
+  const models = [...explorers.keys()];
+  const first = explorers.get(models[0]);
+  const { start, end } = EXPERT_YEARS;
+  const out = {
+    format: 'meteor-view-multi-model-mean',
+    schema_version: 1,
+    location,
+    models,
+    years: [start, end],
+    quantiles: SUMMARY_QUANTILES,
+    scenarios: {},
+  };
+  const window = (series, first0) => series.slice(start - first0, end - first0 + 1);
+  const perModel = new Map();
+  for (const model of models) {
+    const explorer = explorers.get(model);
+    const y0 = explorer.bundles.tas.forcingYearStart;
+    const reference = explorer.baselineScenario;
+    const recent = periodMean(
+      modelChange(explorer, { variable: 'tas', location, scenario: reference }),
+      y0,
+      BASELINES.recent
+    );
+    const pr = explorer.bundles.pr;
+    const training = pr.scenarios.includes(pr.attrs.training_scenario) ? pr.attrs.training_scenario : reference;
+    const at2015 = forcedResponse(pr, location, pr.forcing(training))[2015 - pr.forcingYearStart];
+    const level = pr.get('transform_baseline')[pr.locationIndex(location)];
+    const climate = curves ? referenceClimate(explorer, location) : null;
+    const offset = explorer.absoluteOffset({ variable: 'tas', location });
+    perModel.set(model, { explorer, y0, recent, at2015, level, climate, offset });
+  }
+  const monthlyMeans = (monthly, from, to, y0, shift = 0) => {
+    const outMonths = new Array(12).fill(0);
+    for (let y = from; y <= to; y += 1) {
+      for (let m = 0; m < 12; m += 1) outMonths[m] += (monthly[(y - y0) * 12 + m] + shift) / (to - from + 1);
+    }
+    return outMonths;
+  };
+  for (const scenario of first.scenarios) {
+    const series = { tas_pi: [], tas_recent: [], pr: [], hdd: [], cdd: [] };
+    const seasonal = { tas: [], hdd: [], cdd: [] };
+    for (const model of models) {
+      const { explorer, y0, recent, at2015, level, climate, offset } = perModel.get(model);
+      const tas = modelChange(explorer, { variable: 'tas', location, scenario });
+      series.tas_pi.push(window(tas, y0));
+      series.tas_recent.push(window(tas.map((v) => v - recent), y0));
+      const pr = explorer.bundles.pr;
+      const forced = forcedResponse(pr, location, pr.forcing(scenario));
+      series.pr.push(window(forced.map((v) => (level + v - at2015) * SECONDS_PER_DAY), pr.forcingYearStart));
+      const monthly = deterministicMonthly(explorer, location, scenario);
+      seasonal.tas.push({
+        early: monthlyMeans(monthly, 2015, 2034, y0, offset),
+        late: monthlyMeans(monthly, 2081, 2100, y0, offset),
+      });
+      if (curves) {
+        for (const index of ['hdd', 'cdd']) {
+          const days = monthlyDegreeDays(curves, 'climate', index, monthly, climate);
+          series[index].push(window(annualSums(days), y0));
+          seasonal[index].push({ early: monthlyMeans(days, 2015, 2034, y0), late: monthlyMeans(days, 2081, 2100, y0) });
+        }
+      }
+    }
+    const entry = {
+      tas_pi: meanAndBands(series.tas_pi, 3),
+      tas_recent: meanAndBands(series.tas_recent, 3),
+      pr: meanAndBands(series.pr, 4),
+      seasonal: {},
+    };
+    if (curves) {
+      entry.hdd = meanAndBands(series.hdd, 0);
+      entry.cdd = meanAndBands(series.cdd, 0);
+    }
+    for (const [key, list] of Object.entries(seasonal)) {
+      if (!list.length) continue;
+      const digits = key === 'tas' ? 2 : 1;
+      const avg = (part) => Array.from({ length: 12 }, (_, m) => round(digits)(list.reduce((s, x) => s + x[part][m], 0) / list.length));
+      entry.seasonal[key] = { early: avg('early'), late: avg('late') };
+    }
+    out.scenarios[scenario] = entry;
+  }
+  return out;
+}
+
+/** The mean across models, point by point, of maps on the common grid. */
+function meanField(fields, digits) {
+  const n = fields[0].length;
+  const out = new Array(n);
+  for (let k = 0; k < n; k += 1) {
+    let sum = 0;
+    let count = 0;
+    for (const field of fields) {
+      if (Number.isFinite(field[k])) {
+        sum += field[k];
+        count += 1;
+      }
+    }
+    out[k] = count * 2 < fields.length ? null : Number((sum / count).toFixed(digits));
+  }
+  return out;
+}
+
+/**
+ * One scenario's multi-model mean maps, from 1850-1900, at the stored years:
+ * temperature in °C and precipitation in percent, on the common grid.
+ */
+export async function summarizeExpertMap(explorers, scenario) {
+  const { regrid } = await import('./map.js');
+  const { lat, lon } = SUMMARY_GRID;
+  const out = {
+    format: 'meteor-view-multi-model-mean-map',
+    schema_version: 1,
+    scenario,
+    models: [...explorers.keys()],
+    baseline: BASELINES.pi,
+    years: EXPERT_MAP_YEARS,
+    lat: [lat[0], lat[1] - lat[0], lat.length],
+    lon: [lon[0], lon[1] - lon[0], lon.length],
+  };
+  for (const variable of ['tas', 'pr']) {
+    out[variable] = [];
+    for (const year of EXPERT_MAP_YEARS) {
+      const fields = [];
+      for (const explorer of explorers.values()) {
+        const map = await modelMapChange(explorer, { variable, scenario, period: { from: year, to: year } });
+        fields.push(regrid(map, lat, lon));
+      }
+      out[variable].push(meanField(fields, variable === 'tas' ? 2 : 1));
+    }
+  }
+  return out;
+}
+
+/**
+ * What the recent baseline is on the maps' terms: each model's 2005-2024
+ * change from 1850-1900 under the baseline scenario, averaged. Temperature
+ * maps from 2005-2024 are the 1850-1900 maps less this, exactly; precipitation
+ * percentages are rebased with it, which for a mean across models is close
+ * rather than exact.
+ */
+export async function summarizeExpertBaselineMap(explorers) {
+  const { regrid } = await import('./map.js');
+  const { lat, lon } = SUMMARY_GRID;
+  const out = {
+    format: 'meteor-view-multi-model-mean-baseline',
+    schema_version: 1,
+    models: [...explorers.keys()],
+    period: BASELINES.recent,
+    lat: [lat[0], lat[1] - lat[0], lat.length],
+    lon: [lon[0], lon[1] - lon[0], lon.length],
+  };
+  for (const variable of ['tas', 'pr']) {
+    const fields = [];
+    for (const explorer of explorers.values()) {
+      const map = await modelMapChange(explorer, {
+        variable,
+        scenario: explorer.baselineScenario,
+        period: BASELINES.recent,
+      });
+      fields.push(regrid(map, lat, lon));
+    }
+    out[variable] = meanField(fields, variable === 'tas' ? 2 : 1);
+  }
+  return out;
 }

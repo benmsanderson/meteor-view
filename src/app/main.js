@@ -7,8 +7,8 @@
  * maps, the context figure, drawing — is quick and stays on the main thread.
  */
 
-import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './chart.js';
-import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
+import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal, quantiles } from './chart.js';
+import { chartToPng, download, downloadText, filenameStem, toAnnualCsv, toCsv } from './export.js';
 import {
   boxFromDrag,
   citiesAtZoom,
@@ -29,6 +29,9 @@ import {
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
 import {
+  EXPERT_BASELINE_MAP,
+  expertFile,
+  expertMapFile,
   loadSummary,
   mapFromFile,
   summaryMapFile,
@@ -41,7 +44,7 @@ import {
   monthlyDegreeDays,
   referenceClimate,
 } from '../lib/degree-days.js';
-import { assignModelColours, modelColour } from './models.js';
+import { MULTI_MODEL_MEAN, assignModelColours, modelColour } from './models.js';
 import { placeLabel, registerCities } from './places.js';
 import { attachPlaceSearch } from './place-search.js';
 import { dataUrl } from '../lib/data-url.js';
@@ -401,8 +404,11 @@ function renderPickers() {
   });
   fillPicker(elements.modelList, {
     name: 'model',
-    groups: [{ family: 'CMIP6 models', names: availableModelList }],
-    label: (name) => name,
+    groups: [
+      { family: 'Across models', names: [MULTI_MODEL_MEAN] },
+      { family: 'CMIP6 models', names: availableModelList },
+    ],
+    label: modelLabel,
     colour: null,
     multiple: many('models'),
     cap: MAX_MODELS,
@@ -485,8 +491,8 @@ function showSelection() {
     chosen.length === 1 ? label(chosen[0]) : `${label(chosen[0])} + ${chosen.length - 1} more`;
   elements.scenarioSummary.textContent = summary(selection, scenarioLabel);
   elements.scenarioPicker.title = selection.map(scenarioLabel).join(', ');
-  elements.modelSummary.textContent = summary(models, (m) => m);
-  elements.modelPicker.title = models.join(', ');
+  elements.modelSummary.textContent = summary(models, modelLabel);
+  elements.modelPicker.title = models.map(modelLabel).join(', ');
 
   const items = comparedItems();
   if (!compare || !compare.every((name) => items.includes(name))) {
@@ -517,7 +523,7 @@ function showSelection() {
  */
 function readPicker(name, changed) {
   const list = name === 'model' ? elements.modelList : elements.scenarioList;
-  const order = name === 'model' ? availableModelList : null;
+  const order = name === 'model' ? [MULTI_MODEL_MEAN, ...availableModelList] : null;
   let chosen = pickerInputs(list, name).filter((b) => b.checked).map((b) => b.value);
   chosen = order ? order.filter((m) => chosen.includes(m)) : sortScenarios(chosen);
   // Unticking the last one would leave nothing to show, so it stays.
@@ -532,8 +538,61 @@ function readPicker(name, changed) {
   return true;
 }
 
+/** How the model menu and the charts name a model. */
+function modelLabel(model) {
+  return model === MULTI_MODEL_MEAN ? `Multi-model mean (${availableModelList.length})` : model;
+}
+
+/**
+ * The model whose bundles answer for everything the view needs beyond the
+ * series themselves (places, scenarios, the window): the first real model
+ * chosen, or the default when only the multi-model mean is.
+ */
+function primaryModel() {
+  return models.find((m) => m !== MULTI_MODEL_MEAN) ?? availableModelList[0];
+}
+
+/** One place's multi-model mean for the expert view, fetched once. */
+const expertFiles = new Map();
+function expertFor(location) {
+  if (!expertFiles.has(location)) {
+    const pending = fetch(dataUrl(dataBase, expertFile(location)))
+      .then((r) => (r.ok ? r.json() : null))
+      .catch((error) => {
+        expertFiles.delete(location);
+        throw error;
+      });
+    expertFiles.set(location, pending);
+  }
+  return expertFiles.get(location);
+}
+
+/**
+ * The multi-model mean as a run: its mean as the line and the models'
+ * spread as the bands, in the expert view's units for the variable and
+ * baseline, with its seasonal climatology where there is one.
+ */
+function meanRun(spec, file, variable) {
+  const entry = file.scenarios[spec.scenario];
+  const key =
+    variable === 'tas' ? (elements.baseline.value === 'recent' ? 'tas_recent' : 'tas_pi') : variable;
+  const data = entry?.[key];
+  if (!data) return null;
+  const [p05, p25, p50, p75, p95] = data.bands;
+  return {
+    ...spec,
+    series: null,
+    bands: [p05, p25, data.mean, p75, p95],
+    median: p50,
+    seasonal: entry.seasonal[variable === 'tas' ? 'tas' : variable] ?? null,
+    toAbsolute: 0,
+    mean: true,
+  };
+}
+
 /** The explorer for a model, loading its bundles the first time. */
 function explorerFor(model) {
+  if (model === MULTI_MODEL_MEAN) return explorerFor(primaryModel());
   if (!explorers.has(model)) {
     const loading = Explorer.load(dataBase, model).then((loaded) => {
       // Outlines, coastlines and emissions do not depend on the model.
@@ -560,7 +619,7 @@ function seriesSpecs() {
       key: model,
       model,
       scenario,
-      label: model,
+      label: model === MULTI_MODEL_MEAN ? 'Multi-model mean' : model,
       colour: modelColour(model),
     }));
   }
@@ -629,18 +688,26 @@ async function run() {
 
   let results;
   let loaded;
+  let meanFile = null;
   try {
     loaded = await Promise.all(specs.map((s) => explorerFor(s.model)));
-    // Every series at once: the pool spreads them over its workers.
+    if (specs.some((s) => s.model === MULTI_MODEL_MEAN)) {
+      meanFile = await expertFor(location);
+      if (!meanFile) throw new Error('the multi-model mean has not been built for this place');
+    }
+    // Every series at once: the pool spreads them over its workers. The
+    // multi-model mean is precomputed, so it has nothing to generate.
     results = await Promise.all(
       specs.map(({ model, scenario }) =>
-        runner
-          .run(model, { variable: dataVariable(variable), location, scenario, nRealizations, seed })
-          .then((r) => {
-            done += 1;
-            progress();
-            return r;
-          })
+        model === MULTI_MODEL_MEAN
+          ? null
+          : runner
+              .run(model, { variable: dataVariable(variable), location, scenario, nRealizations, seed })
+              .then((r) => {
+                done += 1;
+                progress();
+                return r;
+              })
       )
     );
   } catch (error) {
@@ -651,8 +718,9 @@ async function run() {
   if (request !== runRequest) return;
   const elapsed = performance.now() - started;
 
-  const years = results[0].years;
+  const years = results.find(Boolean)?.years ?? explorer.windowYears();
   const runs = results.map((result, i) => {
+    if (specs[i].model === MULTI_MODEL_MEAN) return meanRun(specs[i], meanFile, variable);
     // Each model is measured from its own baseline: under recent history that
     // is what takes out the part of two models' difference inherited from the
     // past.
@@ -684,6 +752,10 @@ async function run() {
     };
   });
 
+  if (runs.some((r) => r === null)) {
+    setStatus(DEGREE_DAYS_WHERE, 'error');
+    return;
+  }
   lastRun = { years, runs, variable, location, compareBy, baseline: baselineNote(variable) };
   syncUrl();
 
@@ -691,10 +763,16 @@ async function run() {
   drawChart();
   drawSeasonalPanel();
 
+  const allMean = runs.every((r) => r.mean);
+  const scenarioNames = listOf([...new Set(runs.map((r) => scenarioLabel(r.scenario)))]);
   setStatus(
-    `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
-      `${placeLabel(location)}, ${describeRuns(runs)}, ` +
-      `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
+    allMean
+      ? `The mean and spread of ${availableModelList.length} models' forced responses: ` +
+          `${spec.label.toLowerCase()} at ${placeLabel(location)} under ${scenarioNames}, ` +
+          `${WINDOW.start}–${WINDOW.end}.`
+      : `${nRealizations} realizations of ${spec.label.toLowerCase()} at ` +
+          `${placeLabel(location)}, ${describeRuns(runs)}, ` +
+          `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
 }
 
@@ -981,7 +1059,7 @@ function chartTitle(spec, place, preposition) {
 
 /** "from NorESM2-MM under SSP1-2.6 and SSP5-8.5", or the other way round. */
 function describeRuns(runs) {
-  const models = [...new Set(runs.map((r) => r.model))];
+  const models = [...new Set(runs.map((r) => modelLabel(r.model)))];
   const scenarios = [...new Set(runs.map((r) => r.scenario))];
   return `from ${listOf(models)} under ${listOf(scenarios.map(scenarioLabel))}`;
 }
@@ -1030,6 +1108,14 @@ async function runCustomRegion(request) {
     setStatus(
       `${spec.label} need the monthly cycle, which a drawn region does not have: ` +
         'pick a listed place, or choose Temperature.',
+      'error'
+    );
+    return;
+  }
+  if (seriesSpecs().some((s) => s.model === MULTI_MODEL_MEAN)) {
+    setStatus(
+      'The multi-model mean is computed for the listed places, not a drawn region: ' +
+        'pick a place, or a single model.',
       'error'
     );
     return;
@@ -1106,11 +1192,9 @@ function drawChart() {
   const spec = VARIABLES[lastRun.variable];
   drawFanChart(elements.chart, {
     x: lastRun.years,
-    groups: lastRun.runs.map(({ label, colour, series }) => ({
-      label,
-      colour,
-      series: series.map(spec.annual ?? annualMeans),
-    })),
+    groups: lastRun.runs.map(({ label, colour, series, bands }) =>
+      bands ? { label, colour, bands } : { label, colour, series: series.map(spec.annual ?? annualMeans) }
+    ),
     yLabel: yLabel(lastRun.variable),
     format: spec.format,
   });
@@ -1126,6 +1210,13 @@ function drawChart() {
   };
   if (lastRun.forcedOnly) {
     elements.chartLegend.textContent = 'Forced response, no ensemble';
+  } else if (lastRun.runs.every((r) => r.mean)) {
+    const n = availableModelList.length;
+    elements.chartLegend.replaceChildren(
+      ...swatch('median', `mean of ${n} models`),
+      ...swatch('band', 'middle half'),
+      ...swatch('wide', 'middle 90% of models')
+    );
   } else if (lastRun.runs.length === 1) {
     elements.chartLegend.replaceChildren(
       ...swatch('median', 'median'),
@@ -1134,7 +1225,9 @@ function drawChart() {
     );
   } else {
     const per = lastRun.compareBy === 'models' ? 'model' : 'scenario';
-    elements.chartLegend.textContent = `Median (line) and 5–95% (band) per ${per}`;
+    elements.chartLegend.textContent =
+      `Median (line) and 5–95% (band) per ${per}` +
+      (lastRun.runs.some((r) => r.mean) ? '; for the multi-model mean, the mean and the models’ 5–95%' : '');
   }
 }
 
@@ -1151,8 +1244,9 @@ function describeBox(box) {
 /** Climatology for the first and last twenty years of the window. */
 function drawSeasonalPanel() {
   if (!lastRun) return;
-  // A forced-response run is annual, so there is no seasonal cycle in it.
-  if (lastRun.forcedOnly) {
+  // A forced-response run is annual, so there is no seasonal cycle in it; the
+  // multi-model mean carries one precomputed, except for precipitation.
+  if (lastRun.forcedOnly || lastRun.runs.some((r) => r.mean && !r.seasonal)) {
     elements.seasonal.closest('.panel').hidden = true;
     return;
   }
@@ -1185,17 +1279,14 @@ function drawSeasonalPanel() {
   // period is drawn once. Models do not — their absolute climates differ by
   // degrees — so comparing models, each gets its own early line too.
   const byModel = lastRun.compareBy === 'models';
+  // The multi-model mean's climatologies come with it, already absolute.
+  const period = (run, from, to, part) =>
+    run.seasonal ? Float64Array.from(run.seasonal[part]) : climatology(run.series, from, to, run.toAbsolute);
   drawSeasonal(elements.seasonal, {
     early: byModel
-      ? lastRun.runs.map(({ colour, series, toAbsolute }) => ({
-          colour,
-          values: climatology(series, 2015, 2034, toAbsolute),
-        }))
-      : climatology(lastRun.runs[0].series, 2015, 2034, lastRun.runs[0].toAbsolute),
-    late: lastRun.runs.map(({ colour, series, toAbsolute }) => ({
-      colour,
-      values: climatology(series, 2081, 2100, toAbsolute),
-    })),
+      ? lastRun.runs.map((run) => ({ colour: run.colour, values: period(run, 2015, 2034, 'early') }))
+      : period(lastRun.runs[0], 2015, 2034, 'early'),
+    late: lastRun.runs.map((run) => ({ colour: run.colour, values: period(run, 2081, 2100, 'late') })),
     format: spec.format,
   });
 
@@ -1254,7 +1345,7 @@ function applyState(state) {
   showMode();
   compareBy = state.compareBy;
   elements.compareBy.value = compareBy;
-  models = availableModelList.filter((m) => state.models.includes(m));
+  models = [MULTI_MODEL_MEAN, ...availableModelList].filter((m) => state.models.includes(m));
   if (!models.length) models = [availableModelList[0]];
   renderPickers();
   elements.baseline.value = state.baseline;
@@ -1307,6 +1398,11 @@ function attachActions() {
 
   elements.downloadCsv.addEventListener('click', () => {
     if (!lastRun) return;
+    if (lastRun.runs.some((r) => r.mean)) {
+      downloadText(`${stem()}.csv`, annualCsv());
+      flash(elements.downloadCsv, 'CSV saved');
+      return;
+    }
     const spec = VARIABLES[lastRun.variable];
     const csv = toCsv({
       years: lastRun.years,
@@ -1348,7 +1444,7 @@ function attachActions() {
       subtitle:
         `${[...new Set(lastRun.runs.map((r) => r.model))].join(', ')} · ` +
         `${[...new Set(lastRun.runs.map((r) => scenarioLabel(r.scenario)))].join(', ')} · ` +
-        `${lastRun.runs[0].series.length} realizations · ${WINDOW.start}–${WINDOW.end}` +
+        `${lastRun.runs[0].series ? `${lastRun.runs[0].series.length} realizations` : `${availableModelList.length} models`} · ${WINDOW.start}–${WINDOW.end}` +
         (VARIABLES[lastRun.variable].baselined
           ? ` · from ${BASELINES[elements.baseline.value].label}`
           : ''),
@@ -1362,6 +1458,45 @@ function attachActions() {
     // is the honest way to show that no single realization means anything.
     seed = Math.floor(Math.random() * 0xffffffff);
     run();
+  });
+}
+
+/** The CSV for a view with the multi-model mean in it: one row a year. */
+function annualCsv() {
+  const spec = VARIABLES[lastRun.variable];
+  const series = lastRun.runs.map((run) => {
+    if (run.mean) {
+      const [p05, p25, mean, p75, p95] = run.bands;
+      return {
+        model: 'multi-model mean',
+        scenario: run.scenario,
+        spread: `models (${availableModelList.length})`,
+        rows: mean.map((m, t) => ({ mean: m, p05: p05[t], p25: p25[t], p50: run.median[t], p75: p75[t], p95: p95[t] })),
+      };
+    }
+    const annual = run.series.map(spec.annual ?? annualMeans);
+    const [p05, p25, p50, p75, p95] = quantiles(annual, [0.05, 0.25, 0.5, 0.75, 0.95]);
+    return {
+      model: run.model,
+      scenario: run.scenario,
+      spread: `realizations (${annual.length})`,
+      rows: Array.from(p50, (_, t) => ({
+        mean: annual.reduce((s, a) => s + a[t], 0) / annual.length,
+        p05: p05[t], p25: p25[t], p50: p50[t], p75: p75[t], p95: p95[t],
+      })),
+    };
+  });
+  return toAnnualCsv({
+    years: lastRun.years,
+    series,
+    header: [
+      'METEOR emulator output, from meteor-view',
+      `variable: ${lastRun.variable} (${yLabel(lastRun.variable)})`,
+      `baseline: ${lastRun.baseline}`,
+      `location: ${lastRun.location}`,
+      `multi-model mean: the mean and spread of the forced responses of ${availableModelList.join(', ')}`,
+      `regenerate: ${toUrl(currentState())}`,
+    ],
   });
 }
 
@@ -1437,6 +1572,7 @@ async function renderMap() {
   try {
     fields = await Promise.all(
       shown.map(async (s) => {
+        if (s.model === MULTI_MODEL_MEAN) return meanMap(s.scenario, variable, year, baseline);
         const own = await explorerFor(s.model);
         const base = await own.baselineMap({ variable, baseline });
         const climatology = variable === 'pr' ? await own.climatology() : null;
@@ -1469,6 +1605,46 @@ async function renderMap() {
   elements.mapTitle.textContent = compare
     ? `Forced response, ${year}: ${what} and their difference`
     : `Forced response, ${year}`;
+}
+
+/** The multi-model mean's map files, fetched once each. */
+const meanMaps = new Map();
+function meanMapFile(name) {
+  if (!meanMaps.has(name)) {
+    const pending = fetch(dataUrl(dataBase, name)).then((r) => {
+      if (!r.ok) throw new Error('the multi-model mean maps have not been built');
+      return r.json();
+    });
+    pending.catch(() => meanMaps.delete(name));
+    meanMaps.set(name, pending);
+  }
+  return meanMaps.get(name);
+}
+
+/**
+ * The multi-model mean's map for a scenario and year, in map units, from
+ * either baseline. Stored every ten years from 1850-1900; a year between is
+ * interpolated, which a forced response, smooth in time, allows. From
+ * 2005-2024, temperature is the same maps less the models' mean change to
+ * then, exactly, and precipitation is rebased on it, closely.
+ */
+async function meanMap(scenario, variable, year, baseline) {
+  const file = await meanMapFile(expertMapFile(scenario));
+  const years = file.years;
+  let i = years.findIndex((y) => y >= year);
+  if (i <= 0) i = 1;
+  const f = Math.min(Math.max((year - years[i - 1]) / (years[i] - years[i - 1]), 0), 1);
+  const [a, b] = [file[variable][i - 1], file[variable][i]];
+  let field = Float64Array.from(a, (v, k) => (v === null || b[k] === null ? NaN : v + f * (b[k] - v)));
+  if (baseline === 'recent') {
+    const base = (await meanMapFile(EXPERT_BASELINE_MAP))[variable];
+    field =
+      variable === 'tas'
+        ? field.map((v, k) => (base[k] === null ? NaN : v - base[k]))
+        : field.map((v, k) => (base[k] === null ? NaN : ((1 + v / 100) / (1 + base[k] / 100) - 1) * 100));
+  }
+  const { lat, lon } = mapFromFile({ ...file, tas: [] }, 'tas');
+  return { field, lat, lon };
 }
 
 /** Switch which gesture a plain drag performs. */
@@ -2009,7 +2185,7 @@ function redraw() {
  */
 async function selectionChanged() {
   try {
-    const primary = await explorerFor(models[0]);
+    const primary = await explorerFor(primaryModel());
     if (primary !== explorer) {
       explorer = primary;
       showProvenance();
@@ -2149,7 +2325,7 @@ async function start() {
   // The model decides which bundles to fetch, so it is read from the link
   // before anything else; the rest is validated once the bundles say what
   // locations and scenarios exist.
-  const first = fromQuery(window.location.search, { models: availableModelList });
+  const first = fromQuery(window.location.search, { models: [MULTI_MODEL_MEAN, ...availableModelList] });
   compareBy = first.compareBy;
   mode = first.mode;
   // The simple view's cities; without the file, the bundles' own.
@@ -2165,7 +2341,7 @@ async function start() {
     return { spec: c.spec, lat, lon, label: c.label, population: c.population, capital: c.capital };
   });
   try {
-    explorer = await explorerFor(first.models[0]);
+    explorer = await explorerFor(first.models.find((m) => m !== MULTI_MODEL_MEAN) ?? availableModelList[0]);
   } catch (error) {
     setStatus(`Could not load the emulator bundles: ${error.message}`, 'error');
     return;
@@ -2188,7 +2364,7 @@ async function start() {
     fromQuery(window.location.search, {
       locations: [...explorer.locations, ...cities.map((c) => c.spec)],
       scenarios: explorer.scenarios,
-      models: availableModelList,
+      models: [MULTI_MODEL_MEAN, ...availableModelList],
     })
   );
 

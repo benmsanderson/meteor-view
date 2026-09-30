@@ -166,3 +166,28 @@ export function filenameStem({ cmip6Model, variable, location, scenario }) {
   const scenarios = [scenario].flat().join('+');
   return `meteor_${cmip6Model}_${variable}_${place}_${scenarios}`;
 }
+
+/**
+ * An annual table for a view that includes the multi-model mean, which has no
+ * realizations to list: for each series, its central line and the 5, 25, 50,
+ * 75 and 95% points of its spread. For a model the spread is across its
+ * realizations and the line their mean; for the multi-model mean it is across
+ * models and the line their mean.
+ *
+ * @param {object} options
+ * @param {number[]} options.years
+ * @param {Array<{model: string, scenario: string, spread: string,
+ *   rows: Array<{mean: number, p05: number, p25: number, p50: number, p75: number, p95: number}>}>} options.series
+ * @param {string[]} options.header comment lines, without their '# '
+ */
+export function toAnnualCsv({ years, series, header }) {
+  const lines = header.map((line) => `# ${line}`);
+  lines.push('model,scenario,year,mean,p05,p25,p50,p75,p95,spread_across');
+  for (const { model, scenario, spread, rows } of series) {
+    rows.forEach((row, i) => {
+      const values = ['mean', 'p05', 'p25', 'p50', 'p75', 'p95'].map((k) => formatValue(row[k]));
+      lines.push([model, scenario, years[i], ...values, spread].join(','));
+    });
+  }
+  return `${lines.join('\n')}\n`;
+}
