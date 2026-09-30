@@ -272,6 +272,20 @@ function stepResponse(coeffs, timescales, nTimes) {
  * @param {Map<string, ArrayLike<number>>} forcingByExp from `bundle.forcing()`
  * @returns {Float64Array} annual, starting at the bundle's `forcing_year_start`
  */
+/**
+ * The per-mode convolution of one experiment's forcing with its step
+ * response, which does not depend on the location: cached per forcing (a
+ * bundle returns the same Map for the same scenario), so every location after
+ * the first costs one projection rather than a convolution.
+ */
+const convolutions = new WeakMap();
+function convolved(forcingByExp, experiment, compute) {
+  if (!convolutions.has(forcingByExp)) convolutions.set(forcingByExp, new Map());
+  const byExperiment = convolutions.get(forcingByExp);
+  if (!byExperiment.has(experiment)) byExperiment.set(experiment, compute());
+  return byExperiment.get(experiment);
+}
+
 export function forcedResponse(bundle, location, forcingByExp) {
   const nPatternModes = bundle.dims.pattern_mode;
   const locIdx = bundle.locationIndex(location);
@@ -302,17 +316,28 @@ export function forcedResponse(bundle, location, forcingByExp) {
       dF[t] = (forcing[t + 1] - forcing[t]) / step;
     }
 
-    const kernel = stepResponse(c, ts, nTimes);
-    const projBase = (locIdx * nExp + j) * nPatternModes;
+    const conv = convolved(forcingByExp, j, () => {
+      const kernel = stepResponse(c, ts, nTimes);
+      // Convolve per mode: the full convolution is truncated to nTimes
+      // anyway, so only terms with u <= t are needed.
+      const out = new Float64Array(nTimes * nPatternModes);
+      for (let t = 0; t < nTimes; t += 1) {
+        for (let k = 0; k < nPatternModes; k += 1) {
+          let acc = 0;
+          for (let u = 0; u <= t; u += 1) acc += kernel[u * nPatternModes + k] * dF[t - u];
+          out[t * nPatternModes + k] = acc;
+        }
+      }
+      return out;
+    });
 
-    // Convolve per mode and project in one pass: the full convolution is
-    // truncated to nTimes anyway, so only terms with u <= t are needed.
+    // Then project onto the location, which is all that differs between
+    // locations.
+    const projBase = (locIdx * nExp + j) * nPatternModes;
     for (let t = 0; t < nTimes; t += 1) {
       let acc = 0;
       for (let k = 0; k < nPatternModes; k += 1) {
-        let conv = 0;
-        for (let u = 0; u <= t; u += 1) conv += kernel[u * nPatternModes + k] * dF[t - u];
-        acc += conv * projections[projBase + k];
+        acc += conv[t * nPatternModes + k] * projections[projBase + k];
       }
       total[t] += acc;
     }

@@ -303,6 +303,34 @@ def register_model(out, model):
     print(f"registered {model} in {path}")
 
 
+#: Trace precipitation, kg m-2 s-1 (about 0.03 mm a year): the least a month
+#: is taken to have when fitting the gamma distribution.
+TRACE_PRECIPITATION = 1e-9
+
+
+def floor_transform_reference():
+    """
+    Let the precipitation transform fit a hyper-arid city.
+
+    METEOR fits a gamma distribution to each location's monthly precipitation,
+    and a gamma cannot take a month of exactly zero, which a model can have at
+    a desert gridbox (Doha, Riyadh, Lima). Such a month is given a trace
+    amount instead, for the fit only: patterns and noise, which are
+    anomalies, are untouched, and no value above the trace changes, so any
+    location that fitted before fits the same.
+    """
+    from meteor import timeseries_bundle as tb
+
+    original = tb._fit_transform_parameters
+
+    def fit(reference, parsed, project):
+        return original(
+            reference, parsed, lambda field, location: np.maximum(project(field, location), TRACE_PRECIPITATION)
+        )
+
+    tb._fit_transform_parameters = fit
+
+
 def locations():
     """
     The global mean, the 58 AR6 regions and the cities: the eight below, and
@@ -334,6 +362,7 @@ def main():
     # Land-aware location weights, as the AR6 Atlas: see landmask.py. Installed
     # after training, since they change only how fields reduce to locations.
     masks = landmask.install(MODEL, CACHE)
+    floor_transform_reference()
 
     for var in ("tas", "pr"):
         noise = emu.noise_models[var]

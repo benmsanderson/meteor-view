@@ -24,14 +24,14 @@ describe('bundle', () => {
     expect(tas.variable).toBe('tas');
     expect(tas.nModes).toBe(40);
     expect(tas.lagOrder).toBe(2);
-    expect(tas.locations.length).toBe(67);
+    expect(tas.locations.length).toBe(311);
     expect(tas.scenarios.length).toBe(15);
   });
 
   it('covers global, the AR6 regions and points', () => {
     expect(tas.locations[0]).toBe('global');
     expect(tas.locations.filter((l) => l.startsWith('regional:')).length).toBe(58);
-    expect(tas.locations.filter((l) => l.startsWith('point:')).length).toBe(8);
+    expect(tas.locations.filter((l) => l.startsWith('point:')).length).toBe(252);
   });
 
   it('rejects an artifact from a newer schema', () => {

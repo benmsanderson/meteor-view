@@ -1,434 +1,421 @@
 {
   "format": "meteor-view-artifacts",
   "schema_version": 1,
-  "release": "artifacts-2026-09-28",
-  "base_url": "https://github.com/benmsanderson/meteor-view/releases/download/artifacts-2026-09-28/",
+  "release": "artifacts-2026-09-30",
+  "base_url": "https://github.com/benmsanderson/meteor-view/releases/download/artifacts-2026-09-30/",
   "provisional": true,
   "provenance": {
     "meteor": "benmsanderson/METEOR integration/meteor-view b02011b (base + #104, #102, #101, unmerged)",
-    "staged_from": "meteor-view data-staging 171d194",
+    "locations": "global, 58 AR6 regions, 252 cities (data/cities_v1.json)",
     "region_averaging": "AR6 Atlas-style land masking, scripts/landmask.py",
+    "excluded": "IPSL-CM6A-LR: its pattern fits are unstable between trainings (implausible warming or precipitation)",
     "notes": "Provisional: to be re-exported from METEOR base once #101, #102 and #104 merge."
   },
   "models": [
     {
       "model": "NorESM2-MM",
       "file": "meteor_NorESM2-MM_v1.zip",
-      "size": 4082745,
-      "sha256": "acd24e72762b27277f300923efe47c94aa8204928c7948264c7a697d3224956f",
+      "size": 4214732,
+      "sha256": "6a54b50d638e74fe3d4800302cb0b27d4543831b0a51a92ccd58e6e311ef16b6",
       "members": [
-        "meteor_NorESM2-MM_landfrac_v1.nc",
-        "meteor_NorESM2-MM_pr_bundle_v1.nc",
-        "meteor_NorESM2-MM_pr_climatology_v1.nc",
-        "meteor_NorESM2-MM_pr_pattern_v1.nc",
         "meteor_NorESM2-MM_tas_bundle_v1.nc",
-        "meteor_NorESM2-MM_tas_pattern_v1.nc"
+        "meteor_NorESM2-MM_tas_pattern_v1.nc",
+        "meteor_NorESM2-MM_pr_bundle_v1.nc",
+        "meteor_NorESM2-MM_pr_pattern_v1.nc",
+        "meteor_NorESM2-MM_pr_climatology_v1.nc",
+        "meteor_NorESM2-MM_landfrac_v1.nc"
       ]
     },
     {
       "model": "ACCESS-CM2",
       "file": "meteor_ACCESS-CM2_v1.zip",
-      "size": 2157678,
-      "sha256": "6a5b5f3690ef941b431aa22674d4d0ceb2c30e1de94833dff560c4bca374bd28",
+      "size": 2285825,
+      "sha256": "dd88bf7dec1da0cf41ac5f9ba924a2ad119a3e54cbc052a05e95bec366f28a97",
       "members": [
-        "meteor_ACCESS-CM2_landfrac_v1.nc",
-        "meteor_ACCESS-CM2_pr_bundle_v1.nc",
-        "meteor_ACCESS-CM2_pr_climatology_v1.nc",
-        "meteor_ACCESS-CM2_pr_pattern_v1.nc",
         "meteor_ACCESS-CM2_tas_bundle_v1.nc",
-        "meteor_ACCESS-CM2_tas_pattern_v1.nc"
+        "meteor_ACCESS-CM2_tas_pattern_v1.nc",
+        "meteor_ACCESS-CM2_pr_bundle_v1.nc",
+        "meteor_ACCESS-CM2_pr_pattern_v1.nc",
+        "meteor_ACCESS-CM2_pr_climatology_v1.nc",
+        "meteor_ACCESS-CM2_landfrac_v1.nc"
       ]
     },
     {
       "model": "ACCESS-ESM1-5",
       "file": "meteor_ACCESS-ESM1-5_v1.zip",
-      "size": 2145808,
-      "sha256": "7c933bf07eed5841f4f7a2f57f123ccbd99afa184df5cfe5083cce9bedab69fa",
+      "size": 2272861,
+      "sha256": "98bebb4fcf11c646f067242a2517c85501d1d5fe84b277868d1acde9ce427ed6",
       "members": [
-        "meteor_ACCESS-ESM1-5_landfrac_v1.nc",
-        "meteor_ACCESS-ESM1-5_pr_bundle_v1.nc",
-        "meteor_ACCESS-ESM1-5_pr_climatology_v1.nc",
-        "meteor_ACCESS-ESM1-5_pr_pattern_v1.nc",
         "meteor_ACCESS-ESM1-5_tas_bundle_v1.nc",
-        "meteor_ACCESS-ESM1-5_tas_pattern_v1.nc"
+        "meteor_ACCESS-ESM1-5_tas_pattern_v1.nc",
+        "meteor_ACCESS-ESM1-5_pr_bundle_v1.nc",
+        "meteor_ACCESS-ESM1-5_pr_pattern_v1.nc",
+        "meteor_ACCESS-ESM1-5_pr_climatology_v1.nc",
+        "meteor_ACCESS-ESM1-5_landfrac_v1.nc"
       ]
     },
     {
       "model": "BCC-CSM2-MR",
       "file": "meteor_BCC-CSM2-MR_v1.zip",
-      "size": 3772951,
-      "sha256": "004d442424a27fff6847f2dcdf65e21c460b33d9b198b96d72399f85370e11a6",
+      "size": 3903865,
+      "sha256": "c21f50a951eff75f844a9b7776a9e8dca3c433b8d0253336bffad1717c957f88",
       "members": [
-        "meteor_BCC-CSM2-MR_landfrac_v1.nc",
-        "meteor_BCC-CSM2-MR_pr_bundle_v1.nc",
-        "meteor_BCC-CSM2-MR_pr_climatology_v1.nc",
-        "meteor_BCC-CSM2-MR_pr_pattern_v1.nc",
         "meteor_BCC-CSM2-MR_tas_bundle_v1.nc",
-        "meteor_BCC-CSM2-MR_tas_pattern_v1.nc"
+        "meteor_BCC-CSM2-MR_tas_pattern_v1.nc",
+        "meteor_BCC-CSM2-MR_pr_bundle_v1.nc",
+        "meteor_BCC-CSM2-MR_pr_pattern_v1.nc",
+        "meteor_BCC-CSM2-MR_pr_climatology_v1.nc",
+        "meteor_BCC-CSM2-MR_landfrac_v1.nc"
       ]
     },
     {
       "model": "CanESM5",
       "file": "meteor_CanESM5_v1.zip",
-      "size": 804910,
-      "sha256": "1e2a243ae6c74f37913f3ca91cb6a1b4fc1a0efee912730e216eb776b75551ee",
+      "size": 920278,
+      "sha256": "71bf441b38c35c1bda67b07ba8bc3bd3b25741ffc44651a171e844aec5e4bdd3",
       "members": [
-        "meteor_CanESM5_landfrac_v1.nc",
-        "meteor_CanESM5_pr_bundle_v1.nc",
-        "meteor_CanESM5_pr_climatology_v1.nc",
-        "meteor_CanESM5_pr_pattern_v1.nc",
         "meteor_CanESM5_tas_bundle_v1.nc",
-        "meteor_CanESM5_tas_pattern_v1.nc"
+        "meteor_CanESM5_tas_pattern_v1.nc",
+        "meteor_CanESM5_pr_bundle_v1.nc",
+        "meteor_CanESM5_pr_pattern_v1.nc",
+        "meteor_CanESM5_pr_climatology_v1.nc",
+        "meteor_CanESM5_landfrac_v1.nc"
       ]
     },
     {
       "model": "CAS-ESM2-0",
       "file": "meteor_CAS-ESM2-0_v1.zip",
-      "size": 2504697,
-      "sha256": "76138a8e6e47ab2b00bf37bf2c974cd06baa7a710add6cd7c0a1f4e76e41de7c",
+      "size": 2634659,
+      "sha256": "a757b458720986bbd1299a4448b4eac0dc3a461fe19ece3b3f69dd98dd6becaa",
       "members": [
-        "meteor_CAS-ESM2-0_landfrac_v1.nc",
-        "meteor_CAS-ESM2-0_pr_bundle_v1.nc",
-        "meteor_CAS-ESM2-0_pr_climatology_v1.nc",
-        "meteor_CAS-ESM2-0_pr_pattern_v1.nc",
         "meteor_CAS-ESM2-0_tas_bundle_v1.nc",
-        "meteor_CAS-ESM2-0_tas_pattern_v1.nc"
+        "meteor_CAS-ESM2-0_tas_pattern_v1.nc",
+        "meteor_CAS-ESM2-0_pr_bundle_v1.nc",
+        "meteor_CAS-ESM2-0_pr_pattern_v1.nc",
+        "meteor_CAS-ESM2-0_pr_climatology_v1.nc",
+        "meteor_CAS-ESM2-0_landfrac_v1.nc"
       ]
     },
     {
       "model": "CESM2",
       "file": "meteor_CESM2_v1.zip",
-      "size": 4052840,
-      "sha256": "8a650b1a3d509aaf960c7bc23ba9e58c363f07c1c015c84a05fc8f790a8d3447",
+      "size": 4185554,
+      "sha256": "99d56b7dd09dcf291a1926d1eb1fc98c156de130c8ad120f427230fbf2cf7f23",
       "members": [
-        "meteor_CESM2_landfrac_v1.nc",
-        "meteor_CESM2_pr_bundle_v1.nc",
-        "meteor_CESM2_pr_climatology_v1.nc",
-        "meteor_CESM2_pr_pattern_v1.nc",
         "meteor_CESM2_tas_bundle_v1.nc",
-        "meteor_CESM2_tas_pattern_v1.nc"
+        "meteor_CESM2_tas_pattern_v1.nc",
+        "meteor_CESM2_pr_bundle_v1.nc",
+        "meteor_CESM2_pr_pattern_v1.nc",
+        "meteor_CESM2_pr_climatology_v1.nc",
+        "meteor_CESM2_landfrac_v1.nc"
       ]
     },
     {
       "model": "CESM2-WACCM",
       "file": "meteor_CESM2-WACCM_v1.zip",
-      "size": 4069646,
-      "sha256": "1d64228aabacc6cca4cd5e166f79029a13388aff990b90802f1b7d90d134d7c1",
+      "size": 4200442,
+      "sha256": "6f4719e1bcc95d84a1871d6beb45601e07f9fb88e014b5ff4fcee75e2d218878",
       "members": [
-        "meteor_CESM2-WACCM_landfrac_v1.nc",
-        "meteor_CESM2-WACCM_pr_bundle_v1.nc",
-        "meteor_CESM2-WACCM_pr_climatology_v1.nc",
-        "meteor_CESM2-WACCM_pr_pattern_v1.nc",
         "meteor_CESM2-WACCM_tas_bundle_v1.nc",
-        "meteor_CESM2-WACCM_tas_pattern_v1.nc"
+        "meteor_CESM2-WACCM_tas_pattern_v1.nc",
+        "meteor_CESM2-WACCM_pr_bundle_v1.nc",
+        "meteor_CESM2-WACCM_pr_pattern_v1.nc",
+        "meteor_CESM2-WACCM_pr_climatology_v1.nc",
+        "meteor_CESM2-WACCM_landfrac_v1.nc"
       ]
     },
     {
       "model": "CMCC-CM2-SR5",
       "file": "meteor_CMCC-CM2-SR5_v1.zip",
-      "size": 4049692,
-      "sha256": "b567ec1a31b982d38c57a937392da30e4ce0adc96c115a0cfa06d3ea70dc0b04",
+      "size": 4180938,
+      "sha256": "2d2e93a35c29bb35b40562a080141965bfa52460e807ac3b79d6003a067a8705",
       "members": [
-        "meteor_CMCC-CM2-SR5_landfrac_v1.nc",
-        "meteor_CMCC-CM2-SR5_pr_bundle_v1.nc",
-        "meteor_CMCC-CM2-SR5_pr_climatology_v1.nc",
-        "meteor_CMCC-CM2-SR5_pr_pattern_v1.nc",
         "meteor_CMCC-CM2-SR5_tas_bundle_v1.nc",
-        "meteor_CMCC-CM2-SR5_tas_pattern_v1.nc"
+        "meteor_CMCC-CM2-SR5_tas_pattern_v1.nc",
+        "meteor_CMCC-CM2-SR5_pr_bundle_v1.nc",
+        "meteor_CMCC-CM2-SR5_pr_pattern_v1.nc",
+        "meteor_CMCC-CM2-SR5_pr_climatology_v1.nc",
+        "meteor_CMCC-CM2-SR5_landfrac_v1.nc"
       ]
     },
     {
       "model": "CMCC-ESM2",
       "file": "meteor_CMCC-ESM2_v1.zip",
-      "size": 4041801,
-      "sha256": "bba51ef05d05f4a05ae57c95142a909abc8315638c7fa0f65bf0c0d14dd5c433",
+      "size": 4172872,
+      "sha256": "3a4585c66cf35fea7685024404fca4d63eb29a2327c6f491642de27ee9b997ca",
       "members": [
-        "meteor_CMCC-ESM2_landfrac_v1.nc",
-        "meteor_CMCC-ESM2_pr_bundle_v1.nc",
-        "meteor_CMCC-ESM2_pr_climatology_v1.nc",
-        "meteor_CMCC-ESM2_pr_pattern_v1.nc",
         "meteor_CMCC-ESM2_tas_bundle_v1.nc",
-        "meteor_CMCC-ESM2_tas_pattern_v1.nc"
+        "meteor_CMCC-ESM2_tas_pattern_v1.nc",
+        "meteor_CMCC-ESM2_pr_bundle_v1.nc",
+        "meteor_CMCC-ESM2_pr_pattern_v1.nc",
+        "meteor_CMCC-ESM2_pr_climatology_v1.nc",
+        "meteor_CMCC-ESM2_landfrac_v1.nc"
       ]
     },
     {
       "model": "CNRM-CM6-1",
       "file": "meteor_CNRM-CM6-1_v1.zip",
-      "size": 2324582,
-      "sha256": "6e12a2d44300cf1fcaf39044bf3cabe3c2cc2f592b765cb232fc8f76363db976",
+      "size": 2455093,
+      "sha256": "261c2e15f5f672fe51f32368fa7285da3369750c3ab3129007ec5ea4070f14ce",
       "members": [
-        "meteor_CNRM-CM6-1_landfrac_v1.nc",
-        "meteor_CNRM-CM6-1_pr_bundle_v1.nc",
-        "meteor_CNRM-CM6-1_pr_climatology_v1.nc",
-        "meteor_CNRM-CM6-1_pr_pattern_v1.nc",
         "meteor_CNRM-CM6-1_tas_bundle_v1.nc",
-        "meteor_CNRM-CM6-1_tas_pattern_v1.nc"
+        "meteor_CNRM-CM6-1_tas_pattern_v1.nc",
+        "meteor_CNRM-CM6-1_pr_bundle_v1.nc",
+        "meteor_CNRM-CM6-1_pr_pattern_v1.nc",
+        "meteor_CNRM-CM6-1_pr_climatology_v1.nc",
+        "meteor_CNRM-CM6-1_landfrac_v1.nc"
       ]
     },
     {
       "model": "CNRM-CM6-1-HR",
       "file": "meteor_CNRM-CM6-1-HR_v1.zip",
-      "size": 15830588,
-      "sha256": "d554d89d966e2f3e9772686bea82e98f703666c79825cac6c9ae919da04293f6",
+      "size": 15965708,
+      "sha256": "2808cadb13e7229dd35498fe205ebf1985d3fca4441d95a8316ce5b9861d7dd1",
       "members": [
-        "meteor_CNRM-CM6-1-HR_landfrac_v1.nc",
-        "meteor_CNRM-CM6-1-HR_pr_bundle_v1.nc",
-        "meteor_CNRM-CM6-1-HR_pr_climatology_v1.nc",
-        "meteor_CNRM-CM6-1-HR_pr_pattern_v1.nc",
         "meteor_CNRM-CM6-1-HR_tas_bundle_v1.nc",
-        "meteor_CNRM-CM6-1-HR_tas_pattern_v1.nc"
+        "meteor_CNRM-CM6-1-HR_tas_pattern_v1.nc",
+        "meteor_CNRM-CM6-1-HR_pr_bundle_v1.nc",
+        "meteor_CNRM-CM6-1-HR_pr_pattern_v1.nc",
+        "meteor_CNRM-CM6-1-HR_pr_climatology_v1.nc",
+        "meteor_CNRM-CM6-1-HR_landfrac_v1.nc"
       ]
     },
     {
       "model": "CNRM-ESM2-1",
       "file": "meteor_CNRM-ESM2-1_v1.zip",
-      "size": 2323895,
-      "sha256": "85ebc9adc1a2b72c07232c1428a2cd71180083b4cc6b08199bf52bf1ea05ec19",
+      "size": 2454415,
+      "sha256": "35479f084df198f7f39d196a7842e738f2b5feab759066e293297ffd2591a902",
       "members": [
-        "meteor_CNRM-ESM2-1_landfrac_v1.nc",
-        "meteor_CNRM-ESM2-1_pr_bundle_v1.nc",
-        "meteor_CNRM-ESM2-1_pr_climatology_v1.nc",
-        "meteor_CNRM-ESM2-1_pr_pattern_v1.nc",
         "meteor_CNRM-ESM2-1_tas_bundle_v1.nc",
-        "meteor_CNRM-ESM2-1_tas_pattern_v1.nc"
+        "meteor_CNRM-ESM2-1_tas_pattern_v1.nc",
+        "meteor_CNRM-ESM2-1_pr_bundle_v1.nc",
+        "meteor_CNRM-ESM2-1_pr_pattern_v1.nc",
+        "meteor_CNRM-ESM2-1_pr_climatology_v1.nc",
+        "meteor_CNRM-ESM2-1_landfrac_v1.nc"
       ]
     },
     {
       "model": "FGOALS-f3-L",
       "file": "meteor_FGOALS-f3-L_v1.zip",
-      "size": 3798892,
-      "sha256": "3a6ebb55f733ea4a38104f3a5cdf4792b4ffb1774062b843a275d8bfd583b50b",
+      "size": 3931398,
+      "sha256": "45608087fb3d722753b29d71f15434b10bbc8abacd4628436f4a290f8c3e6a83",
       "members": [
-        "meteor_FGOALS-f3-L_landfrac_v1.nc",
-        "meteor_FGOALS-f3-L_pr_bundle_v1.nc",
-        "meteor_FGOALS-f3-L_pr_climatology_v1.nc",
-        "meteor_FGOALS-f3-L_pr_pattern_v1.nc",
         "meteor_FGOALS-f3-L_tas_bundle_v1.nc",
-        "meteor_FGOALS-f3-L_tas_pattern_v1.nc"
+        "meteor_FGOALS-f3-L_tas_pattern_v1.nc",
+        "meteor_FGOALS-f3-L_pr_bundle_v1.nc",
+        "meteor_FGOALS-f3-L_pr_pattern_v1.nc",
+        "meteor_FGOALS-f3-L_pr_climatology_v1.nc",
+        "meteor_FGOALS-f3-L_landfrac_v1.nc"
       ]
     },
     {
       "model": "GFDL-CM4",
       "file": "meteor_GFDL-CM4_v1.zip",
-      "size": 3815972,
-      "sha256": "b4aa624b69e9e388ed7f3cd7534323c57df9c96b87e9c2dd5392ee7f92e5edcb",
+      "size": 3944913,
+      "sha256": "8deed64092d271a15783ff37c64996b5c9025f41cc3a1b8472a676a38fb6d7f6",
       "members": [
-        "meteor_GFDL-CM4_landfrac_v1.nc",
-        "meteor_GFDL-CM4_pr_bundle_v1.nc",
-        "meteor_GFDL-CM4_pr_climatology_v1.nc",
-        "meteor_GFDL-CM4_pr_pattern_v1.nc",
         "meteor_GFDL-CM4_tas_bundle_v1.nc",
-        "meteor_GFDL-CM4_tas_pattern_v1.nc"
+        "meteor_GFDL-CM4_tas_pattern_v1.nc",
+        "meteor_GFDL-CM4_pr_bundle_v1.nc",
+        "meteor_GFDL-CM4_pr_pattern_v1.nc",
+        "meteor_GFDL-CM4_pr_climatology_v1.nc",
+        "meteor_GFDL-CM4_landfrac_v1.nc"
       ]
     },
     {
       "model": "GFDL-ESM4",
       "file": "meteor_GFDL-ESM4_v1.zip",
-      "size": 3811064,
-      "sha256": "67c0bc0920125056f1a5f92ea49c7ef3d994acad4e2328e5651d47ffe69b79b1",
+      "size": 3941168,
+      "sha256": "c6cbf65d719d4056c2442a686d9ef5f5812355d41f7666a49a2fe81d04b1146e",
       "members": [
-        "meteor_GFDL-ESM4_landfrac_v1.nc",
-        "meteor_GFDL-ESM4_pr_bundle_v1.nc",
-        "meteor_GFDL-ESM4_pr_climatology_v1.nc",
-        "meteor_GFDL-ESM4_pr_pattern_v1.nc",
         "meteor_GFDL-ESM4_tas_bundle_v1.nc",
-        "meteor_GFDL-ESM4_tas_pattern_v1.nc"
+        "meteor_GFDL-ESM4_tas_pattern_v1.nc",
+        "meteor_GFDL-ESM4_pr_bundle_v1.nc",
+        "meteor_GFDL-ESM4_pr_pattern_v1.nc",
+        "meteor_GFDL-ESM4_pr_climatology_v1.nc",
+        "meteor_GFDL-ESM4_landfrac_v1.nc"
       ]
     },
     {
       "model": "GISS-E2-1-G",
       "file": "meteor_GISS-E2-1-G_v1.zip",
-      "size": 1116940,
-      "sha256": "a6c1b2b1b09c93020a4a8276f9ce9131d014d35057dc1ba9f1ae2703ae60ea48",
+      "size": 1237998,
+      "sha256": "3d4a1569bd36b3162ec6deb822fa1e9954a3a4b4f70a7804074d044c04d2fcb0",
       "members": [
-        "meteor_GISS-E2-1-G_landfrac_v1.nc",
-        "meteor_GISS-E2-1-G_pr_bundle_v1.nc",
-        "meteor_GISS-E2-1-G_pr_climatology_v1.nc",
-        "meteor_GISS-E2-1-G_pr_pattern_v1.nc",
         "meteor_GISS-E2-1-G_tas_bundle_v1.nc",
-        "meteor_GISS-E2-1-G_tas_pattern_v1.nc"
+        "meteor_GISS-E2-1-G_tas_pattern_v1.nc",
+        "meteor_GISS-E2-1-G_pr_bundle_v1.nc",
+        "meteor_GISS-E2-1-G_pr_pattern_v1.nc",
+        "meteor_GISS-E2-1-G_pr_climatology_v1.nc",
+        "meteor_GISS-E2-1-G_landfrac_v1.nc"
       ]
     },
     {
       "model": "HadGEM3-GC31-LL",
       "file": "meteor_HadGEM3-GC31-LL_v1.zip",
-      "size": 2156002,
-      "sha256": "96df1677f76dcfbd187c71ddc3d21a8f6e67c9411743bda6d96b5f188dc27832",
+      "size": 2283820,
+      "sha256": "f9cc40587110915db7ae43ef278c9b6f168787aedffee1d2fff4ca5389785109",
       "members": [
-        "meteor_HadGEM3-GC31-LL_landfrac_v1.nc",
-        "meteor_HadGEM3-GC31-LL_pr_bundle_v1.nc",
-        "meteor_HadGEM3-GC31-LL_pr_climatology_v1.nc",
-        "meteor_HadGEM3-GC31-LL_pr_pattern_v1.nc",
         "meteor_HadGEM3-GC31-LL_tas_bundle_v1.nc",
-        "meteor_HadGEM3-GC31-LL_tas_pattern_v1.nc"
+        "meteor_HadGEM3-GC31-LL_tas_pattern_v1.nc",
+        "meteor_HadGEM3-GC31-LL_pr_bundle_v1.nc",
+        "meteor_HadGEM3-GC31-LL_pr_pattern_v1.nc",
+        "meteor_HadGEM3-GC31-LL_pr_climatology_v1.nc",
+        "meteor_HadGEM3-GC31-LL_landfrac_v1.nc"
       ]
     },
     {
       "model": "INM-CM4-8",
       "file": "meteor_INM-CM4-8_v1.zip",
-      "size": 1741263,
-      "sha256": "2892ac65fa807b843ef9cb0788a66ec31ad16fa14768ab966caf3aa08e2f36fc",
+      "size": 1867268,
+      "sha256": "9e23df9bafef8ac15aef7cfef5a621e2b994a24a42b0a384aac9052e7fc43595",
       "members": [
-        "meteor_INM-CM4-8_landfrac_v1.nc",
-        "meteor_INM-CM4-8_pr_bundle_v1.nc",
-        "meteor_INM-CM4-8_pr_climatology_v1.nc",
-        "meteor_INM-CM4-8_pr_pattern_v1.nc",
         "meteor_INM-CM4-8_tas_bundle_v1.nc",
-        "meteor_INM-CM4-8_tas_pattern_v1.nc"
+        "meteor_INM-CM4-8_tas_pattern_v1.nc",
+        "meteor_INM-CM4-8_pr_bundle_v1.nc",
+        "meteor_INM-CM4-8_pr_pattern_v1.nc",
+        "meteor_INM-CM4-8_pr_climatology_v1.nc",
+        "meteor_INM-CM4-8_landfrac_v1.nc"
       ]
     },
     {
       "model": "INM-CM5-0",
       "file": "meteor_INM-CM5-0_v1.zip",
-      "size": 1737005,
-      "sha256": "d85cbd564c26e6ec63bee9c722a81c34603aac196c7251565a2a99bbb8fb751f",
+      "size": 1862560,
+      "sha256": "37d6fa7be182288099ac2c7e5f65b401dcb32fe84b2c474ae04170920f26696c",
       "members": [
-        "meteor_INM-CM5-0_landfrac_v1.nc",
-        "meteor_INM-CM5-0_pr_bundle_v1.nc",
-        "meteor_INM-CM5-0_pr_climatology_v1.nc",
-        "meteor_INM-CM5-0_pr_pattern_v1.nc",
         "meteor_INM-CM5-0_tas_bundle_v1.nc",
-        "meteor_INM-CM5-0_tas_pattern_v1.nc"
-      ]
-    },
-    {
-      "model": "IPSL-CM6A-LR",
-      "file": "meteor_IPSL-CM6A-LR_v1.zip",
-      "size": 1644361,
-      "sha256": "02d374dbd3036c01139e59237200864edc7b4bd125d93a6eaf1bf92574954d26",
-      "members": [
-        "meteor_IPSL-CM6A-LR_landfrac_v1.nc",
-        "meteor_IPSL-CM6A-LR_pr_bundle_v1.nc",
-        "meteor_IPSL-CM6A-LR_pr_climatology_v1.nc",
-        "meteor_IPSL-CM6A-LR_pr_pattern_v1.nc",
-        "meteor_IPSL-CM6A-LR_tas_bundle_v1.nc",
-        "meteor_IPSL-CM6A-LR_tas_pattern_v1.nc"
+        "meteor_INM-CM5-0_tas_pattern_v1.nc",
+        "meteor_INM-CM5-0_pr_bundle_v1.nc",
+        "meteor_INM-CM5-0_pr_pattern_v1.nc",
+        "meteor_INM-CM5-0_pr_climatology_v1.nc",
+        "meteor_INM-CM5-0_landfrac_v1.nc"
       ]
     },
     {
       "model": "KACE-1-0-G",
       "file": "meteor_KACE-1-0-G_v1.zip",
-      "size": 2153186,
-      "sha256": "e283d7fb4bf75cfdd3f4573188e3d36e85c70941015f9b0b098248584c7a3cb6",
+      "size": 2283386,
+      "sha256": "c87a1fc5c7c8cbbc3dc0555759bb0ac5d30aaac5d9d67f0f1e233a4df096179f",
       "members": [
-        "meteor_KACE-1-0-G_landfrac_v1.nc",
-        "meteor_KACE-1-0-G_pr_bundle_v1.nc",
-        "meteor_KACE-1-0-G_pr_climatology_v1.nc",
-        "meteor_KACE-1-0-G_pr_pattern_v1.nc",
         "meteor_KACE-1-0-G_tas_bundle_v1.nc",
-        "meteor_KACE-1-0-G_tas_pattern_v1.nc"
+        "meteor_KACE-1-0-G_tas_pattern_v1.nc",
+        "meteor_KACE-1-0-G_pr_bundle_v1.nc",
+        "meteor_KACE-1-0-G_pr_pattern_v1.nc",
+        "meteor_KACE-1-0-G_pr_climatology_v1.nc",
+        "meteor_KACE-1-0-G_landfrac_v1.nc"
       ]
     },
     {
       "model": "MCM-UA-1-0",
       "file": "meteor_MCM-UA-1-0_v1.zip",
-      "size": 768062,
-      "sha256": "4382fabe3459a3ab4372b34f1fde455c2ae8526460eea7daee380ad981c96190",
+      "size": 884554,
+      "sha256": "34d1730689cd9633b8b359fe403f02af064f9db1cecac31ba54d7b609ee3dd17",
       "members": [
-        "meteor_MCM-UA-1-0_landfrac_v1.nc",
-        "meteor_MCM-UA-1-0_pr_bundle_v1.nc",
-        "meteor_MCM-UA-1-0_pr_climatology_v1.nc",
-        "meteor_MCM-UA-1-0_pr_pattern_v1.nc",
         "meteor_MCM-UA-1-0_tas_bundle_v1.nc",
-        "meteor_MCM-UA-1-0_tas_pattern_v1.nc"
+        "meteor_MCM-UA-1-0_tas_pattern_v1.nc",
+        "meteor_MCM-UA-1-0_pr_bundle_v1.nc",
+        "meteor_MCM-UA-1-0_pr_pattern_v1.nc",
+        "meteor_MCM-UA-1-0_pr_climatology_v1.nc",
+        "meteor_MCM-UA-1-0_landfrac_v1.nc"
       ]
     },
     {
       "model": "MIROC-ES2L",
       "file": "meteor_MIROC-ES2L_v1.zip",
-      "size": 805230,
-      "sha256": "200f657fa9bf613cf8adcb87391da0f5808be7221c2f51c2515a65e4748b0aa9",
+      "size": 922264,
+      "sha256": "9c2a9f0f653634c166d84f04fa1f14ef6cde52e9b55da096635c30f3f542e777",
       "members": [
-        "meteor_MIROC-ES2L_landfrac_v1.nc",
-        "meteor_MIROC-ES2L_pr_bundle_v1.nc",
-        "meteor_MIROC-ES2L_pr_climatology_v1.nc",
-        "meteor_MIROC-ES2L_pr_pattern_v1.nc",
         "meteor_MIROC-ES2L_tas_bundle_v1.nc",
-        "meteor_MIROC-ES2L_tas_pattern_v1.nc"
+        "meteor_MIROC-ES2L_tas_pattern_v1.nc",
+        "meteor_MIROC-ES2L_pr_bundle_v1.nc",
+        "meteor_MIROC-ES2L_pr_pattern_v1.nc",
+        "meteor_MIROC-ES2L_pr_climatology_v1.nc",
+        "meteor_MIROC-ES2L_landfrac_v1.nc"
       ]
     },
     {
       "model": "MIROC6",
       "file": "meteor_MIROC6_v1.zip",
-      "size": 2525189,
-      "sha256": "1c9ff36d0a0efaa081420acb7ce0cd1d3bc03681a13295463ca35cf61201aee3",
+      "size": 2655203,
+      "sha256": "68cfde7db09cc1d3accbf343a5e2382e5c980c19bae5a021b9c26c6e78c777e2",
       "members": [
-        "meteor_MIROC6_landfrac_v1.nc",
-        "meteor_MIROC6_pr_bundle_v1.nc",
-        "meteor_MIROC6_pr_climatology_v1.nc",
-        "meteor_MIROC6_pr_pattern_v1.nc",
         "meteor_MIROC6_tas_bundle_v1.nc",
-        "meteor_MIROC6_tas_pattern_v1.nc"
+        "meteor_MIROC6_tas_pattern_v1.nc",
+        "meteor_MIROC6_pr_bundle_v1.nc",
+        "meteor_MIROC6_pr_pattern_v1.nc",
+        "meteor_MIROC6_pr_climatology_v1.nc",
+        "meteor_MIROC6_landfrac_v1.nc"
       ]
     },
     {
       "model": "MPI-ESM1-2-HR",
       "file": "meteor_MPI-ESM1-2-HR_v1.zip",
-      "size": 5357468,
-      "sha256": "e4c5382b33007b9c6361b90c637ef0de19f8d85d08ac0dd7b130d59a0a3c63a6",
+      "size": 5488714,
+      "sha256": "b3fae3a002ab5ad9e73f40479e3435ce9ef5d435ccc88f917326b311a3ceea01",
       "members": [
-        "meteor_MPI-ESM1-2-HR_landfrac_v1.nc",
-        "meteor_MPI-ESM1-2-HR_pr_bundle_v1.nc",
-        "meteor_MPI-ESM1-2-HR_pr_climatology_v1.nc",
-        "meteor_MPI-ESM1-2-HR_pr_pattern_v1.nc",
         "meteor_MPI-ESM1-2-HR_tas_bundle_v1.nc",
-        "meteor_MPI-ESM1-2-HR_tas_pattern_v1.nc"
+        "meteor_MPI-ESM1-2-HR_tas_pattern_v1.nc",
+        "meteor_MPI-ESM1-2-HR_pr_bundle_v1.nc",
+        "meteor_MPI-ESM1-2-HR_pr_pattern_v1.nc",
+        "meteor_MPI-ESM1-2-HR_pr_climatology_v1.nc",
+        "meteor_MPI-ESM1-2-HR_landfrac_v1.nc"
       ]
     },
     {
       "model": "MPI-ESM1-2-LR",
       "file": "meteor_MPI-ESM1-2-LR_v1.zip",
-      "size": 1516782,
-      "sha256": "4753c400492449173a41ac0eb8d00d6b5fd9688a39c5690b1e0b1375e1bf31bb",
+      "size": 1640597,
+      "sha256": "d4add1e15a3fbef36091d4d11d843746609a9b91136935d0796ac4bad9ea5ec4",
       "members": [
-        "meteor_MPI-ESM1-2-LR_landfrac_v1.nc",
-        "meteor_MPI-ESM1-2-LR_pr_bundle_v1.nc",
-        "meteor_MPI-ESM1-2-LR_pr_climatology_v1.nc",
-        "meteor_MPI-ESM1-2-LR_pr_pattern_v1.nc",
         "meteor_MPI-ESM1-2-LR_tas_bundle_v1.nc",
-        "meteor_MPI-ESM1-2-LR_tas_pattern_v1.nc"
+        "meteor_MPI-ESM1-2-LR_tas_pattern_v1.nc",
+        "meteor_MPI-ESM1-2-LR_pr_bundle_v1.nc",
+        "meteor_MPI-ESM1-2-LR_pr_pattern_v1.nc",
+        "meteor_MPI-ESM1-2-LR_pr_climatology_v1.nc",
+        "meteor_MPI-ESM1-2-LR_landfrac_v1.nc"
       ]
     },
     {
       "model": "MRI-ESM2-0",
       "file": "meteor_MRI-ESM2-0_v1.zip",
-      "size": 3790506,
-      "sha256": "7f71e411a18438fcf724688dc51bf1b0c1f932a2dcdd6b45a56b52e4ea25fcaf",
+      "size": 3921643,
+      "sha256": "32efe9efa197f690a0a2422a08f3b0c7f3e5810fea9b0d06378e60508cd84d98",
       "members": [
-        "meteor_MRI-ESM2-0_landfrac_v1.nc",
-        "meteor_MRI-ESM2-0_pr_bundle_v1.nc",
-        "meteor_MRI-ESM2-0_pr_climatology_v1.nc",
-        "meteor_MRI-ESM2-0_pr_pattern_v1.nc",
         "meteor_MRI-ESM2-0_tas_bundle_v1.nc",
-        "meteor_MRI-ESM2-0_tas_pattern_v1.nc"
+        "meteor_MRI-ESM2-0_tas_pattern_v1.nc",
+        "meteor_MRI-ESM2-0_pr_bundle_v1.nc",
+        "meteor_MRI-ESM2-0_pr_pattern_v1.nc",
+        "meteor_MRI-ESM2-0_pr_climatology_v1.nc",
+        "meteor_MRI-ESM2-0_landfrac_v1.nc"
       ]
     },
     {
       "model": "NESM3",
       "file": "meteor_NESM3_v1.zip",
-      "size": 1511973,
-      "sha256": "eeb1a8975f530dac314a60dffeebce3fc37151a59cce163ebc4bcdb810157da6",
+      "size": 1639077,
+      "sha256": "93cb10529e8022f595af0973bf82c02738c2a8550d12497d11e973d2be662e5b",
       "members": [
-        "meteor_NESM3_landfrac_v1.nc",
-        "meteor_NESM3_pr_bundle_v1.nc",
-        "meteor_NESM3_pr_climatology_v1.nc",
-        "meteor_NESM3_pr_pattern_v1.nc",
         "meteor_NESM3_tas_bundle_v1.nc",
-        "meteor_NESM3_tas_pattern_v1.nc"
+        "meteor_NESM3_tas_pattern_v1.nc",
+        "meteor_NESM3_pr_bundle_v1.nc",
+        "meteor_NESM3_pr_pattern_v1.nc",
+        "meteor_NESM3_pr_climatology_v1.nc",
+        "meteor_NESM3_landfrac_v1.nc"
       ]
     },
     {
       "model": "UKESM1-0-LL",
       "file": "meteor_UKESM1-0-LL_v1.zip",
-      "size": 2151606,
-      "sha256": "1290578545fe5997d777777e718585559f921c8b399a7585ffca0ccc7d21a885",
+      "size": 2279760,
+      "sha256": "a5302f1f22ff40d7d353977a1018abb1bebc61abf09320d74b330cc3f84387c1",
       "members": [
-        "meteor_UKESM1-0-LL_landfrac_v1.nc",
-        "meteor_UKESM1-0-LL_pr_bundle_v1.nc",
-        "meteor_UKESM1-0-LL_pr_climatology_v1.nc",
-        "meteor_UKESM1-0-LL_pr_pattern_v1.nc",
         "meteor_UKESM1-0-LL_tas_bundle_v1.nc",
-        "meteor_UKESM1-0-LL_tas_pattern_v1.nc"
+        "meteor_UKESM1-0-LL_tas_pattern_v1.nc",
+        "meteor_UKESM1-0-LL_pr_bundle_v1.nc",
+        "meteor_UKESM1-0-LL_pr_pattern_v1.nc",
+        "meteor_UKESM1-0-LL_pr_climatology_v1.nc",
+        "meteor_UKESM1-0-LL_landfrac_v1.nc"
       ]
     }
   ]
