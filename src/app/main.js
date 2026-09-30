@@ -26,6 +26,7 @@ import {
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
 import { loadSummary, summarySentence } from './summary.js';
+import { DEGREE_DAYS, annualSums, degreeDays } from '../lib/degree-days.js';
 import { assignModelColours, modelColour } from './models.js';
 import { placeLabel } from './places.js';
 import {
@@ -71,7 +72,38 @@ const VARIABLES = {
     convert: (v) => v * SECONDS_PER_DAY,
     format: (v) => v.toFixed(1),
   },
+  // Degree days: impacts derived from each temperature realization, through
+  // METEOR's degree-days calculator (src/lib/degree-days.js), on absolute
+  // monthly temperature. Expert view only, and only where a run has a monthly
+  // cycle, so not for a drawn region.
+  hdd: {
+    label: 'Heating degree days',
+    source: 'tas',
+    degreeDays: 'hdd',
+    yLabel: `Heating degree days per year (base ${DEGREE_DAYS.base} °C)`,
+    baselined: false,
+    annual: annualSums,
+    convert: (v) => v,
+    format: (v) => v.toFixed(0),
+    seasonalNote: ' · degree days per month',
+  },
+  cdd: {
+    label: 'Cooling degree days',
+    source: 'tas',
+    degreeDays: 'cdd',
+    yLabel: `Cooling degree days per year (base ${DEGREE_DAYS.base} °C)`,
+    baselined: false,
+    annual: annualSums,
+    convert: (v) => v,
+    format: (v) => v.toFixed(0),
+    seasonalNote: ' · degree days per month',
+  },
 };
+
+/** The emulated variable behind what is shown: temperature, for degree days. */
+function dataVariable(variable = elements.variable.value) {
+  return VARIABLES[variable]?.source ?? variable;
+}
 
 /**
  * The simple view's two quantities: change from 1850-1900 across models, in
@@ -470,11 +502,13 @@ async function run() {
     // Every series at once: the pool spreads them over its workers.
     results = await Promise.all(
       specs.map(({ model, scenario }) =>
-        runner.run(model, { variable, location, scenario, nRealizations, seed }).then((r) => {
-          done += 1;
-          progress();
-          return r;
-        })
+        runner
+          .run(model, { variable: dataVariable(variable), location, scenario, nRealizations, seed })
+          .then((r) => {
+            done += 1;
+            progress();
+            return r;
+          })
       )
     );
   } catch (error) {
@@ -491,6 +525,18 @@ async function run() {
     // is what takes out the part of two models' difference inherited from the
     // past.
     const own = loaded[i];
+    if (spec.degreeDays) {
+      // Degree days need absolute temperature: the run plus the location's
+      // unforced level, as the seasonal panel shows it.
+      const level = own.absoluteOffset({ variable: 'tas', location });
+      return {
+        ...specs[i],
+        series: result.series.map(
+          (series) => degreeDays(Float64Array.from(series, (v) => v + level))[spec.degreeDays]
+        ),
+        toAbsolute: 0,
+      };
+    }
     const offset = spec.baselined
       ? spec.convert(own.baselineOffset({ variable, location, baseline: elements.baseline.value }))
       : 0;
@@ -633,6 +679,20 @@ function setMode(next) {
 /** Show the controls and panels of the current view, and say which it is. */
 function showMode() {
   document.documentElement.dataset.mode = mode;
+  // Degree days are an expert-view variable: offered there, removed here.
+  const select = elements.variable;
+  for (const key of ['hdd', 'cdd']) {
+    const existing = select.querySelector(`option[value="${key}"]`);
+    if (mode === 'expert' && !existing) {
+      const option = document.createElement('option');
+      option.value = key;
+      option.textContent = VARIABLES[key].label;
+      select.append(option);
+    } else if (mode === 'simple' && existing) {
+      if (select.value === key) select.value = 'tas';
+      existing.remove();
+    }
+  }
   for (const button of elements.viewButtons) {
     button.setAttribute('aria-pressed', String(button.dataset.view === mode));
   }
@@ -660,6 +720,9 @@ function yLabel(variable) {
 
 /** What a run's numbers are measured from, for captions and the CSV. */
 function baselineNote(variable) {
+  if (VARIABLES[variable].degreeDays) {
+    return `degree days per year, base ${DEGREE_DAYS.base} °C, from absolute monthly temperature`;
+  }
   if (!VARIABLES[variable].baselined) return 'absolute (no baseline)';
   const { label } = BASELINES[elements.baseline.value];
   const own = compareBy === 'models' ? ", each model's own" : '';
@@ -688,6 +751,14 @@ function showBoxControls(visible) {
 async function runCustomRegion(request) {
   const variable = elements.variable.value;
   const spec = VARIABLES[variable];
+  if (spec.degreeDays) {
+    setStatus(
+      `${spec.label} need the monthly cycle, which a drawn region does not have: ` +
+        'pick a listed place, or choose Temperature.',
+      'error'
+    );
+    return;
+  }
   const { boxRegion } = await import('../lib/pattern.js');
 
   const runs = [];
@@ -763,7 +834,7 @@ function drawChart() {
     groups: lastRun.runs.map(({ label, colour, series }) => ({
       label,
       colour,
-      series: series.map(annualMeans),
+      series: series.map(spec.annual ?? annualMeans),
     })),
     yLabel: yLabel(lastRun.variable),
     format: spec.format,
@@ -868,7 +939,9 @@ function drawSeasonalPanel() {
   }
   if (lastRun.runs.length > 1) items.push('(2081–2100)');
   // Says so, because the chart above is a change and this is not.
-  items.push(lastRun.variable === 'tas' ? ' · absolute, °C' : ' · absolute, mm/day');
+  items.push(
+    spec.seasonalNote ?? (lastRun.variable === 'tas' ? ' · absolute, °C' : ' · absolute, mm/day')
+  );
   elements.seasonalLegend.replaceChildren(...items);
 }
 
@@ -962,7 +1035,7 @@ function attachActions() {
     const csv = toCsv({
       years: lastRun.years,
       runs: lastRun.runs,
-      bundle: explorer.bundles[lastRun.variable],
+      bundle: explorer.bundles[dataVariable(lastRun.variable)],
       models: [...new Set(lastRun.runs.map((r) => r.model))],
       variable: lastRun.variable,
       location: lastRun.location,
@@ -1039,7 +1112,7 @@ async function loadMap() {
       explorer.regions(),
       explorer.coastlines(),
     ]);
-    await explorer.patterns(elements.variable.value);
+    await explorer.patterns(dataVariable());
     elements.mapPanel.dataset.map = 'ready';
     elements.loadMap.hidden = true;
     elements.mapModes.hidden = false;
@@ -1099,7 +1172,8 @@ async function renderMap() {
   if (elements.mapPanel.dataset.map !== 'ready') return;
   const request = ++mapRequest;
 
-  const variable = elements.variable.value;
+  // Degree days map as the temperature they come from.
+  const variable = dataVariable();
   const year = Number(elements.mapYear.value);
   const baseline = elements.baseline.value;
   const specs = seriesSpecs();

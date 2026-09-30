@@ -80,6 +80,14 @@ describe('URL state', () => {
     expect(toQuery(DEFAULTS)).toBe('');
   });
 
+  it('offers degree days in the expert view only', () => {
+    expect(fromQuery('?v=hdd', CONTEXT).variable).toBe('hdd');
+    expect(fromQuery('?view=expert&v=cdd', CONTEXT).variable).toBe('cdd');
+    expect(fromQuery('?view=simple&v=hdd', CONTEXT).variable).toBe(DEFAULTS.variable);
+    const state = { ...EXPERT, variable: 'hdd', location: 'point:19.1,72.9' };
+    expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
+  });
+
   it('keeps a simple link to its three settings', () => {
     const state = { ...DEFAULTS, variable: 'pr', location: 'regional:NEU' };
     const query = toQuery({ ...state, models: ['CanESM5'], nRealizations: 50, seed: 7 });

@@ -159,6 +159,8 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
 
   const variable = params.get('v');
   if (variable === 'tas' || variable === 'pr') state.variable = variable;
+  // Degree days, derived from temperature, are offered in the expert view only.
+  if (state.mode === 'expert' && (variable === 'hdd' || variable === 'cdd')) state.variable = variable;
 
   const location = params.get('loc');
   if (location && locations.includes(location)) state.location = location;
