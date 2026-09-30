@@ -58,6 +58,23 @@ h1 {
   color: var(--muted);
 }
 
+.byline {
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+
+.byline a {
+  color: inherit;
+  font-weight: 600;
+  text-decoration-color: var(--border);
+  text-underline-offset: 3px;
+}
+
+.byline a:hover {
+  color: var(--accent);
+}
+
 h2 {
   margin: 0;
   font-size: 1rem;
@@ -419,6 +436,55 @@ button.link {
   opacity: 0.85;
 }
 
+.partners {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 28px;
+}
+
+/* White in both themes: the logos are drawn for a white ground. */
+.partner {
+  display: flex;
+  align-items: center;
+  height: 64px;
+  padding: 0 20px;
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: border-color 0.15s;
+}
+
+.partner:hover,
+.partner:focus-visible {
+  border-color: var(--accent);
+}
+
+/* Heights balanced by eye: the wordmarks have different proportions. */
+.partner img {
+  display: block;
+  width: auto;
+}
+
+.logo-cicero {
+  height: 26px;
+}
+
+.logo-diamond {
+  height: 24px;
+}
+
+.logo-futura {
+  height: 36px;
+}
+
+.funding {
+  margin-top: 14px;
+  font-size: 0.78rem;
+  opacity: 0.85;
+}
+
 @media (max-width: 560px) {
   .masthead {
     padding-top: 32px;
@@ -426,6 +492,26 @@ button.link {
 
   .panel {
     padding: 14px 12px 6px;
+  }
+
+  /* Two to a row and one below: fill the rows rather than leave them ragged. */
+  .partner {
+    flex: 1 1 auto;
+    justify-content: center;
+    height: 52px;
+    padding: 0 14px;
+  }
+
+  .logo-cicero {
+    height: 20px;
+  }
+
+  .logo-diamond {
+    height: 19px;
+  }
+
+  .logo-futura {
+    height: 28px;
   }
 }
 
