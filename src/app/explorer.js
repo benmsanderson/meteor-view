@@ -33,6 +33,7 @@ import {
   spinUpMonths,
 } from '../lib/kernel.js';
 import { normalGenerator } from '../lib/stats.js';
+import { dataUrl } from '../lib/data-url.js';
 
 const MONTHS = 12;
 
@@ -87,7 +88,7 @@ export const DEFAULT_MODEL = 'NorESM2-MM';
  */
 export async function availableModels(base = 'data/') {
   try {
-    const response = await fetch(`${base}models_v1.json`);
+    const response = await fetch(dataUrl(base, 'models_v1.json'));
     if (!response.ok) return [DEFAULT_MODEL];
     const { models } = await response.json();
     return Array.isArray(models) && models.length ? models : [DEFAULT_MODEL];
@@ -237,7 +238,7 @@ export class Explorer {
   static async load(base = 'data/', model = DEFAULT_MODEL) {
     const { Bundle } = await import('../lib/bundle.js');
     const fetchBundle = async (variable) => {
-      const url = `${base}${artifactName(model, variable, 'bundle')}`;
+      const url = dataUrl(base, `${artifactName(model, variable, 'bundle')}`);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`could not load ${url}: ${response.status}`);
       return new Bundle(await response.arrayBuffer());
@@ -264,7 +265,7 @@ export class Explorer {
   async patterns(variable) {
     if (!this.patternArtifacts.has(variable)) {
       const { PatternArtifact } = await import('../lib/pattern.js');
-      const url = `${this.base}${artifactName(this.model, variable, 'pattern')}`;
+      const url = dataUrl(this.base, `${artifactName(this.model, variable, 'pattern')}`);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`could not load ${url}: ${response.status}`);
       this.patternArtifacts.set(variable, new PatternArtifact(await response.arrayBuffer()));
@@ -281,7 +282,7 @@ export class Explorer {
    */
   async emissions() {
     if (!this.scenarioEmissions) {
-      const response = await fetch(`${this.base}scenario_emissions_v1.json`);
+      const response = await fetch(dataUrl(this.base, 'scenario_emissions_v1.json'));
       if (!response.ok) throw new Error('could not load scenario emissions');
       this.scenarioEmissions = await response.json();
     }
@@ -291,7 +292,7 @@ export class Explorer {
   /** AR6 outlines, once, on demand. */
   async regions() {
     if (!this.regionOutlines) {
-      const response = await fetch(`${this.base}ar6_regions_v1.json`);
+      const response = await fetch(dataUrl(this.base, 'ar6_regions_v1.json'));
       if (!response.ok) throw new Error('could not load region outlines');
       this.regionOutlines = (await response.json()).regions;
     }
@@ -301,7 +302,7 @@ export class Explorer {
   /** Coastlines, once, on demand. The geography a reader orients by. */
   async coastlines() {
     if (!this.coastlineRings) {
-      const response = await fetch(`${this.base}coastlines_v1.json`);
+      const response = await fetch(dataUrl(this.base, 'coastlines_v1.json'));
       if (!response.ok) throw new Error('could not load coastlines');
       this.coastlineRings = (await response.json()).rings;
     }
@@ -317,7 +318,7 @@ export class Explorer {
   async climatology() {
     if (!this.prClimatology) {
       const { Artifact } = await import('../lib/bundle.js');
-      const url = `${this.base}${artifactName(this.model, 'pr', 'climatology')}`;
+      const url = dataUrl(this.base, `${artifactName(this.model, 'pr', 'climatology')}`);
       const response = await fetch(url);
       if (!response.ok) throw new Error(`could not load ${url}`);
       const artifact = new Artifact(await response.arrayBuffer());
@@ -334,7 +335,7 @@ export class Explorer {
     if (this.landPercent === undefined) {
       try {
         const { Artifact } = await import('../lib/bundle.js');
-        const url = `${this.base}meteor_${this.model}_landfrac_v1.nc`;
+        const url = dataUrl(this.base, `meteor_${this.model}_landfrac_v1.nc`);
         const response = await fetch(url);
         this.landPercent = response.ok
           ? new Artifact(await response.arrayBuffer()).array('land_percent')

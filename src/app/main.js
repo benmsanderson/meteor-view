@@ -44,6 +44,7 @@ import {
 import { assignModelColours, modelColour } from './models.js';
 import { placeLabel, registerCities } from './places.js';
 import { attachPlaceSearch } from './place-search.js';
+import { dataUrl } from '../lib/data-url.js';
 import {
   groupScenarios,
   scenarioColour,
@@ -947,7 +948,7 @@ async function renderSimpleMap() {
   try {
     if (!outlines.length) [outlines, coastlines] = await Promise.all([explorer.regions(), explorer.coastlines()]);
     if (!summaryMaps.has(scenario)) {
-      const response = await fetch(`${dataBase}${summaryMapFile(scenario)}`);
+      const response = await fetch(dataUrl(dataBase, summaryMapFile(scenario)));
       if (!response.ok) throw new Error(`no map across models for ${scenarioLabel(scenario)}`);
       summaryMaps.set(scenario, await response.json());
     }
@@ -2153,7 +2154,7 @@ async function start() {
   mode = first.mode;
   // The simple view's cities; without the file, the bundles' own.
   try {
-    const response = await fetch(`${dataBase}cities_v1.json`);
+    const response = await fetch(dataUrl(dataBase, 'cities_v1.json'));
     cities = response.ok ? (await response.json()).cities : [];
   } catch {
     cities = [];

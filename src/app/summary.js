@@ -30,6 +30,7 @@ import {
 } from '../lib/degree-days.js';
 import { quantiles } from './chart.js';
 import { BASELINES } from './explorer.js';
+import { dataUrl } from '../lib/data-url.js';
 
 /** The years the simple chart shows: enough history to see it has begun. */
 export const SUMMARY_YEARS = { start: 1950, end: 2100 };
@@ -50,7 +51,7 @@ export function summaryFile(location) {
 
 /** Fetch one place's summary, or null when none was built. */
 export async function loadSummary(base, location) {
-  const response = await fetch(`${base}${summaryFile(location)}`);
+  const response = await fetch(dataUrl(base, summaryFile(location)));
   return response.ok ? response.json() : null;
 }
 
