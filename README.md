@@ -71,7 +71,7 @@ npm test
 ```bash
 npm install
 node scripts/fetch-artifacts.mjs   # every model but NorESM2-MM; optional
-npm run dev
+npm run dev                        # builds the simple view's summaries first
 ```
 
 `npm run build` produces `dist/`, which is what Pages serves. Without the
@@ -104,6 +104,21 @@ a fiction".
 
 The exporter depends on `series_transformed` and `locations=`, both added by
 [METEOR#101](https://github.com/benmsanderson/METEOR/pull/101).
+
+## Two views
+
+The page opens in a **simple view** for a general audience: a variable, a
+place and some scenarios, one chart and one sentence. It shows the spread
+across every model the site carries, each model's forced change from its own
+1850–1900 level (precipitation as a percentage of that level), as the median
+model, the middle half and the middle 90%. The spread is computed at build
+time by `scripts/build-summary.mjs` into one small file per place
+(`data/summary_v1/`), so the browser never loads thirty models' bundles.
+
+The **expert view** is everything below: one model's internal variability,
+model comparison, baselines, maps, drawn regions and exports. The bare URL
+opens the simple view; every earlier link carries no `view=` and opens the
+expert view unchanged. Details in `src/app/state.js`.
 
 ## Maps and your own regions
 

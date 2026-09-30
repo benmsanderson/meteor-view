@@ -16,11 +16,31 @@
     -->
     <meta name="robots" content="noindex, nofollow" />
     <link rel="stylesheet" href="./src/app/style.css" />
+    <script>
+      // Which view, before anything draws: the rule in src/app/state.js.
+      (function () {
+        var q = new URLSearchParams(location.search);
+        var v = q.get('view');
+        document.documentElement.dataset.mode =
+          v === 'simple' || v === 'expert' ? v : location.search.length > 1 ? 'expert' : 'simple';
+      })();
+    </script>
   </head>
   <body>
     <header class="masthead">
-      <h1>METEOR explorer</h1>
-      <p class="tagline">
+      <div class="masthead__top">
+        <h1>METEOR explorer</h1>
+        <div class="view-toggle" role="group" aria-label="View">
+          <button type="button" data-view="simple" aria-pressed="true">Simple</button>
+          <button type="button" data-view="expert" aria-pressed="false">Expert</button>
+        </div>
+      </div>
+      <p class="tagline" data-simple>
+        How much warmer, wetter or drier could it get? See what a family of
+        climate models projects for a place under each scenario, and how far
+        they agree.
+      </p>
+      <p class="tagline" data-expert>
         A climate emulator running entirely in your browser. Pick a scenario and a
         place, and see the spread of monthly outcomes.
       </p>
@@ -33,7 +53,7 @@
 
     <main>
       <form class="controls" id="controls">
-        <div class="control">
+        <div class="control" data-expert>
           <label for="compare-by">Compare</label>
           <select id="compare-by">
             <option value="scenarios">Scenarios</option>
@@ -41,7 +61,7 @@
           </select>
         </div>
 
-        <div class="control">
+        <div class="control" data-expert>
           <span class="control__label" id="model-label">Models</span>
           <details class="multiselect" id="model-picker">
             <summary aria-labelledby="model-label model-summary">
@@ -74,7 +94,7 @@
           </details>
         </div>
 
-        <div class="control">
+        <div class="control" data-expert>
           <label for="baseline">Change from</label>
           <select
             id="baseline"
@@ -85,7 +105,7 @@
           </select>
         </div>
 
-        <div class="control">
+        <div class="control" data-expert>
           <label for="realizations">Realizations</label>
           <select id="realizations">
             <option value="10">10</option>
@@ -105,18 +125,19 @@
             <span class="swatch swatch--wide"></span> 5–95%
           </p>
         </div>
+        <p class="summary" id="summary" data-simple aria-live="polite"></p>
         <canvas id="chart" height="360"></canvas>
         <div class="actions">
           <button type="button" id="copy-link">Copy link to this view</button>
-          <button type="button" id="download-csv">Download CSV</button>
+          <button type="button" id="download-csv" data-expert>Download CSV</button>
           <button type="button" id="download-png">Download chart</button>
-          <button type="button" id="resample" class="actions__spacer">
+          <button type="button" id="resample" class="actions__spacer" data-expert>
             Draw a new sample
           </button>
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-expert>
         <div class="panel__header">
           <h2 id="context-title">Scenario context</h2>
           <p class="legend">
@@ -137,7 +158,7 @@
         <canvas id="context"></canvas>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-expert>
         <div class="panel__header">
           <h2 id="map-title">Map of the forced response</h2>
           <p class="legend">
@@ -201,7 +222,7 @@
         </div>
       </section>
 
-      <section class="panel">
+      <section class="panel" data-expert>
         <div class="panel__header">
           <h2>Seasonal cycle</h2>
           <p class="legend" id="seasonal-legend">
@@ -221,7 +242,18 @@
           CMIP6 output. The whole payload is about 300 KB and there is no server: the
           emulator runs on your machine.
         </p>
-        <p>
+        <p data-simple>
+          <strong>What the range shows.</strong> Each climate model gives a
+          somewhat different answer, and the chart shows how much they agree:
+          the line is the middle model, the darker band the middle half of the
+          models, and the lighter band the middle 90%. These are the models'
+          long-term responses to each scenario, without the ups and downs of
+          individual years, measured from each model's own 1850–1900 level.
+          Precipitation change is a percentage of that level. The
+          <em>Expert</em> view shows year-to-year variability, one model at a
+          time, with maps, other baselines and more.
+        </p>
+        <p data-expert>
           <strong>Two generations of scenario.</strong> The CMIP6 SSPs and the
           CMIP7 ScenarioMIP markers were built years apart and harmonized to
           different vintages of history, so they are not interchangeable. Both
@@ -231,7 +263,7 @@
           0.74 W/m² model difference inside what looks like a scenario
           difference.
         </p>
-        <p>
+        <p data-expert>
           <strong>Baselines.</strong> Temperature, and the maps, are shown as
           change from a reference period: 1850–1900, the pre-industrial
           convention warming levels are defined against, or 2005–2024, recent
@@ -245,7 +277,7 @@
           their disagreement about the future is disagreement about the past.
           The precipitation timeseries stays in absolute mm/day.
         </p>
-        <p>
+        <p data-expert>
           <strong>What it is not.</strong> The band around any one model is that
           model's internal variability — not model uncertainty, and not the
           full uncertainty in a projection. Compare models to see how much they

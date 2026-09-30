@@ -724,3 +724,67 @@ a.partner:focus-visible {
 .box-land input {
   accent-color: var(--accent);
 }
+
+/* Two views. The one not shown is hidden outright, controls and panels alike;
+   the rule that picks it is in src/app/state.js. */
+[data-mode='simple'] [data-expert],
+[data-mode='expert'] [data-simple] {
+  display: none !important;
+}
+
+.masthead__top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 24px;
+}
+
+.masthead__top h1 {
+  margin-bottom: 0;
+}
+
+.view-toggle {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  background: var(--surface);
+}
+
+.view-toggle button {
+  font: inherit;
+  font-size: 0.9rem;
+  padding: 6px 16px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.view-toggle button[aria-pressed='true'] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.masthead .tagline {
+  margin-top: 8px;
+}
+
+/* The simple view's plain-language reading of the chart. */
+.summary {
+  margin: 0 0 12px;
+  max-width: 72ch;
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.summary strong {
+  font-weight: 650;
+}
+
+.summary .range {
+  color: var(--muted);
+  white-space: nowrap;
+}

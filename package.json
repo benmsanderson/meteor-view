@@ -8,7 +8,10 @@
   },
   "scripts": {
     "test": "vitest run",
+    "summary": "node scripts/build-summary.mjs",
+    "predev": "node scripts/build-summary.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/build-summary.mjs",
     "build": "vite build"
   },
   "repository": {

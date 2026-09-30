@@ -36,6 +36,11 @@ To publish a new release: zip each model's `meteor_<model>_{tas,pr}_{bundle,patt
 `meteor_<model>_v1.zip`, attach them to a release, and record the tag, each
 zip's size and SHA-256, and its member files in `artifacts_v1.json`.
 
+`summary_v1/`, generated, gitignored: the simple view's spread across models,
+one JSON file per place, written by `scripts/build-summary.mjs` from whatever
+models are present. `npm run build` and `npm run dev` run it first; it is
+skipped when nothing has changed.
+
 ## Emulator artifacts
 
 `meteor_*_bundle_v1.nc`, `meteor_*_pattern_v1.nc`, `meteor_*_golden_*.nc`

@@ -25,6 +25,7 @@ import {
 } from './map.js';
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
+import { loadSummary, summarySentence } from './summary.js';
 import { assignModelColours, modelColour } from './models.js';
 import { placeLabel } from './places.js';
 import {
@@ -72,8 +73,27 @@ const VARIABLES = {
   },
 };
 
+/**
+ * The simple view's two quantities: change from 1850-1900 across models, in
+ * °C and in percent of the 1850-1900 level (src/app/summary.js).
+ */
+const SIMPLE_VARIABLES = {
+  tas: {
+    label: 'Temperature',
+    yLabel: 'Change from 1850–1900 (°C)',
+    format: (v) => `${v.toFixed(1)}°`,
+  },
+  pr: {
+    label: 'Precipitation',
+    yLabel: 'Change from 1850–1900 (%)',
+    format: (v) => `${v.toFixed(0)}%`,
+  },
+};
+
 const elements = {
   controls: document.getElementById('controls'),
+  viewButtons: document.querySelectorAll('.view-toggle button'),
+  summary: document.getElementById('summary'),
   compareBy: document.getElementById('compare-by'),
   modelPicker: document.getElementById('model-picker'),
   modelList: document.getElementById('model-list'),
@@ -138,6 +158,12 @@ let explorer;
 const explorers = new Map();
 /** Every model the site carries, from the manifest. */
 let availableModelList = [];
+/** Which view: 'simple', the spread across models, or 'expert', everything else. */
+let mode = DEFAULTS.mode;
+/** One place's multi-model summary per place asked for, fetched once. */
+const summaries = new Map();
+/** What the simple view last drew, kept for redraws and the chart download. */
+let lastSimple = null;
 /** Whether a view compares scenarios under one model, or models under one scenario. */
 let compareBy = 'scenarios';
 /** The selected models, in manifest order. Never empty. */
@@ -412,6 +438,10 @@ function seriesSpecs() {
 async function run() {
   if (!explorer) return;
   const request = ++runRequest;
+  if (mode === 'simple') {
+    runSimple(request);
+    return;
+  }
   if (customBox) {
     runCustomRegion(request);
     return;
@@ -487,6 +517,125 @@ async function run() {
       `${placeLabel(location)}, ${describeRuns(runs)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
+}
+
+/** One place's summary, fetched once; a failed fetch is retried next time. */
+function summaryFor(location) {
+  if (!summaries.has(location)) {
+    const pending = loadSummary(dataBase, location).catch((error) => {
+      summaries.delete(location);
+      throw error;
+    });
+    summaries.set(location, pending);
+  }
+  return summaries.get(location);
+}
+
+/**
+ * The simple view: the spread across every model of the change since
+ * 1850-1900, from summaries computed at build time, so nothing is generated
+ * here and no model's bundles beyond the first are fetched.
+ */
+async function runSimple(request) {
+  const variable = elements.variable.value;
+  const location = elements.location.value;
+  let summary;
+  try {
+    summary = await summaryFor(location);
+  } catch (error) {
+    if (request === runRequest) setStatus(error.message, 'error');
+    return;
+  }
+  if (request !== runRequest) return;
+  if (!summary) {
+    setStatus(
+      'The summary across models is missing: run `node scripts/build-summary.mjs`, ' +
+        'or use the Expert view.',
+      'error'
+    );
+    return;
+  }
+  const scenarios = selection.filter((name) => summary[variable][name]);
+  lastSimple = { variable, location, summary, scenarios };
+  syncUrl();
+
+  const spec = SIMPLE_VARIABLES[variable];
+  const place = placeLabel(location);
+  elements.chartTitle.textContent = `${spec.label} change at ${place}`;
+  elements.summary.textContent = summarySentence({
+    summary,
+    variable,
+    scenarios,
+    label: scenarioLabel,
+    place: location === 'global' ? 'global' : place,
+  });
+  drawChart();
+  showProvenance();
+  const [start, end] = summary.years;
+  setStatus(
+    `${spec.label} change at ${place} across ${summary.models.length} climate models, ` +
+      `${start}–${end}, under ${listOf(scenarios.map(scenarioLabel))}.`
+  );
+}
+
+/** The simple view's chart and legend, from the last summary drawn. */
+function drawSimpleChart() {
+  if (!lastSimple) return;
+  const { variable, summary, scenarios } = lastSimple;
+  const spec = SIMPLE_VARIABLES[variable];
+  const [start, end] = summary.years;
+  drawFanChart(elements.chart, {
+    x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
+    groups: scenarios.map((scenario) => ({
+      label: scenarioShortLabel(scenario),
+      colour: selectedColour(scenario),
+      bands: summary[variable][scenario].bands,
+    })),
+    yLabel: spec.yLabel,
+    format: spec.format,
+  });
+
+  const n = summary.models.length;
+  const colour = selectedColour(scenarios[0]);
+  const swatch = (kind, text) => {
+    const span = document.createElement('span');
+    span.className = `swatch swatch--${kind}`;
+    span.style.background = colour;
+    return [span, ` ${text} `];
+  };
+  if (scenarios.length === 1) {
+    elements.chartLegend.replaceChildren(
+      ...swatch('median', 'middle model'),
+      ...swatch('band', 'middle half'),
+      ...swatch('wide', `middle 90% of ${n} models`)
+    );
+  } else {
+    elements.chartLegend.textContent = `Middle model (line) and middle 90% of ${n} models (band)`;
+  }
+}
+
+/** Switch view, keeping every setting either view has for when it comes back. */
+function setMode(next) {
+  if (next === mode) return;
+  mode = next;
+  if (mode === 'simple' && compareBy === 'models') {
+    // The simple view compares scenarios; carry over the one being shown.
+    compareBy = 'scenarios';
+    elements.compareBy.value = compareBy;
+    models = models.slice(0, 1);
+    renderPickers();
+    showSelection();
+  }
+  showMode();
+  selectionChanged();
+}
+
+/** Show the controls and panels of the current view, and say which it is. */
+function showMode() {
+  document.documentElement.dataset.mode = mode;
+  for (const button of elements.viewButtons) {
+    button.setAttribute('aria-pressed', String(button.dataset.view === mode));
+  }
 }
 
 /** "Temperature at Global mean", naming the one scenario when models vary. */
@@ -603,6 +752,10 @@ async function runCustomRegion(request) {
 
 /** The fan chart and its legend, from the last run. */
 function drawChart() {
+  if (mode === 'simple') {
+    drawSimpleChart();
+    return;
+  }
   if (!lastRun) return;
   const spec = VARIABLES[lastRun.variable];
   drawFanChart(elements.chart, {
@@ -722,6 +875,7 @@ function drawSeasonalPanel() {
 /** The current control state, as the URL records it. */
 function currentState() {
   return {
+    mode,
     compareBy,
     models,
     variable: elements.variable.value,
@@ -748,6 +902,8 @@ function syncUrl() {
 
 /** Apply state parsed from the URL to the controls. */
 function applyState(state) {
+  mode = state.mode;
+  showMode();
   compareBy = state.compareBy;
   elements.compareBy.value = compareBy;
   models = availableModelList.filter((m) => state.models.includes(m));
@@ -820,6 +976,22 @@ function attachActions() {
   });
 
   elements.downloadPng.addEventListener('click', async () => {
+    if (mode === 'simple') {
+      if (!lastSimple) return;
+      const { variable, location, summary, scenarios } = lastSimple;
+      const blob = await chartToPng(elements.chart, {
+        title: elements.chartTitle.textContent,
+        subtitle:
+          `${summary.models.length} climate models · ${scenarios.map(scenarioLabel).join(', ')} · ` +
+          `change from 1850–1900 · METEOR explorer`,
+      });
+      download(
+        `${filenameStem({ cmip6Model: 'multimodel', variable, location, scenario: scenarios })}.png`,
+        blob
+      );
+      flash(elements.downloadPng, 'Chart saved');
+      return;
+    }
     if (!lastRun) return;
     const spec = VARIABLES[lastRun.variable];
     const blob = await chartToPng(elements.chart, {
@@ -1513,6 +1685,10 @@ async function selectionChanged() {
 }
 
 function attachControls() {
+  for (const button of elements.viewButtons) {
+    button.addEventListener('click', () => setMode(button.dataset.view));
+  }
+
   // The compare menus pick which two of the selection the maps show. Choosing
   // the scenario already in the other slot swaps the two rather than
   // comparing a scenario with itself.
@@ -1591,6 +1767,14 @@ function attachControls() {
 /** Which models, trained how, from which version of METEOR. */
 function showProvenance() {
   const bundle = explorer.bundles.tas;
+  if (mode === 'simple') {
+    const list = lastSimple?.summary.models ?? [];
+    elements.provenance.textContent = list.length
+      ? `Models: ${list.join(', ')}. Forced responses from METEOR ${bundle.attrs.meteor_version}, ` +
+        `schema v${bundle.schemaVersion}, each measured from its own 1850–1900 level.`
+      : '';
+    return;
+  }
   const which = compareBy === 'models' ? models.join(', ') : bundle.attrs.cmip6_model;
   elements.provenance.textContent =
     `Bundles: ${which}, trained on ${bundle.attrs.training_scenario}, ` +
