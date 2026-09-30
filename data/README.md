@@ -24,17 +24,18 @@ Settled 2026-09-29 (`docs/00-development-plan.md` §6), replacing the split of
   from a separate store.
 
 The current release,
-[`artifacts-2026-09-28`](https://github.com/benmsanderson/meteor-view/releases/tag/artifacts-2026-09-28),
-is **provisional**: 30 models exported from METEOR `b02011b`, before
+[`artifacts-2026-09-30`](https://github.com/benmsanderson/meteor-view/releases/tag/artifacts-2026-09-30),
+is **provisional**: 29 models exported from METEOR `b02011b` with 311
+locations (IPSL-CM6A-LR is left out: its fits are unstable between trainings), before
 METEOR#101, #102 and #104 merge. Once they do, everything is re-exported from
 `base` into a new release, and `artifacts_v1.json` is updated to point at it.
 A citable Zenodo record can later archive the same zips; the pipeline only
 needs `base_url` changed.
 
-To publish a new release: zip each model's `meteor_<model>_{tas,pr}_{bundle,pattern}_v1.nc`,
-`meteor_<model>_pr_climatology_v1.nc` and `meteor_<model>_landfrac_v1.nc` as
-`meteor_<model>_v1.zip`, attach them to a release, and record the tag, each
-zip's size and SHA-256, and its member files in `artifacts_v1.json`.
+To publish a new release: `python scripts/package_artifacts.py <tag> <out dir>`
+zips each model's bundles, pattern artifacts, climatology and land fraction
+and pins them in `artifacts_v1.json`; attach the zips and the pin to a
+release of that tag.
 
 `summary_v1/`, generated, gitignored: the simple view's spread across models,
 one JSON file per place, written by `scripts/build-summary.mjs` from whatever
@@ -44,11 +45,11 @@ skipped when nothing has changed.
 `cities_v1.json`, committed: the simple view's 252 cities, every national
 capital of more than 500,000 people and every other city of more than 2.5
 million, from Natural Earth's populated places (public domain), grouped by
-continent. Built by `scripts/make_cities.py`. The eight the bundles carry keep
-their specifiers; the rest are read from each model's pattern artifacts at
-build time, at the nearest gridbox more than half land, as the bundles place
-theirs. The expert view offers the eight until the bundles are re-exported
-with the rest.
+continent. Built by `scripts/make_cities.py`. The exporter takes its cities from this
+file, specifiers exactly as written, so every bundle since
+`artifacts-2026-09-30` carries all 252 and both views offer them, the expert
+view with year-to-year variability. The eight cities of earlier bundles keep
+their specifiers.
 
 `degree_days_v1/`, committed: observed degree-day curves, the bias
 correction for heating and cooling degree days. One JSON file per city (all
