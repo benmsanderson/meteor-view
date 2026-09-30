@@ -25,13 +25,13 @@ const LABELS = {
   'ssp534-over': 'SSP5-3.4-OS',
   ssp585: 'SSP5-8.5',
 
-  'cmip7-very-low': 'Very Low (SSP1)',
-  'cmip7-low': 'Low (SSP2)',
-  'cmip7-low-to-negative': 'Low to Negative (SSP2)',
-  'cmip7-medium-to-low': 'Medium to Low (SSP2)',
-  'cmip7-medium': 'Medium (SSP2)',
-  'cmip7-high-to-low': 'High to Low (SSP5)',
-  'cmip7-high': 'High (SSP3)',
+  'cmip7-very-low': 'Very Low',
+  'cmip7-low': 'Low',
+  'cmip7-low-to-negative': 'Low to Negative',
+  'cmip7-medium-to-low': 'Medium to Low',
+  'cmip7-medium': 'Medium',
+  'cmip7-high-to-low': 'High to Low',
+  'cmip7-high': 'High',
 };
 
 /**
@@ -113,17 +113,6 @@ export function sortScenarios(names) {
 /** Which generation a scenario belongs to. */
 export function scenarioFamily(name) {
   return name.startsWith('cmip7-') ? 'CMIP7 ScenarioMIP' : 'CMIP6 SSPs';
-}
-
-/**
- * A shorter display name, for chart labels.
- *
- * Drops the parenthetical SSP the marker derives from: in a chart the colour
- * and the menu already carry it, and "Medium to Low (SSP2)" needs half again
- * as much margin as "Medium to Low".
- */
-export function scenarioShortLabel(name) {
-  return scenarioLabel(name).replace(/\s*\(.*\)$/, '');
 }
 
 /** A display name, falling back to the raw identifier. */

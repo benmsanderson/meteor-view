@@ -372,7 +372,7 @@ describe('scenario families', () => {
 
   it('gives readable names', () => {
     expect(scenarioLabel('ssp534-over')).toBe('SSP5-3.4-OS');
-    expect(scenarioLabel('cmip7-medium-to-low')).toBe('Medium to Low (SSP2)');
+    expect(scenarioLabel('cmip7-medium-to-low')).toBe('Medium to Low');
     expect(scenarioFamily('cmip7-high')).toBe('CMIP7 ScenarioMIP');
     expect(scenarioFamily('ssp245')).toBe('CMIP6 SSPs');
   });

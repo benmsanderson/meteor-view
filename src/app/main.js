@@ -47,7 +47,6 @@ import {
   scenarioColour,
   scenarioFamily,
   scenarioLabel,
-  scenarioShortLabel,
   selectedColour,
   sortScenarios,
 } from './scenarios.js';
@@ -429,11 +428,11 @@ function showSelection() {
     swatch.style.background = on ? modelColour(swatch.dataset.item) : '';
   }
 
-  const summary = (chosen, label, short) =>
-    chosen.length === 1 ? label(chosen[0]) : `${short(chosen[0])} + ${chosen.length - 1} more`;
-  elements.scenarioSummary.textContent = summary(selection, scenarioLabel, scenarioShortLabel);
+  const summary = (chosen, label) =>
+    chosen.length === 1 ? label(chosen[0]) : `${label(chosen[0])} + ${chosen.length - 1} more`;
+  elements.scenarioSummary.textContent = summary(selection, scenarioLabel);
   elements.scenarioPicker.title = selection.map(scenarioLabel).join(', ');
-  elements.modelSummary.textContent = summary(models, (m) => m, (m) => m);
+  elements.modelSummary.textContent = summary(models, (m) => m);
   elements.modelPicker.title = models.join(', ');
 
   const items = comparedItems();
@@ -517,7 +516,7 @@ function seriesSpecs() {
     key: scenario,
     model,
     scenario,
-    label: scenarioShortLabel(scenario),
+    label: scenarioLabel(scenario),
     colour: selectedColour(scenario),
   }));
 }
@@ -745,7 +744,7 @@ function drawSimpleChart() {
   drawFanChart(elements.chart, {
     x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
     groups: scenarios.map((scenario) => ({
-      label: scenarioShortLabel(scenario),
+      label: scenarioLabel(scenario),
       colour: selectedColour(scenario),
       bands: summary[variable][scenario].bands,
     })),
@@ -848,7 +847,7 @@ function drawGlobal() {
       name,
       years,
       values: scenarioEmissions.scenarios[name].CO2,
-      label: scenarioShortLabel(name),
+      label: scenarioLabel(name),
       colour: selectedColour(name),
       selectedColour: selectedColour(name),
       labelled: true,
@@ -862,7 +861,7 @@ function drawGlobal() {
   drawFanChart(elements.globalTemperature, {
     x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
     groups: scenarios.map((scenario) => ({
-      label: scenarioShortLabel(scenario),
+      label: scenarioLabel(scenario),
       colour: selectedColour(scenario),
       bands: summary.tas[scenario].bands,
     })),
@@ -1843,7 +1842,7 @@ async function renderContext() {
   drawScenarioContext(elements.context, {
     scenarios: series.map((s) => ({
       ...s,
-      label: scenarioShortLabel(s.name),
+      label: scenarioLabel(s.name),
       colour: scenarioColour(s.name, neutral),
       selectedColour: selectedColour(s.name, neutral),
       // The CMIP7 markers are the subject and get named; the SSPs are the
