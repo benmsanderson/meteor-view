@@ -76,6 +76,8 @@
           <select id="variable">
             <option value="tas">Temperature</option>
             <option value="pr">Precipitation</option>
+            <option value="hdd">Heating degree days</option>
+            <option value="cdd">Cooling degree days</option>
           </select>
         </div>
 
@@ -277,17 +279,16 @@
           their disagreement about the future is disagreement about the past.
           The precipitation timeseries stays in absolute mm/day.
         </p>
-        <p data-expert>
+        <p>
           <strong>Degree days.</strong> Heating and cooling degree days, base
-          18 °C, are computed from each realization's absolute monthly
-          temperature with METEOR's degree-days calculator (Isaac and van
-          Vuuren 2009), which infers the spread of daily temperatures within a
-          month from the monthly mean. They inherit the model's own absolute
-          climate, which can be a few degrees off the observed one at any given
-          place, so compare changes between periods and scenarios rather than
-          reading the level as a forecast. For a region they are the degree
-          days of its average temperature, so they mean most for the cities.
-          The seasonal panel shows them month by month.
+          18 °C, count how far daily temperatures fall below or rise above the
+          point where buildings need heating or cooling. They start from the
+          observed climate of 1995–2014 (W5E5, daily) and add each model's
+          warming for each month, so they do not inherit a model's biases in
+          absolute temperature or in how much days vary. For a region they
+          average its land gridboxes' degree days; for a city they use the
+          nearest land gridbox of the observations, half a degree across. They
+          are not offered for the sea or the global mean.
         </p>
         <p data-expert>
           <strong>What it is not.</strong> The band around any one model is that
@@ -318,7 +319,12 @@
           Coupled Model Intercomparison Project. AR6 reference regions from
           Iturbide et al. (2020),
           <a href="https://doi.org/10.5194/essd-12-2959-2020">ESSD 12, 2959–2970</a>;
-          coastlines from Natural Earth.
+          coastlines from Natural Earth. Degree days are corrected with W5E5
+          v2.0 (Lange et al. 2021,
+          <a href="https://doi.org/10.48364/ISIMIP.342217">10.48364/ISIMIP.342217</a>;
+          Cucchi et al. 2020,
+          <a href="https://doi.org/10.5194/essd-12-2097-2020">ESSD 12, 2097–2120</a>),
+          CC BY 4.0.
         </p>
         <p class="provenance" id="provenance"></p>
         <!--

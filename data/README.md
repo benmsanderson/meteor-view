@@ -41,6 +41,18 @@ one JSON file per place, written by `scripts/build-summary.mjs` from whatever
 models are present. `npm run build` and `npm run dev` run it first; it is
 skipped when nothing has changed.
 
+`degree_days_v1/`, committed: observed degree-day curves, the bias
+correction for heating and cooling degree days. One JSON file per city and
+AR6 land region, none for the sea or the global mean: for each calendar month,
+the heating and cooling degree days (base 18 °C) of the observed 1995–2014
+climate under a uniform temperature shift from −15 to +20 °C, in two forms
+(`climate`, keeping year-to-year variability, for forced responses; `within`,
+keeping only the spread of days within each month, for realizations). Built
+once by `scripts/make_degree_day_curves.py` from W5E5 v2.0 daily temperature
+(Lange et al. 2021, doi:10.48364/ISIMIP.342217; Cucchi et al. 2020,
+doi:10.5194/essd-12-2097-2020), CC BY 4.0; the 5.9 GB of daily data it reads
+is not kept. See `src/lib/degree-days.js` for how the site uses them.
+
 ## Emulator artifacts
 
 `meteor_*_bundle_v1.nc`, `meteor_*_pattern_v1.nc`, `meteor_*_golden_*.nc`

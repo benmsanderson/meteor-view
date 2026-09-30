@@ -115,6 +115,14 @@ model, the middle half and the middle 90%. The spread is computed at build
 time by `scripts/build-summary.mjs` into one small file per place
 (`data/summary_v1/`), so the browser never loads thirty models' bundles.
 
+Both views offer **heating and cooling degree days** (base 18 °C) for cities
+and land regions, bias-corrected against observations: each model's warming
+for each month is applied to the observed daily temperatures of 1995–2014
+(W5E5 v2.0), through curves precomputed by
+`scripts/make_degree_day_curves.py` into `data/degree_days_v1/`. The simple
+view shows the spread across models; the expert view runs each realization
+through the same curves. Details in `src/lib/degree-days.js`.
+
 The **expert view** is everything below: one model's internal variability,
 model comparison, baselines, maps, drawn regions and exports. The bare URL
 opens the simple view; every earlier link carries no `view=` and opens the

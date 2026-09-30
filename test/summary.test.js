@@ -121,6 +121,21 @@ describe('the sentence', () => {
     );
   });
 
+  it('anchors degree days on the observed climate', () => {
+    const withDays = {
+      ...summary,
+      observed: { period: { from: 1995, to: 2014 }, hdd: 2773.7, cdd: 52.9 },
+      hdd: { a: { end: [2185, 2393, 2550, 2694, 2851] } },
+    };
+    expect(
+      summarySentence({ summary: withDays, variable: 'hdd', scenarios: ['a'], label, place: 'London' })
+    ).toBe(
+      'Heating degree days in London were 2,774 a year in 1995–2014, as observed. ' +
+        'By 2081–2100 they come to 2,550 (2,185–2,851) under Very Low. ' +
+        'Figures in brackets span the middle 90% of the 30 climate models.'
+    );
+  });
+
   it('does not claim a range from one model', () => {
     const one = { ...summary, models: ['M0'] };
     expect(

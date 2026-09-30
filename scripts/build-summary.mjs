@@ -14,6 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { Bundle } from '../src/lib/bundle.js';
 import { Explorer, artifactName } from '../src/app/explorer.js';
 import { summarizeLocation, summaryFile } from '../src/app/summary.js';
+import { degreeDayFile } from '../src/lib/degree-days.js';
 
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const OUT = join(DATA, 'summary_v1');
@@ -24,8 +25,14 @@ const models = existsSync(manifest)
   ? JSON.parse(readFileSync(manifest, 'utf8')).models
   : ['NorESM2-MM'];
 const bundles = models.flatMap((m) => ['tas', 'pr'].map((v) => join(DATA, artifactName(m, v, 'bundle'))));
+// The observed degree-day curves are inputs too.
+const curveFiles = existsSync(join(DATA, 'degree_days_v1'))
+  ? readdirSync(join(DATA, 'degree_days_v1')).map((f) => join(DATA, 'degree_days_v1', f))
+  : [];
 
-const newest = Math.max(...[manifest, ...bundles].filter(existsSync).map((f) => statSync(f).mtimeMs));
+const newest = Math.max(
+  ...[manifest, ...bundles, ...curveFiles].filter(existsSync).map((f) => statSync(f).mtimeMs)
+);
 if (existsSync(STAMP) && statSync(STAMP).mtimeMs > newest) {
   const built = JSON.parse(readFileSync(STAMP, 'utf8'));
   if (built.models.join() === models.join()) {
@@ -45,7 +52,12 @@ const { locations } = explorers.get(models[0]);
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(OUT, { recursive: true });
 for (const location of locations) {
-  writeFileSync(join(DATA, summaryFile(location)), JSON.stringify(summarizeLocation(explorers, location)));
+  const curveFile = join(DATA, degreeDayFile(location));
+  const curves = existsSync(curveFile) ? JSON.parse(readFileSync(curveFile, 'utf8')) : null;
+  writeFileSync(
+    join(DATA, summaryFile(location)),
+    JSON.stringify(summarizeLocation(explorers, location, curves))
+  );
 }
 writeFileSync(STAMP, JSON.stringify({ models, locations: locations.length }));
 

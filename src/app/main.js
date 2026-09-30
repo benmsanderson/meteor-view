@@ -26,7 +26,13 @@ import {
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
 import { loadSummary, summarySentence } from './summary.js';
-import { DEGREE_DAYS, annualSums, degreeDays } from '../lib/degree-days.js';
+import {
+  DEGREE_DAY_BASE,
+  annualSums,
+  loadDegreeDayCurves,
+  monthlyDegreeDays,
+  referenceClimate,
+} from '../lib/degree-days.js';
 import { assignModelColours, modelColour } from './models.js';
 import { placeLabel } from './places.js';
 import {
@@ -72,15 +78,15 @@ const VARIABLES = {
     convert: (v) => v * SECONDS_PER_DAY,
     format: (v) => v.toFixed(1),
   },
-  // Degree days: impacts derived from each temperature realization, through
-  // METEOR's degree-days calculator (src/lib/degree-days.js), on absolute
-  // monthly temperature. Expert view only, and only where a run has a monthly
-  // cycle, so not for a drawn region.
+  // Degree days: derived from each temperature realization, bias-corrected
+  // against observations (src/lib/degree-days.js). Only where there are
+  // observed curves, so land regions and cities, and only where a run has a
+  // monthly cycle, so not a drawn region.
   hdd: {
     label: 'Heating degree days',
     source: 'tas',
     degreeDays: 'hdd',
-    yLabel: `Heating degree days per year (base ${DEGREE_DAYS.base} °C)`,
+    yLabel: `Heating degree days per year (base ${DEGREE_DAY_BASE} °C)`,
     baselined: false,
     annual: annualSums,
     convert: (v) => v,
@@ -91,7 +97,7 @@ const VARIABLES = {
     label: 'Cooling degree days',
     source: 'tas',
     degreeDays: 'cdd',
-    yLabel: `Cooling degree days per year (base ${DEGREE_DAYS.base} °C)`,
+    yLabel: `Cooling degree days per year (base ${DEGREE_DAY_BASE} °C)`,
     baselined: false,
     annual: annualSums,
     convert: (v) => v,
@@ -119,6 +125,18 @@ const SIMPLE_VARIABLES = {
     label: 'Precipitation',
     yLabel: 'Change from 1850–1900 (%)',
     format: (v) => `${v.toFixed(0)}%`,
+  },
+  hdd: {
+    label: 'Heating degree days',
+    title: 'Heating degree days',
+    yLabel: `Heating degree days per year (base ${DEGREE_DAY_BASE} °C)`,
+    format: (v) => v.toFixed(0),
+  },
+  cdd: {
+    label: 'Cooling degree days',
+    title: 'Cooling degree days',
+    yLabel: `Cooling degree days per year (base ${DEGREE_DAY_BASE} °C)`,
+    format: (v) => v.toFixed(0),
   },
 };
 
@@ -486,6 +504,16 @@ async function run() {
   const specs = seriesSpecs();
   const noun = compareBy === 'models' ? 'models' : 'scenarios';
 
+  let curves = null;
+  if (spec.degreeDays) {
+    curves = await curvesFor(location);
+    if (request !== runRequest) return;
+    if (!curves) {
+      setStatus(DEGREE_DAYS_WHERE, 'error');
+      return;
+    }
+  }
+
   const started = performance.now();
   let done = 0;
   const progress = () => {
@@ -526,13 +554,14 @@ async function run() {
     // past.
     const own = loaded[i];
     if (spec.degreeDays) {
-      // Degree days need absolute temperature: the run plus the location's
-      // unforced level, as the seasonal panel shows it.
-      const level = own.absoluteOffset({ variable: 'tas', location });
+      // Each month's warming from the model's own 1995-2014 climate, read
+      // off the observed curve; `within`, since a realization brings its own
+      // year-to-year variability.
+      const reference = referenceClimate(own, location);
       return {
         ...specs[i],
-        series: result.series.map(
-          (series) => degreeDays(Float64Array.from(series, (v) => v + level))[spec.degreeDays]
+        series: result.series.map((series) =>
+          monthlyDegreeDays(curves, 'within', spec.degreeDays, series, reference)
         ),
         toAbsolute: 0,
       };
@@ -563,6 +592,24 @@ async function run() {
       `${placeLabel(location)}, ${describeRuns(runs)}, ` +
       `${WINDOW.start}–${WINDOW.end}, generated in ${elapsed.toFixed(0)} ms.`
   );
+}
+
+/** Degree days need observations to correct them with, which only land has. */
+const DEGREE_DAYS_WHERE =
+  'Degree days are computed for cities and land regions, where observations ' +
+  'correct them; pick one of those, or another variable.';
+
+/** One place's observed degree-day curves, fetched once; null for none. */
+const degreeDayCurves = new Map();
+function curvesFor(location) {
+  if (!degreeDayCurves.has(location)) {
+    const pending = loadDegreeDayCurves(dataBase, location).catch((error) => {
+      degreeDayCurves.delete(location);
+      throw error;
+    });
+    degreeDayCurves.set(location, pending);
+  }
+  return degreeDayCurves.get(location);
 }
 
 /** One place's summary, fetched once; a failed fetch is retried next time. */
@@ -601,13 +648,26 @@ async function runSimple(request) {
     );
     return;
   }
+  const spec = SIMPLE_VARIABLES[variable];
+  const place = placeLabel(location);
+  if (!summary[variable]) {
+    // Degree days at sea or for the whole globe: say why rather than draw.
+    lastSimple = null;
+    syncUrl();
+    elements.chartTitle.textContent = `${spec.label} at ${place}`;
+    elements.summary.textContent = DEGREE_DAYS_WHERE;
+    elements.chartLegend.textContent = '';
+    elements.chart.getContext('2d').clearRect(0, 0, elements.chart.width, elements.chart.height);
+    setStatus('');
+    return;
+  }
   const scenarios = selection.filter((name) => summary[variable][name]);
   lastSimple = { variable, location, summary, scenarios };
   syncUrl();
 
-  const spec = SIMPLE_VARIABLES[variable];
-  const place = placeLabel(location);
-  elements.chartTitle.textContent = `${spec.label} change at ${place}`;
+  elements.chartTitle.textContent = spec.title
+    ? `${spec.title} at ${place}`
+    : `${spec.label} change at ${place}`;
   elements.summary.textContent = summarySentence({
     summary,
     variable,
@@ -619,7 +679,7 @@ async function runSimple(request) {
   showProvenance();
   const [start, end] = summary.years;
   setStatus(
-    `${spec.label} change at ${place} across ${summary.models.length} climate models, ` +
+    `${elements.chartTitle.textContent} across ${summary.models.length} climate models, ` +
       `${start}–${end}, under ${listOf(scenarios.map(scenarioLabel))}.`
   );
 }
@@ -679,20 +739,6 @@ function setMode(next) {
 /** Show the controls and panels of the current view, and say which it is. */
 function showMode() {
   document.documentElement.dataset.mode = mode;
-  // Degree days are an expert-view variable: offered there, removed here.
-  const select = elements.variable;
-  for (const key of ['hdd', 'cdd']) {
-    const existing = select.querySelector(`option[value="${key}"]`);
-    if (mode === 'expert' && !existing) {
-      const option = document.createElement('option');
-      option.value = key;
-      option.textContent = VARIABLES[key].label;
-      select.append(option);
-    } else if (mode === 'simple' && existing) {
-      if (select.value === key) select.value = 'tas';
-      existing.remove();
-    }
-  }
   for (const button of elements.viewButtons) {
     button.setAttribute('aria-pressed', String(button.dataset.view === mode));
   }
@@ -721,7 +767,7 @@ function yLabel(variable) {
 /** What a run's numbers are measured from, for captions and the CSV. */
 function baselineNote(variable) {
   if (VARIABLES[variable].degreeDays) {
-    return `degree days per year, base ${DEGREE_DAYS.base} °C, from absolute monthly temperature`;
+    return `degree days per year, base ${DEGREE_DAY_BASE} °C, bias-corrected against W5E5 1995–2014`;
   }
   if (!VARIABLES[variable].baselined) return 'absolute (no baseline)';
   const { label } = BASELINES[elements.baseline.value];

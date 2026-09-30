@@ -80,10 +80,10 @@ describe('URL state', () => {
     expect(toQuery(DEFAULTS)).toBe('');
   });
 
-  it('offers degree days in the expert view only', () => {
+  it('offers degree days in both views', () => {
     expect(fromQuery('?v=hdd', CONTEXT).variable).toBe('hdd');
     expect(fromQuery('?view=expert&v=cdd', CONTEXT).variable).toBe('cdd');
-    expect(fromQuery('?view=simple&v=hdd', CONTEXT).variable).toBe(DEFAULTS.variable);
+    expect(fromQuery('?view=simple&v=hdd', CONTEXT).variable).toBe('hdd');
     const state = { ...EXPERT, variable: 'hdd', location: 'point:19.1,72.9' };
     expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
   });

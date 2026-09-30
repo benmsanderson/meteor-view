@@ -1,87 +1,166 @@
 /**
- * Heating and cooling degree days from monthly mean temperature.
+ * Bias-corrected heating and cooling degree days.
  *
- * Port of METEOR's `DegreeDaysCalculator` (meteor/impacts/calculators/
- * degree_days.py), which follows Isaac and van Vuuren (2009), Energy Policy
- * 37, 507-521, with the correction of Erbs et al. (1983), Solar Energy 28,
- * 293-302: daily temperatures are taken to be normally distributed about the
- * monthly mean, with a spread that shrinks as the month warms and grows with
- * the size of the seasonal cycle, so degree days follow from monthly means
- * alone.
+ * Degree days depend on absolute temperature, which a model can have a few
+ * degrees off at any one place, and on how daily temperatures spread within a
+ * month, which METEOR's monthly output does not carry. So both come from
+ * observations and only the change comes from the model: for each place and
+ * calendar month, scripts/make_degree_day_curves.py records how degree days in
+ * the observed 1995-2014 climate (W5E5 v2.0, daily) respond to a uniform
+ * temperature shift, and here each model's warming for that month is read off
+ * the curve. This is the delta-change method on daily observations; for a
+ * region it averages each gridbox's degree days rather than taking the degree
+ * days of the region's average temperature.
  *
- * As METEOR does, each month's degree days go wholly to heating or wholly to
- * cooling, by which side of the base temperature its mean falls. The paper's
- * formula would also give a month near the base a little of the other kind;
- * METEOR drops that tail, and so does this, so the two agree.
+ * A model's warming for a month is measured from its own 1995-2014 climate of
+ * that calendar month, which is the forced response plus its seasonal cycle,
+ * whose amplitude changes with global warming: so a model that warms winters
+ * more than summers says so here.
  *
- * Checked against METEOR itself in test/degree-days.test.js.
+ * Two kinds of curve. `climate` keeps the observed year-to-year variability
+ * of monthly means, for a forced response that has none of its own; `within`
+ * keeps only the spread of days within each month, for a realization that
+ * brings its own year-to-year variability, which would otherwise count twice.
  */
 
-/** METEOR's defaults: base temperature and the Isaac & van Vuuren constants. */
-export const DEGREE_DAYS = {
-  base: 18,
-  sigmaC1: 1.45,
-  sigmaC2: 0.29,
-  sigmaC3: 0.664,
-  aC1: 1.698,
-};
+import {
+  annualToMonthly,
+  designMatrix,
+  forcedResponse,
+  seasonalCycle,
+} from './kernel.js';
 
-const DAYS_IN_MONTH = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+/** Heating below and cooling above this daily mean temperature, °C: METEOR's default. */
+export const DEGREE_DAY_BASE = 18;
+
+/** The observed reference period the curves describe. */
+export const DEGREE_DAY_PERIOD = { from: 1995, to: 2014 };
+
+const MONTHS = 12;
+
+/** Where one place's curves are served, relative to the data directory. */
+export function degreeDayFile(location) {
+  return `degree_days_v1/${location.replace(/[^A-Za-z0-9.-]/g, '_')}.json`;
+}
 
 /**
- * Monthly heating and cooling degree days for one series.
- *
- * @param {ArrayLike<number>} temperature monthly means in °C, starting in
- *   January, as a run's window does
- * @param {object} [options]
- * @param {number} [options.base] base temperature, °C
- * @returns {{hdd: Float64Array, cdd: Float64Array}} degree days per month
+ * Fetch one place's curves, or null for a place without any (sea, global).
+ * A server that answers a missing file with a page rather than a 404 counts
+ * as none too.
  */
-export function degreeDays(temperature, { base = DEGREE_DAYS.base } = {}) {
-  const { sigmaC1, sigmaC2, sigmaC3, aC1 } = DEGREE_DAYS;
-  const n = temperature.length;
-
-  // The spread of the series' own mean seasonal cycle: the standard deviation
-  // of its twelve calendar-month means, population form, as xarray's .std().
-  const sums = new Float64Array(12);
-  const counts = new Float64Array(12);
-  for (let t = 0; t < n; t += 1) {
-    sums[t % 12] += temperature[t];
-    counts[t % 12] += 1;
+export async function loadDegreeDayCurves(base, location) {
+  const response = await fetch(`${base}${degreeDayFile(location)}`);
+  if (!response.ok) return null;
+  try {
+    return await response.json();
+  } catch {
+    return null;
   }
-  const months = [];
-  for (let m = 0; m < 12; m += 1) if (counts[m]) months.push(sums[m] / counts[m]);
-  const mean = months.reduce((s, v) => s + v, 0) / months.length;
-  const sigmaY = Math.sqrt(months.reduce((s, v) => s + (v - mean) ** 2, 0) / months.length);
+}
 
-  const hdd = new Float64Array(n);
-  const cdd = new Float64Array(n);
-  for (let t = 0; t < n; t += 1) {
-    const T = temperature[t];
-    const days = DAYS_IN_MONTH[t % 12];
-    const root = Math.sqrt(days);
-    // Floored, as METEOR does: the linear fit goes negative in hot months.
-    const sigmaM = Math.max(sigmaC1 - sigmaC2 * T + sigmaC3 * sigmaY, 0.5);
-    const a = aC1 * root;
-    const h = Math.abs(base - T) / (sigmaM * root);
-    const x = a * h;
-    // For large x the log term tends to x, and the bracket to h.
-    const bracket = x > 100 ? h : h / 2 + Math.log(Math.exp(-x) + Math.exp(x)) / (2 * a);
-    let dd = sigmaM * days ** 1.5 * bracket;
-    if (!(dd >= 0) || !Number.isFinite(dd)) dd = 0;
-    if (T < base) hdd[t] = dd;
-    else if (T > base) cdd[t] = dd;
+/**
+ * Degree days in one calendar month after a temperature shift, by linear
+ * interpolation along the curve and linear extrapolation beyond it, where
+ * degree days change by a month's days per degree.
+ *
+ * @param {object} curves one place's curves file
+ * @param {'climate'|'within'} kind
+ * @param {'hdd'|'cdd'} index
+ * @param {number} month 0 for January
+ * @param {number} shift °C from the observed 1995-2014 climate
+ */
+export function curveValue(curves, kind, index, month, shift) {
+  const { start, step, n } = curves.shifts;
+  const values = curves[kind][index][month];
+  const position = (shift - start) / step;
+  const i = Math.min(Math.max(Math.floor(position), 0), n - 2);
+  const f = position - i;
+  return Math.max(values[i] + f * (values[i + 1] - values[i]), 0);
+}
+
+/**
+ * A model's deterministic monthly temperature at a place, as an anomaly on
+ * the kernel's own terms: the seasonal harmonics, whose amplitude follows
+ * global warming, plus the forced response. Over the full forcing axis,
+ * starting in January of the bundle's first year.
+ *
+ * @param {import('../app/explorer.js').Explorer} explorer
+ * @param {string} location
+ * @param {string} scenario
+ * @returns {Float64Array}
+ */
+export function deterministicMonthly(explorer, location, scenario) {
+  const bundle = explorer.bundles.tas;
+  const forced = annualToMonthly(forcedResponse(bundle, location, bundle.forcing(scenario)));
+  const seasonal = seasonalCycle(
+    globalDesign(bundle, scenario),
+    bundle.locationRow('seasonal_coef', location, 9),
+    bundle.get('seasonal_intercept')[bundle.locationIndex(location)],
+    { anomaly: true }
+  );
+  return seasonal.map((v, t) => v + forced[t]);
+}
+
+/**
+ * The seasonal design matrix a scenario's global warming gives, which every
+ * place shares: computed once per bundle and scenario.
+ */
+const designs = new WeakMap();
+function globalDesign(bundle, scenario) {
+  if (!designs.has(bundle)) designs.set(bundle, new Map());
+  const byScenario = designs.get(bundle);
+  if (!byScenario.has(scenario)) {
+    const global = forcedResponse(bundle, 'global', bundle.forcing(scenario));
+    byScenario.set(scenario, designMatrix(annualToMonthly(global)));
   }
-  return { hdd, cdd };
+  return byScenario.get(scenario);
+}
+
+/**
+ * The model's own 1995-2014 climate of each calendar month, on the same
+ * anomaly terms as its runs, under the shared baseline scenario.
+ *
+ * @returns {Float64Array} twelve values, January first
+ */
+export function referenceClimate(explorer, location) {
+  const bundle = explorer.bundles.tas;
+  const monthly = deterministicMonthly(explorer, location, explorer.baselineScenario);
+  const out = new Float64Array(MONTHS);
+  const { from, to } = DEGREE_DAY_PERIOD;
+  const first = (from - bundle.forcingYearStart) * MONTHS;
+  const years = to - from + 1;
+  for (let y = 0; y < years; y += 1) {
+    for (let m = 0; m < MONTHS; m += 1) out[m] += monthly[first + y * MONTHS + m] / years;
+  }
+  return out;
+}
+
+/**
+ * Monthly degree days for a monthly temperature series on the kernel's
+ * anomaly terms, starting in January: each month's warming from the model's
+ * reference climate, read off the observed curve for that month.
+ *
+ * @param {object} curves one place's curves file
+ * @param {'climate'|'within'} kind `within` for a realization, `climate` for
+ *   a forced response
+ * @param {'hdd'|'cdd'} index
+ * @param {ArrayLike<number>} series
+ * @param {ArrayLike<number>} reference from {@link referenceClimate}
+ * @returns {Float64Array}
+ */
+export function monthlyDegreeDays(curves, kind, index, series, reference) {
+  return Float64Array.from(series, (v, t) =>
+    curveValue(curves, kind, index, t % MONTHS, v - reference[t % MONTHS])
+  );
 }
 
 /** Sum a monthly series into calendar years. */
 export function annualSums(monthly) {
-  const years = Math.floor(monthly.length / 12);
+  const years = Math.floor(monthly.length / MONTHS);
   const out = new Float64Array(years);
   for (let y = 0; y < years; y += 1) {
     let sum = 0;
-    for (let m = 0; m < 12; m += 1) sum += monthly[y * 12 + m];
+    for (let m = 0; m < MONTHS; m += 1) sum += monthly[y * MONTHS + m];
     out[y] = sum;
   }
   return out;
