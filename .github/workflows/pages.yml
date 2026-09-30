@@ -47,6 +47,14 @@ jobs:
 
       - run: node scripts/fetch-artifacts.mjs
 
+      # The summaries take minutes to compute and change only when the data or
+      # the code that computes them does; build-summary.mjs checks the same
+      # inputs by content before trusting what the cache restores.
+      - uses: actions/cache@v4
+        with:
+          path: data/summary_v1
+          key: summaries-${{ hashFiles('data/artifacts_v1.json', 'data/cities_v1.json', 'data/degree_days_v1/**', 'src/app/summary.js', 'src/app/explorer.js', 'src/app/map.js', 'src/app/chart.js', 'src/lib/**', 'scripts/build-summary.mjs') }}
+
       # Never publish a build that cannot reproduce METEOR's output.
       - run: npm test
 

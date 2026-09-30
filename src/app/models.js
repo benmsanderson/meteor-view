@@ -41,6 +41,11 @@ export function assignModelColours(models) {
 /** A selected model's colour, in the page's current theme. */
 export function modelColour(model) {
   const dark = globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches;
+  // The mean across models is not one of them: ink, not a model's hue.
+  if (model === MULTI_MODEL_MEAN) return dark ? '#e2e8f0' : '#0f172a';
   const slot = slots.get(model) ?? 0;
   return (dark ? DARK : LIGHT)[slot];
 }
+
+/** The expert view's mean across every model, offered as one more model. */
+export const MULTI_MODEL_MEAN = 'multi-model-mean';

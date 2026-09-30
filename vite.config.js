@@ -1,5 +1,17 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { cp } from 'node:fs/promises';
 import { defineConfig } from 'vite';
+
+/**
+ * This build's data version, which every data request carries
+ * (src/lib/data-url.js): the pinned artifact release and when the build ran,
+ * so a new deploy never reads a previous one's files from a browser's cache.
+ */
+function dataVersion() {
+  const pin = 'data/artifacts_v1.json';
+  const release = existsSync(pin) ? JSON.parse(readFileSync(pin, 'utf8')).release : 'local';
+  return `${release}.${Date.now().toString(36)}`;
+}
 
 /**
  * Copy the emulator bundles into the build.
@@ -38,6 +50,9 @@ export default defineConfig({
   // GitHub Pages serves this project at /<repository>/.
   base: process.env.PAGES_BASE ?? '/meteor-view/',
   plugins: [copyBundles()],
+  define: {
+    __DATA_VERSION__: JSON.stringify(dataVersion()),
+  },
   // The ensemble worker imports the kernel lazily, as the page does; only ES
   // module workers can split code that way.
   worker: {

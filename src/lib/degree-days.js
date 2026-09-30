@@ -29,6 +29,7 @@ import {
   forcedResponse,
   seasonalCycle,
 } from './kernel.js';
+import { dataUrl } from './data-url.js';
 
 /** Heating below and cooling above this daily mean temperature, °C: METEOR's default. */
 export const DEGREE_DAY_BASE = 18;
@@ -49,7 +50,7 @@ export function degreeDayFile(location) {
  * as none too.
  */
 export async function loadDegreeDayCurves(base, location) {
-  const response = await fetch(`${base}${degreeDayFile(location)}`);
+  const response = await fetch(dataUrl(base, degreeDayFile(location)));
   if (!response.ok) return null;
   try {
     return await response.json();
