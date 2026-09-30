@@ -304,9 +304,18 @@ def register_model(out, model):
 
 
 def locations():
+    """
+    The global mean, the 58 AR6 regions and the cities: the eight below, and
+    every city in data/cities_v1.json, whose specifiers are used exactly as
+    written there, since they are what the site looks them up by.
+    """
     locs = ["global"]
     locs += [f"regional:{r.abbrev}" for r in regionmask.defined_regions.ar6.all]
     locs += [f"point:{lat},{lon}" for lat, lon in CITIES.values()]
+    cities = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "data", "cities_v1.json")
+    if os.path.exists(cities):
+        with open(cities, encoding="utf-8") as handle:
+            locs += [c["spec"] for c in json.load(handle)["cities"] if c["spec"] not in locs]
     return locs
 
 

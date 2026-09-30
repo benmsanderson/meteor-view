@@ -11,6 +11,8 @@ import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal } from './
 import { chartToPng, download, downloadText, filenameStem, toCsv } from './export.js';
 import {
   boxFromDrag,
+  citiesAtZoom,
+  cityNear,
   clampView,
   classedScale,
   defaultView,
@@ -223,6 +225,52 @@ let availableModelList = [];
 let mode = DEFAULTS.mode;
 /** The simple view's cities (data/cities_v1.json), beyond the bundles' own. */
 let cities = [];
+/**
+ * The cities as the map marks them: where, what they are called, and what
+ * decides whether they show at a zoom. Built once the city list loads.
+ * @type {Array<{spec: string, lat: number, lon: number, label: string,
+ *   population: number, capital: boolean}>}
+ */
+let cityPoints = [];
+
+/** The cities the current view can show: every one in either, once exported. */
+function mapCities() {
+  return mode === 'simple'
+    ? cityPoints
+    : cityPoints.filter((c) => explorer.locations.includes(c.spec));
+}
+
+/** The chosen place, when it is a city, for the map's ring. */
+function selectedCity() {
+  const spec = elements.location.value;
+  if (customBox || !spec.startsWith('point:')) return null;
+  const [lat, lon] = spec.slice('point:'.length).split(',').map(Number);
+  return { lat, lon, label: placeLabel(spec) };
+}
+
+/** The marked city under a pointer, if any: it wins over the region below. */
+function cityUnder(canvas, clientX, clientY, touch) {
+  const rect = canvas.getBoundingClientRect();
+  return cityNear(
+    citiesAtZoom(mapCities(), mapView.zoom),
+    mapView,
+    rect.width,
+    rect.height,
+    clientX - rect.left,
+    clientY - rect.top,
+    touch ? 16 : 10
+  );
+}
+
+/** Show a city chosen on the map. */
+function selectCity(spec) {
+  customBox = null;
+  showBoxControls(false);
+  elements.location.value = spec;
+  run();
+  redrawMap();
+}
+
 /** The searchable box over the place menu; `sync` after the place changes. */
 let placeSearch = null;
 /** One place's multi-model summary per place asked for, fetched once. */
@@ -289,14 +337,18 @@ function populatePlaces() {
     if (spec === 'global') groups['Global'].push(spec);
     else if (spec.startsWith('regional:')) groups['AR6 regions'].push(spec);
   }
-  if (mode === 'simple' && cities.length) {
-    for (const city of cities) {
-      const name = `Cities: ${city.continent}`;
-      (groups[name] ??= []).push(city.spec);
-    }
-  } else {
-    groups['Cities'] = explorer.locations.filter((spec) => spec.startsWith('point:'));
+  // Cities by continent, in either view: all of them in the simple view, and
+  // in the expert view those the bundles carry, which once they are
+  // exported with the full list is the same set.
+  const offered = new Set(placesOnOffer());
+  const listed = new Set();
+  for (const city of cities) {
+    if (!offered.has(city.spec)) continue;
+    (groups[`Cities: ${city.continent}`] ??= []).push(city.spec);
+    listed.add(city.spec);
   }
+  const others = explorer.locations.filter((s) => s.startsWith('point:') && !listed.has(s));
+  if (others.length) groups['Cities'] = others;
 
   elements.location.replaceChildren();
   for (const [name, specs] of Object.entries(groups)) {
@@ -1592,7 +1644,11 @@ function attachMap() {
       }
 
       if (!gesture) {
-        if (event.pointerType === 'mouse') showReadout(toLatLon(canvas, event, mapView));
+        if (event.pointerType === 'mouse') {
+          const city = cityUnder(canvas, event.clientX, event.clientY, false);
+          canvas.style.cursor = city ? 'pointer' : mapMode === 'pan' ? 'grab' : 'crosshair';
+          showReadout(toLatLon(canvas, event, mapView), city);
+        }
         return;
       }
       if (gesture.canvas !== canvas) return;
@@ -1689,8 +1745,10 @@ function attachMap() {
         clientY: event.clientY,
         timer: setTimeout(() => {
           pendingTap = null;
-          selectRegionAt(to);
-          if (touch) showReadout(to);
+          const city = cityUnder(canvas, event.clientX, event.clientY, touch);
+          if (city) selectCity(city.spec);
+          else selectRegionAt(to);
+          if (touch) showReadout(to, city);
         }, DOUBLE_TAP_MS),
       };
     });
@@ -1751,8 +1809,10 @@ function mapValueText(value, variable, difference = false) {
  * In a comparison it reads all three at once, which is the point of having
  * them side by side: the colours say roughly, this says exactly.
  */
-function showReadout(point) {
+function showReadout(point, city = null) {
   if (!lastMap) return;
+  // Near a city's dot, read the city: its name, and the values where it is.
+  if (point && city) point = { lat: city.lat, lon: city.lon };
   const prompt = lastMap.fields.length === 2 ? 'Point at any map to read all three.' : '';
   if (!point) {
     elements.mapReadout.textContent = prompt;
@@ -1775,7 +1835,7 @@ function showReadout(point) {
     dd.textContent = value;
     list.append(dt, dd);
   }
-  elements.mapReadout.replaceChildren(`${ns} ${ew}`, list);
+  elements.mapReadout.replaceChildren(city ? `${city.label}, ${ns} ${ew}` : `${ns} ${ew}`, list);
 }
 
 /**
@@ -1884,6 +1944,8 @@ function redrawMap() {
       : null,
     box: customBox,
     view: mapView,
+    cities: citiesAtZoom(mapCities(), mapView.zoom),
+    selectedCity: selectedCity(),
   };
   const units = lastMap.variable === 'tas' ? '°C' : '%';
   const noun = lastMap.variable === 'tas' ? 'Temperature' : 'Precipitation';
@@ -2097,6 +2159,10 @@ async function start() {
     cities = [];
   }
   registerCities(cities);
+  cityPoints = cities.map((c) => {
+    const [lat, lon] = c.spec.slice('point:'.length).split(',').map(Number);
+    return { spec: c.spec, lat, lon, label: c.label, population: c.population, capital: c.capital };
+  });
   try {
     explorer = await explorerFor(first.models[0]);
   } catch (error) {
