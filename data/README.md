@@ -41,9 +41,18 @@ one JSON file per place, written by `scripts/build-summary.mjs` from whatever
 models are present. `npm run build` and `npm run dev` run it first; it is
 skipped when nothing has changed.
 
+`cities_v1.json`, committed: the simple view's 252 cities, every national
+capital of more than 500,000 people and every other city of more than 2.5
+million, from Natural Earth's populated places (public domain), grouped by
+continent. Built by `scripts/make_cities.py`. The eight the bundles carry keep
+their specifiers; the rest are read from each model's pattern artifacts at
+build time, at the nearest gridbox more than half land, as the bundles place
+theirs. The expert view offers the eight until the bundles are re-exported
+with the rest.
+
 `degree_days_v1/`, committed: observed degree-day curves, the bias
-correction for heating and cooling degree days. One JSON file per city and
-AR6 land region, none for the sea or the global mean: for each calendar month,
+correction for heating and cooling degree days. One JSON file per city (all
+252) and AR6 land region, none for the sea or the global mean: for each calendar month,
 the heating and cooling degree days (base 18 °C) of the observed 1995–2014
 climate under a uniform temperature shift from −15 to +20 °C, in two forms
 (`climate`, keeping year-to-year variability, for forced responses; `within`,

@@ -25,7 +25,8 @@ ISIMIP as GSWP3-W5E5 (W5E5 from 1979), and its land-sea mask. Places follow
 the bundles: AR6 land regions average over their land gridboxes, cos-latitude
 weighted, the mixed regions MED, CAR and SEA too, since degree days are about
 where people live; ocean regions and the global mean get no curves; a city is
-the nearest land gridbox.
+the nearest land gridbox, for the bundles' eight and for every city in
+data/cities_v1.json.
 
 For a region this averages each gridbox's degree days, not the degree days of
 the region's average temperature, which would understate both.
@@ -47,6 +48,8 @@ import regionmask
 import xarray as xr
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#: The simple view's cities, beyond the eight the bundles carry.
+CITIES = os.path.join(ROOT, "data", "cities_v1.json")
 #: Any bundle: the places, exactly as the site names them.
 BUNDLE = os.path.join(ROOT, "data", "meteor_NorESM2-MM_tas_bundle_v1.nc")
 OUT = os.path.join(ROOT, "data", "degree_days_v1")
@@ -82,6 +85,9 @@ def places(lat, lon, land):
     la, lo = np.deg2rad(lat2d), np.deg2rad(lon2d)
     with xr.open_dataset(BUNDLE) as bundle:
         points = [str(s) for s in bundle["location"].values if str(s).startswith("point:")]
+    # And the simple view's cities (data/cities_v1.json).
+    with open(CITIES, encoding="utf-8") as handle:
+        points += [c["spec"] for c in json.load(handle)["cities"] if c["spec"] not in points]
     for spec in points:
         city_lat, city_lon = map(float, spec[len("point:"):].split(","))
         t_la, t_lo = np.deg2rad(city_lat), np.deg2rad(city_lon)

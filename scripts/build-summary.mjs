@@ -14,7 +14,13 @@ import { fileURLToPath } from 'node:url';
 import { Artifact, Bundle } from '../src/lib/bundle.js';
 import { PatternArtifact } from '../src/lib/pattern.js';
 import { Explorer, artifactName } from '../src/app/explorer.js';
-import { summarizeLocation, summarizeMap, summaryFile, summaryMapFile } from '../src/app/summary.js';
+import {
+  summarizeCity,
+  summarizeLocation,
+  summarizeMap,
+  summaryFile,
+  summaryMapFile,
+} from '../src/app/summary.js';
 import { degreeDayFile } from '../src/lib/degree-days.js';
 
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -31,13 +37,16 @@ const bundles = models.flatMap((m) =>
     join(DATA, artifactName(m, v, 'pattern')),
   ])
 );
+// The simple view's cities beyond the bundles' own.
+const citiesFile = join(DATA, 'cities_v1.json');
+const cities = existsSync(citiesFile) ? JSON.parse(readFileSync(citiesFile, 'utf8')).cities : [];
 // The observed degree-day curves are inputs too.
 const curveFiles = existsSync(join(DATA, 'degree_days_v1'))
   ? readdirSync(join(DATA, 'degree_days_v1')).map((f) => join(DATA, 'degree_days_v1', f))
   : [];
 
 const newest = Math.max(
-  ...[manifest, ...bundles, ...curveFiles].filter(existsSync).map((f) => statSync(f).mtimeMs)
+  ...[manifest, citiesFile, ...bundles, ...curveFiles].filter(existsSync).map((f) => statSync(f).mtimeMs)
 );
 if (existsSync(STAMP) && statSync(STAMP).mtimeMs > newest) {
   const built = JSON.parse(readFileSync(STAMP, 'utf8'));
@@ -59,6 +68,8 @@ for (const model of models) {
   }
   const climatology = new Artifact(readFileSync(join(DATA, artifactName(model, 'pr', 'climatology'))));
   explorer.prClimatology = climatology.array('pr_climatology');
+  const landfrac = join(DATA, `meteor_${model}_landfrac_v1.nc`);
+  explorer.landPercent = existsSync(landfrac) ? new Artifact(readFileSync(landfrac)).array('land_percent') : null;
   explorers.set(model, explorer);
 }
 const { locations } = explorers.get(models[0]);
@@ -73,6 +84,14 @@ for (const location of locations) {
     JSON.stringify(summarizeLocation(explorers, location, curves))
   );
 }
+// Cities the bundles do not carry, from the pattern artifacts.
+const extra = cities.filter((c) => !locations.includes(c.spec));
+for (const city of extra) {
+  const curveFile = join(DATA, degreeDayFile(city.spec));
+  const curves = existsSync(curveFile) ? JSON.parse(readFileSync(curveFile, 'utf8')) : null;
+  writeFileSync(join(DATA, summaryFile(city.spec)), JSON.stringify(await summarizeCity(explorers, city, curves)));
+}
+
 // The map across models, one file per scenario.
 const { scenarios } = explorers.get(models[0]);
 for (const scenario of scenarios) {
@@ -82,6 +101,6 @@ writeFileSync(STAMP, JSON.stringify({ models, locations: locations.length, scena
 
 const size = readdirSync(OUT).reduce((s, f) => s + statSync(join(OUT, f)).size, 0);
 console.log(
-  `summaries: ${locations.length} places from ${models.length} models, ` +
+  `summaries: ${locations.length} places and ${extra.length} more cities from ${models.length} models, ` +
     `${(size / 1e6).toFixed(1)} MB, in ${((Date.now() - started) / 1000).toFixed(1)} s`
 );

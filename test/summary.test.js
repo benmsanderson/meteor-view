@@ -23,6 +23,7 @@ import {
 const DATA = new URL('../data/', import.meta.url);
 const load = (variable) =>
   new Bundle(readFileSync(new URL(`meteor_NorESM2-MM_${variable}_bundle_v1.nc`, DATA)));
+const LONDON = 'point:51.5,-0.1';
 const explorer = new Explorer({ tas: load('tas'), pr: load('pr') });
 const start = explorer.bundles.tas.forcingYearStart;
 
@@ -175,5 +176,38 @@ describe('the map across models', async () => {
     });
     const global = modelChange(explorer, { variable: 'tas', location: 'global', scenario: 'cmip7-high' });
     expect(sum / weight).toBeCloseTo(mean(global, 2081, 2100), 1);
+  });
+});
+
+describe('a city beyond the bundles', async () => {
+  const { Artifact } = await import('../src/lib/bundle.js');
+  const { PatternArtifact, pointWeights } = await import('../src/lib/pattern.js');
+  const { summarizeCity } = await import('../src/app/summary.js');
+  const read = (name) => readFileSync(new URL(`meteor_NorESM2-MM_${name}_v1.nc`, DATA));
+  explorer.patternArtifacts.set('tas', new PatternArtifact(read('tas_pattern')));
+  explorer.patternArtifacts.set('pr', new PatternArtifact(read('pr_pattern')));
+  explorer.prClimatology = new Artifact(read('pr_climatology')).array('pr_climatology');
+  explorer.landPercent = new Artifact(read('landfrac')).array('land_percent');
+  const one = new Map([['NorESM2-MM', explorer]]);
+
+  it('is what the bundle gives, for a city the bundle does carry', async () => {
+    const byBundle = summarizeLocation(one, LONDON);
+    const byPattern = await summarizeCity(one, { spec: LONDON });
+    for (const variable of ['tas', 'pr']) {
+      for (const scenario of ['ssp245', 'cmip7-high']) {
+        byBundle[variable][scenario].bands[2].forEach((v, t) =>
+          expect(byPattern[variable][scenario].bands[2][t]).toBeCloseTo(v, 1)
+        );
+      }
+    }
+  });
+
+  it('sits on the nearest gridbox that is mostly land', () => {
+    const artifact = explorer.patternArtifacts.get('tas');
+    // Mumbai: the nearest gridbox is mostly sea, so the city moves inland.
+    const { index } = pointWeights(artifact, explorer.landPercent, 19.1, 72.9);
+    expect(explorer.landPercent[index]).toBeGreaterThan(50);
+    const nearest = pointWeights(artifact, null, 19.1, 72.9).index;
+    expect(explorer.landPercent[nearest]).toBeLessThan(50);
   });
 });

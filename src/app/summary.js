@@ -23,6 +23,7 @@ import { forcedResponse } from '../lib/kernel.js';
 import {
   DEGREE_DAY_PERIOD,
   annualSums,
+  curveValue,
   deterministicMonthly,
   monthlyDegreeDays,
   referenceClimate,
@@ -121,6 +122,142 @@ const round = (digits) => (v) => Number(v.toFixed(digits));
  */
 export function summarizeLocation(explorers, location, curves = null) {
   const models = [...explorers.keys()];
+  const references = new Map();
+  // Each model's monthly climate per scenario, shared by heating and cooling.
+  const monthlies = new Map();
+  const monthlyFor = (model, scenario) => {
+    const key = `${model}|${scenario}`;
+    if (!monthlies.has(key)) {
+      monthlies.set(key, deterministicMonthly(explorers.get(model), location, scenario));
+    }
+    return monthlies.get(key);
+  };
+  if (curves) {
+    for (const model of models) references.set(model, referenceClimate(explorers.get(model), location));
+  }
+  return summarize(explorers, location, curves, (model, variable, scenario) => {
+    const explorer = explorers.get(model);
+    return variable === 'hdd' || variable === 'cdd'
+      ? modelDegreeDays(explorer, {
+          index: variable,
+          location,
+          scenario,
+          curves,
+          reference: references.get(model),
+          monthly: monthlyFor(model, scenario),
+        })
+      : modelChange(explorer, { variable, location, scenario });
+  });
+}
+
+/**
+ * The same, for a city the bundles do not carry: each model's forced response
+ * at the city's gridbox, read from its pattern artifacts (which a place in the
+ * bundles gets the same way, at export). No seasonal cycle is stored for such
+ * a point, so its degree days apply each model's annual warming to every
+ * month, still on the observed daily climate.
+ *
+ * @param {Map<string, import('./explorer.js').Explorer>} explorers with pattern
+ *   artifacts, land fraction and precipitation climatology loaded
+ * @param {{spec: string}} city with `spec` a `point:lat,lon` specifier
+ * @param {object|null} curves the city's observed degree-day curves
+ */
+export async function summarizeCity(explorers, city, curves = null) {
+  const { pointWeights } = await import('../lib/pattern.js');
+  const [lat, lon] = city.spec.slice('point:'.length).split(',').map(Number);
+  const series = new Map();
+  for (const [model, explorer] of explorers) {
+    const start = explorer.bundles.tas.forcingYearStart;
+    const at = (values, year) => values[year - start];
+    const mean = (values, from, to) => {
+      let sum = 0;
+      for (let y = from; y <= to; y += 1) sum += at(values, y);
+      return sum / (to - from + 1);
+    };
+    const land = explorer.landPercent ?? null;
+    const forced = {};
+    const points = {};
+    for (const variable of ['tas', 'pr']) {
+      const artifact = await explorer.patterns(variable);
+      points[variable] = pointWeights(artifact, land, lat, lon).index;
+      forced[variable] = (scenario) => cachedPoint(explorer, variable, scenario, points[variable]);
+    }
+    const reference = explorer.baselineScenario;
+    const tasBase = mean(await forced.tas(reference), 1850, 1900);
+    const prReference = await forced.pr(reference);
+    const prBase = mean(prReference, 1850, 1900);
+    // The 1850-1900 precipitation level, as the page's maps take it: the
+    // model's 2015 climatology, carried back by the forced response.
+    const level = explorer.prClimatology[points.pr] + prBase - at(prReference, 2015);
+    const recent = mean(await forced.tas(reference), DEGREE_DAY_PERIOD.from, DEGREE_DAY_PERIOD.to);
+    for (const scenario of explorer.scenarios) {
+      const tas = await forced.tas(scenario);
+      const pr = await forced.pr(scenario);
+      series.set(`${model}|tas|${scenario}`, tas.map((v) => v - tasBase));
+      series.set(
+        `${model}|pr|${scenario}`,
+        pr.map((v) => (level > 0 ? (100 * (v - prBase)) / level : NaN))
+      );
+      if (curves) {
+        for (const index of ['hdd', 'cdd']) {
+          series.set(
+            `${model}|${index}|${scenario}`,
+            tas.map((v) => {
+              let total = 0;
+              for (let m = 0; m < 12; m += 1) total += curveValue(curves, 'climate', index, m, v - recent);
+              return total;
+            })
+          );
+        }
+      }
+    }
+  }
+  return summarize(explorers, city.spec, curves, (model, variable, scenario) =>
+    series.get(`${model}|${variable}|${scenario}`)
+  );
+}
+
+/**
+ * Step-response PCs per model, variable and scenario, which every city
+ * shares, and a city's annual forced response from them: its gridbox's
+ * pattern loadings, read directly rather than projected over the whole grid.
+ */
+const pcsCache = new WeakMap();
+async function cachedPoint(explorer, variable, scenario, index) {
+  const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
+  const artifact = await explorer.patterns(variable);
+  if (!pcsCache.has(artifact)) pcsCache.set(artifact, new Map());
+  const byScenario = pcsCache.get(artifact);
+  if (!byScenario.has(scenario)) {
+    byScenario.set(
+      scenario,
+      stepResponsePcs(patternKernel(artifact), explorer.bundles[variable].forcing(scenario))
+    );
+  }
+  const { pcs, nTimes } = byScenario.get(scenario);
+  const nExp = artifact.dims.exp;
+  const nModes = artifact.nModes;
+  const space = artifact.nLat * artifact.nLon;
+  const patterns = artifact.get('pattern_v');
+  const loading = new Float64Array(nExp * nModes);
+  for (let e = 0; e < nExp; e += 1) {
+    for (let m = 0; m < nModes; m += 1) {
+      const value = patterns[((e * artifact.nFields + 0) * nModes + m) * space + index];
+      loading[e * nModes + m] = Number.isFinite(value) ? value : 0;
+    }
+  }
+  const annual = new Float64Array(nTimes);
+  for (let t = 0; t < nTimes; t += 1) {
+    let acc = 0;
+    for (let k = 0; k < loading.length; k += 1) acc += pcs[t * loading.length + k] * loading[k];
+    annual[t] = acc;
+  }
+  return annual;
+}
+
+/** The spread across models of every series, for one place: one summary file. */
+function summarize(explorers, location, curves, seriesFor) {
+  const models = [...explorers.keys()];
   const first = explorers.get(models[0]);
   const { start, end } = SUMMARY_YEARS;
   const out = {
@@ -136,41 +273,19 @@ export function summarizeLocation(explorers, location, curves = null) {
   // Degree days where there are observations to correct them with: land
   // regions and cities, not the sea or the global mean.
   const variables = ['tas', 'pr'];
-  const references = new Map();
-  // Each model's monthly climate per scenario, shared by heating and cooling.
-  const monthlies = new Map();
-  const monthlyFor = (model, scenario) => {
-    const key = `${model}|${scenario}`;
-    if (!monthlies.has(key)) {
-      monthlies.set(key, deterministicMonthly(explorers.get(model), location, scenario));
-    }
-    return monthlies.get(key);
-  };
   if (curves) {
     variables.push('hdd', 'cdd');
     out.observed = { period: DEGREE_DAY_PERIOD, ...curves.observed_annual };
-    for (const model of models) references.set(model, referenceClimate(explorers.get(model), location));
   }
   const DIGITS = { tas: 3, pr: 2, hdd: 0, cdd: 0 };
   for (const variable of variables) {
     const digits = DIGITS[variable];
     out[variable] = {};
     for (const scenario of first.scenarios) {
-      const perModel = models.map((model) => {
-        const explorer = explorers.get(model);
-        const series =
-          variable === 'hdd' || variable === 'cdd'
-            ? modelDegreeDays(explorer, {
-                index: variable,
-                location,
-                scenario,
-                curves,
-                reference: references.get(model),
-                monthly: monthlyFor(model, scenario),
-              })
-            : modelChange(explorer, { variable, location, scenario });
-        return { series, start: explorer.bundles.tas.forcingYearStart };
-      });
+      const perModel = models.map((model) => ({
+        series: seriesFor(model, variable, scenario),
+        start: explorers.get(model).bundles.tas.forcingYearStart,
+      }));
       const windowed = perModel.map(({ series, start: s }) =>
         series.slice(start - s, end - s + 1)
       );

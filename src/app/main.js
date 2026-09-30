@@ -40,7 +40,7 @@ import {
   referenceClimate,
 } from '../lib/degree-days.js';
 import { assignModelColours, modelColour } from './models.js';
-import { placeLabel } from './places.js';
+import { placeLabel, registerCities } from './places.js';
 import {
   groupScenarios,
   scenarioColour,
@@ -221,6 +221,8 @@ const explorers = new Map();
 let availableModelList = [];
 /** Which view: 'simple', the spread across models, or 'expert', everything else. */
 let mode = DEFAULTS.mode;
+/** The simple view's cities (data/cities_v1.json), beyond the bundles' own. */
+let cities = [];
 /** One place's multi-model summary per place asked for, fetched once. */
 const summaries = new Map();
 /** What the simple view last drew, kept for redraws and the chart download. */
@@ -268,15 +270,30 @@ function setStatus(message, state = '') {
 
 /** Populate the place and scenario menus from the bundle itself. */
 function populateControls() {
-  const groups = {
-    'Global': [],
-    'AR6 regions': [],
-    'Cities': [],
-  };
+  populatePlaces();
+  renderPickers();
+}
+
+/**
+ * The places on offer: the bundles' own in the expert view; in the simple
+ * view the regions and every city in data/cities_v1.json, by continent.
+ * Keeps the current place where it is still on offer; a city the expert view
+ * does not carry falls back to the region around it.
+ */
+function populatePlaces() {
+  const current = elements.location.value;
+  const groups = { 'Global': [], 'AR6 regions': [] };
   for (const spec of explorer.locations) {
     if (spec === 'global') groups['Global'].push(spec);
     else if (spec.startsWith('regional:')) groups['AR6 regions'].push(spec);
-    else groups['Cities'].push(spec);
+  }
+  if (mode === 'simple' && cities.length) {
+    for (const city of cities) {
+      const name = `Cities: ${city.continent}`;
+      (groups[name] ??= []).push(city.spec);
+    }
+  } else {
+    groups['Cities'] = explorer.locations.filter((spec) => spec.startsWith('point:'));
   }
 
   elements.location.replaceChildren();
@@ -292,8 +309,22 @@ function populateControls() {
     }
     elements.location.append(group);
   }
+  if (!current) return;
+  if (placesOnOffer().includes(current)) {
+    elements.location.value = current;
+  } else {
+    const [lat, lon] = current.slice('point:'.length).split(',').map(Number);
+    const region = outlines.length ? regionAt(outlines, { lat, lon }) : null;
+    const spec = region ? `regional:${region.code}` : 'global';
+    elements.location.value = explorer.locations.includes(spec) ? spec : 'global';
+  }
+}
 
-  renderPickers();
+/** Every place the current view offers. */
+function placesOnOffer() {
+  return mode === 'simple'
+    ? [...explorer.locations, ...cities.map((c) => c.spec)]
+    : explorer.locations;
 }
 
 /**
@@ -763,6 +794,7 @@ function showMode() {
     const before = elements.scenarioPicker.closest('.control');
     for (const control of moving) elements.controls.insertBefore(control, before);
   }
+  if (explorer) populatePlaces();
   if (mode === 'simple') setMapMode('pan');
   else if (elements.mapPanel.dataset.map === 'ready') {
     elements.loadMap.hidden = true;
@@ -1169,7 +1201,8 @@ function applyState(state) {
   renderPickers();
   elements.baseline.value = state.baseline;
   elements.variable.value = state.variable;
-  if (explorer.locations.includes(state.location)) elements.location.value = state.location;
+  populatePlaces();
+  if (placesOnOffer().includes(state.location)) elements.location.value = state.location;
   selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
   if (!selection.length) {
     const fallback = DEFAULTS.scenarios.filter((name) => explorer.scenarios.includes(name));
@@ -2050,6 +2083,15 @@ async function start() {
   // locations and scenarios exist.
   const first = fromQuery(window.location.search, { models: availableModelList });
   compareBy = first.compareBy;
+  mode = first.mode;
+  // The simple view's cities; without the file, the bundles' own.
+  try {
+    const response = await fetch(`${dataBase}cities_v1.json`);
+    cities = response.ok ? (await response.json()).cities : [];
+  } catch {
+    cities = [];
+  }
+  registerCities(cities);
   try {
     explorer = await explorerFor(first.models[0]);
   } catch (error) {
@@ -2063,7 +2105,7 @@ async function start() {
   // describes rather than flashing the default view first.
   applyState(
     fromQuery(window.location.search, {
-      locations: explorer.locations,
+      locations: [...explorer.locations, ...cities.map((c) => c.spec)],
       scenarios: explorer.scenarios,
       models: availableModelList,
     })

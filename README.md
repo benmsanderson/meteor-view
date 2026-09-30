@@ -112,7 +112,8 @@ all showing the spread across every model the site carries:
 
 - **The world**: CO₂ emissions of the chosen scenarios beside global warming
   under them, with a sentence reading the result.
-- **A region**, West & Central Europe to begin with: temperature,
+- **A place**, West & Central Europe to begin with, or any of 252 cities
+  (`data/cities_v1.json`): temperature,
   precipitation or degree days, with its own chart and sentence.
 - **A map** of the middle model's change by 2081–2100 under one of the
   scenarios. Clicking a region on it shows that region above.

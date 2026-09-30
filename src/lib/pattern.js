@@ -258,3 +258,42 @@ export function boxRegion({ south, north, west, east }) {
     return w <= e ? l >= w && l <= e : l >= w || l <= e;
   };
 }
+
+/**
+ * A city on a pattern artifact's grid: the nearest gridbox more than half
+ * land, by great-circle distance, as the bundle exporter places its cities
+ * (scripts/landmask.py), so a coastal city does not land on a sea gridbox of a
+ * coarse grid. Without a land fraction, simply the nearest gridbox.
+ *
+ * @param {PatternArtifact} artifact
+ * @param {ArrayLike<number>|null} landPercent on the artifact's grid
+ * @param {number} lat
+ * @param {number} lon
+ * @returns {{index: number, weights: Float64Array}} the gridbox's flat index,
+ *   and weights selecting it alone
+ */
+export function pointWeights(artifact, landPercent, lat, lon) {
+  const rad = DEGREES_TO_RADIANS;
+  const sinT = Math.sin(lat * rad);
+  const cosT = Math.cos(lat * rad);
+  let best = -1;
+  let bestCos = -2;
+  for (let i = 0; i < artifact.nLat; i += 1) {
+    const la = artifact.lat[i] * rad;
+    const s = Math.sin(la) * sinT;
+    const c = Math.cos(la) * cosT;
+    for (let j = 0; j < artifact.nLon; j += 1) {
+      const k = i * artifact.nLon + j;
+      if (landPercent && !(landPercent[k] > 50)) continue;
+      const cosD = s + c * Math.cos((artifact.lon[j] - lon) * rad);
+      if (cosD > bestCos) {
+        bestCos = cosD;
+        best = k;
+      }
+    }
+  }
+  if (best < 0) throw new Error('no land gridbox on this grid');
+  const weights = new Float64Array(artifact.nLat * artifact.nLon);
+  weights[best] = 1;
+  return { index: best, weights };
+}

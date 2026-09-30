@@ -432,15 +432,25 @@ export class Explorer {
    */
   async customForcedFull({ variable, scenario, mask, landOnly = false }) {
     const artifact = await this.patterns(variable);
+    const region = await this.regionWeights(artifact, mask, landOnly);
+    const annual = await this.forcedFromWeights({ variable, scenario, weights: region.weights });
+    return { annual, landOnly: region.landOnly };
+  }
+
+  /**
+   * The annual forced response averaged with any weights on the pattern
+   * grid, over the full forcing axis: what a drawn region and a city beyond
+   * the bundle's locations both come down to.
+   *
+   * @param {{variable: 'tas'|'pr', scenario: string, weights: Float64Array}} options
+   * @returns {Promise<Float64Array>}
+   */
+  async forcedFromWeights({ variable, scenario, weights }) {
+    const artifact = await this.patterns(variable);
     const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
     const bundle = this.bundles[variable];
-
-    const region = await this.regionWeights(artifact, mask, landOnly);
-    const projection = artifact.project(region.weights);
-    const { pcs, nTimes } = stepResponsePcs(
-      patternKernel(artifact),
-      bundle.forcing(scenario)
-    );
+    const projection = artifact.project(weights);
+    const { pcs, nTimes } = stepResponsePcs(patternKernel(artifact), bundle.forcing(scenario));
 
     const nExp = artifact.dims.exp;
     const nModes = artifact.nModes;
@@ -454,7 +464,7 @@ export class Explorer {
       }
       annual[t] = acc;
     }
-    return { annual, landOnly: region.landOnly };
+    return annual;
   }
 
   /**
