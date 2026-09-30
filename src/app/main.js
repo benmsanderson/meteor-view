@@ -41,6 +41,7 @@ import {
 } from '../lib/degree-days.js';
 import { assignModelColours, modelColour } from './models.js';
 import { placeLabel, registerCities } from './places.js';
+import { attachPlaceSearch } from './place-search.js';
 import {
   groupScenarios,
   scenarioColour,
@@ -223,6 +224,8 @@ let availableModelList = [];
 let mode = DEFAULTS.mode;
 /** The simple view's cities (data/cities_v1.json), beyond the bundles' own. */
 let cities = [];
+/** The searchable box over the place menu; `sync` after the place changes. */
+let placeSearch = null;
 /** One place's multi-model summary per place asked for, fetched once. */
 const summaries = new Map();
 /** What the simple view last drew, kept for redraws and the chart download. */
@@ -318,6 +321,7 @@ function populatePlaces() {
     const spec = region ? `regional:${region.code}` : 'global';
     elements.location.value = explorer.locations.includes(spec) ? spec : 'global';
   }
+  placeSearch?.sync();
 }
 
 /** Every place the current view offers. */
@@ -533,6 +537,8 @@ function seriesSpecs() {
  */
 async function run() {
   if (!explorer) return;
+  // Whatever changed the place, the search box shows it.
+  placeSearch?.sync();
   const request = ++runRequest;
   if (mode === 'simple') {
     runSimple(request);
@@ -2100,6 +2106,15 @@ async function start() {
   }
 
   populateControls();
+  const byCity = new Map(cities.map((c) => [c.spec, `${c.country}, ${c.continent}`]));
+  const population = new Map(cities.map((c) => [c.spec, c.population]));
+  placeSearch = attachPlaceSearch({
+    select: elements.location,
+    input: document.getElementById('place-search'),
+    list: document.getElementById('place-results'),
+    keywords: (spec) => byCity.get(spec) ?? '',
+    weight: (spec) => population.get(spec) ?? 0,
+  });
 
   // Apply the shared link before the first run, so a link opens on what it
   // describes rather than flashing the default view first.

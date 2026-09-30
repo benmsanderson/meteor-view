@@ -82,8 +82,23 @@
         </div>
 
         <div class="control">
-          <label for="location">Place</label>
-          <select id="location"></select>
+          <label for="place-search">Place</label>
+          <div class="place-search">
+            <input
+              type="text"
+              id="place-search"
+              role="combobox"
+              aria-autocomplete="list"
+              aria-expanded="false"
+              aria-controls="place-results"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Search regions and cities"
+            />
+            <ul class="place-results" id="place-results" role="listbox" aria-label="Places" hidden></ul>
+          </div>
+          <!-- The record of the chosen place; the box above searches it. -->
+          <select id="location" hidden aria-hidden="true" tabindex="-1"></select>
         </div>
 
         <div class="control">
