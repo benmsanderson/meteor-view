@@ -456,8 +456,8 @@ button.link {
   transition: border-color 0.15s;
 }
 
-.partner:hover,
-.partner:focus-visible {
+a.partner:hover,
+a.partner:focus-visible {
   border-color: var(--accent);
 }
 
@@ -477,6 +477,10 @@ button.link {
 
 .logo-futura {
   height: 36px;
+}
+
+.logo-eu {
+  height: 40px;
 }
 
 .funding {
@@ -512,6 +516,10 @@ button.link {
 
   .logo-futura {
     height: 28px;
+  }
+
+  .logo-eu {
+    height: 30px;
   }
 }
 
