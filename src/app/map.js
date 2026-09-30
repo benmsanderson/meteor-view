@@ -532,3 +532,29 @@ export function drawColourBar(canvas, { edges, colours, label }) {
   context.textAlign = 'left';
   context.fillText(label, 0, barHeight + 16);
 }
+
+/**
+ * The map's own units, which are not the timeseries panel's.
+ *
+ * Temperature is a change in °C either way. Precipitation is a *percent*
+ * change, which is the convention for maps and the only readable choice: an
+ * absolute change of 0.2 mm/day is negligible in the tropics and
+ * transformative in a desert, so an absolute map mostly shows where it already
+ * rains.
+ */
+export function toMapUnits(field, variable, base, climatology) {
+  // Change from the baseline period: the forced response here, less its mean
+  // over the period. Both are relative to the same unforced state, so it
+  // cancels.
+  if (variable === 'tas') return Float64Array.from(field, (v, i) => v - base.mean[i]);
+  return Float64Array.from(field, (v, i) => {
+    // The denominator is the baseline period's own precipitation. The
+    // climatology is the model's 2015 field; the forced response carries it
+    // back or forward to the period.
+    const level = climatology[i] + base.mean[i] - base.at2015[i];
+    // Where there is essentially no rain, a percentage is meaningless rather
+    // than large, so leave it blank instead of rendering a spurious extreme.
+    if (!Number.isFinite(level) || level <= 1e-9) return NaN;
+    return ((v - base.mean[i]) / level) * 100;
+  });
+}

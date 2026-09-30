@@ -49,6 +49,12 @@ export const MAX_MODELS = 6;
 /** What a link that names no scenarios meant before the default changed. */
 export const LEGACY_SCENARIOS = ['ssp245'];
 
+/**
+ * Where the expert view opens, and what an expert link without `loc` has
+ * always meant. The simple view opens on a region instead (DEFAULTS).
+ */
+export const EXPERT_LOCATION = 'global';
+
 /** Fixed default seed, so a link without one is still reproducible. */
 export const DEFAULT_SEED = 20260921;
 
@@ -57,7 +63,8 @@ export const DEFAULTS = {
   compareBy: 'scenarios',
   models: ['NorESM2-MM'],
   variable: 'tas',
-  location: 'global',
+  // The simple view opens on a region people live in; see EXPERT_LOCATION.
+  location: 'regional:WCE',
   // Very Low, Medium to Low and High: the spread of the CMIP7 markers, in
   // menu order.
   scenarios: ['cmip7-very-low', 'cmip7-medium-to-low', 'cmip7-high'],
@@ -96,7 +103,7 @@ function expertQuery(state) {
   if (state.compareBy !== DEFAULTS.compareBy) params.set('by', state.compareBy);
   if (state.models.join(',') !== DEFAULTS.models.join(',')) params.set('m', state.models.join(','));
   if (state.variable !== DEFAULTS.variable) params.set('v', state.variable);
-  if (state.location !== DEFAULTS.location) params.set('loc', state.location);
+  if (state.location !== EXPERT_LOCATION) params.set('loc', state.location);
   if (state.scenarios.join(',') !== DEFAULTS.scenarios.join(',')) {
     params.set('scn', state.scenarios.join(','));
   }
@@ -160,6 +167,7 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   const variable = params.get('v');
   if (['tas', 'pr', 'hdd', 'cdd'].includes(variable)) state.variable = variable;
 
+  if (state.mode === 'expert') state.location = EXPERT_LOCATION;
   const location = params.get('loc');
   if (location && locations.includes(location)) state.location = location;
 

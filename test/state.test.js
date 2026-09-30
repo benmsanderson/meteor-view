@@ -10,7 +10,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULTS, MAX_MODELS, MAX_SCENARIOS, fromQuery, toQuery } from '../src/app/state.js';
 
 /** The defaults as the expert view has them: every setting in play. */
-const EXPERT = { ...DEFAULTS, mode: 'expert' };
+const EXPERT = { ...DEFAULTS, mode: 'expert', location: 'global' };
 import { filenameStem, toCsv } from '../src/app/export.js';
 import {
   groupScenarios,
@@ -21,7 +21,7 @@ import {
 } from '../src/app/scenarios.js';
 
 const CONTEXT = {
-  locations: ['global', 'regional:NEU', 'point:19.1,72.9'],
+  locations: ['global', 'regional:NEU', 'regional:WCE', 'point:19.1,72.9'],
   scenarios: [
     'ssp126', 'ssp245', 'ssp370', 'ssp585', 'ssp119', 'ssp434', 'ssp460',
     'cmip7-very-low', 'cmip7-low', 'cmip7-medium-to-low', 'cmip7-high',
@@ -86,6 +86,15 @@ describe('URL state', () => {
     expect(fromQuery('?view=simple&v=hdd', CONTEXT).variable).toBe('hdd');
     const state = { ...EXPERT, variable: 'hdd', location: 'point:19.1,72.9' };
     expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
+  });
+
+  it('opens the simple view on West & Central Europe, and the expert view on the globe', () => {
+    expect(fromQuery('', CONTEXT).location).toBe('regional:WCE');
+    expect(fromQuery('?view=expert', CONTEXT).location).toBe('global');
+    // An older expert link without loc= meant the globe, and still does.
+    expect(fromQuery('?v=pr', CONTEXT).location).toBe('global');
+    expect(toQuery({ ...EXPERT, location: 'regional:WCE' })).toContain('loc=regional%3AWCE');
+    expect(toQuery({ ...DEFAULTS, variable: 'pr' })).not.toContain('loc=');
   });
 
   it('keeps a simple link to its three settings', () => {

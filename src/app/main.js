@@ -21,11 +21,17 @@ import {
   regrid,
   sameGrid,
   toLatLon,
+  toMapUnits,
   valueAt,
 } from './map.js';
 import { BASELINES, Explorer, WINDOW, availableModels } from './explorer.js';
 import { EnsembleRunner } from './runner.js';
-import { loadSummary, summarySentence } from './summary.js';
+import {
+  loadSummary,
+  mapFromFile,
+  summaryMapFile,
+  summarySentence,
+} from './summary.js';
 import {
   DEGREE_DAY_BASE,
   annualSums,
@@ -144,6 +150,11 @@ const elements = {
   controls: document.getElementById('controls'),
   viewButtons: document.querySelectorAll('.view-toggle button'),
   summary: document.getElementById('summary'),
+  globalSummary: document.getElementById('global-summary'),
+  globalEmissions: document.getElementById('global-emissions'),
+  globalTemperature: document.getElementById('global-temperature'),
+  regionalControls: document.getElementById('regional-controls'),
+  simpleMapScenario: document.getElementById('simple-map-scenario'),
   compareBy: document.getElementById('compare-by'),
   modelPicker: document.getElementById('model-picker'),
   modelList: document.getElementById('model-list'),
@@ -214,6 +225,10 @@ let mode = DEFAULTS.mode;
 const summaries = new Map();
 /** What the simple view last drew, kept for redraws and the chart download. */
 let lastSimple = null;
+/** What the simple view's world panel last drew, kept for redraws. */
+let lastGlobal = null;
+/** The simple view's map across models, one file per scenario, fetched once. */
+const summaryMaps = new Map();
 /** Whether a view compares scenarios under one model, or models under one scenario. */
 let compareBy = 'scenarios';
 /** The selected models, in manifest order. Never empty. */
@@ -739,9 +754,133 @@ function setMode(next) {
 /** Show the controls and panels of the current view, and say which it is. */
 function showMode() {
   document.documentElement.dataset.mode = mode;
+  // The simple view asks for the region's variable and place in the regional
+  // panel, under the world view; the expert view keeps every control together.
+  const moving = [elements.variable, elements.location].map((el) => el.closest('.control'));
+  if (mode === 'simple') {
+    elements.regionalControls.append(...moving);
+  } else {
+    const before = elements.scenarioPicker.closest('.control');
+    for (const control of moving) elements.controls.insertBefore(control, before);
+  }
+  if (mode === 'simple') setMapMode('pan');
+  else if (elements.mapPanel.dataset.map === 'ready') {
+    elements.loadMap.hidden = true;
+    elements.mapModes.hidden = false;
+  }
   for (const button of elements.viewButtons) {
     button.setAttribute('aria-pressed', String(button.dataset.view === mode));
   }
+}
+
+/**
+ * The simple view's world panel: CO2 emissions of the selected scenarios, and
+ * global warming across models under each.
+ */
+async function renderGlobal() {
+  if (mode !== 'simple') return;
+  let summary;
+  try {
+    if (!scenarioEmissions) scenarioEmissions = await explorer.emissions();
+    summary = await summaryFor('global');
+  } catch (error) {
+    setStatus(error.message, 'error');
+    return;
+  }
+  if (!summary) return;
+  const scenarios = selection.filter((name) => summary.tas[name]);
+  lastGlobal = { summary, scenarios };
+  elements.globalSummary.textContent = summarySentence({
+    summary,
+    variable: 'tas',
+    scenarios,
+    label: scenarioLabel,
+    place: 'global',
+  });
+  drawGlobal();
+}
+
+function drawGlobal() {
+  if (mode !== 'simple' || !lastGlobal || !scenarioEmissions) return;
+  const { summary, scenarios } = lastGlobal;
+  const { years } = scenarioEmissions;
+  const shown = scenarios.filter((name) => scenarioEmissions.scenarios[name]);
+  drawScenarioContext(elements.globalEmissions, {
+    scenarios: shown.map((name) => ({
+      name,
+      years,
+      values: scenarioEmissions.scenarios[name].CO2,
+      label: scenarioShortLabel(name),
+      colour: selectedColour(name),
+      selectedColour: selectedColour(name),
+      labelled: true,
+    })),
+    selected: shown,
+    range: [years[0], years[years.length - 1]],
+    yLabel: CONTEXT_SERIES.CO2.label,
+    format: CONTEXT_SERIES.CO2.format,
+  });
+  const [start, end] = summary.years;
+  drawFanChart(elements.globalTemperature, {
+    x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
+    groups: scenarios.map((scenario) => ({
+      label: scenarioShortLabel(scenario),
+      colour: selectedColour(scenario),
+      bands: summary.tas[scenario].bands,
+    })),
+    yLabel: SIMPLE_VARIABLES.tas.yLabel,
+    format: SIMPLE_VARIABLES.tas.format,
+  });
+}
+
+/**
+ * The simple view's map: the middle model's change by 2081-2100 at every
+ * point, under one of the selected scenarios, computed at build time and
+ * drawn by the same code as the expert maps. Temperature, or precipitation
+ * when the region shows it; degree days map as the temperature behind them.
+ */
+async function renderSimpleMap() {
+  const menu = elements.simpleMapScenario;
+  const keep = selection.includes(menu.value) ? menu.value : selection[selection.length - 1];
+  menu.replaceChildren(
+    ...selection.map((name) => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = scenarioLabel(name);
+      return option;
+    })
+  );
+  menu.value = keep;
+  const scenario = keep;
+  const variable = elements.variable.value === 'pr' ? 'pr' : 'tas';
+  const request = ++mapRequest;
+  let file;
+  try {
+    if (!outlines.length) [outlines, coastlines] = await Promise.all([explorer.regions(), explorer.coastlines()]);
+    if (!summaryMaps.has(scenario)) {
+      const response = await fetch(`${dataBase}${summaryMapFile(scenario)}`);
+      if (!response.ok) throw new Error(`no map across models for ${scenarioLabel(scenario)}`);
+      summaryMaps.set(scenario, await response.json());
+    }
+    file = summaryMaps.get(scenario);
+  } catch (error) {
+    setStatus(`Could not draw the map: ${error.message}`, 'error');
+    return;
+  }
+  if (request !== mapRequest || mode !== 'simple') return;
+  elements.mapPanel.dataset.map = 'ready';
+  lastMap = {
+    fields: [mapFromFile(file, variable)],
+    difference: null,
+    specs: [{ scenario, label: scenarioLabel(scenario) }],
+    variable,
+    year: `${file.period.from}–${file.period.to}`,
+    baseline: 'pi',
+  };
+  elements.mapTitle.textContent =
+    `${variable === 'tas' ? 'Temperature' : 'Precipitation'} change by ` +
+    `${file.period.from}–${file.period.to}, middle of ${file.models.length} models`;
+  redrawMap();
 }
 
 /** "Temperature at Global mean", naming the one scenario when models vary. */
@@ -1171,32 +1310,6 @@ async function loadMap() {
   }
 }
 
-/**
- * The map's own units, which are not the timeseries panel's.
- *
- * Temperature is a change in °C either way. Precipitation is a *percent*
- * change, which is the convention for maps and the only readable choice: an
- * absolute change of 0.2 mm/day is negligible in the tropics and
- * transformative in a desert, so an absolute map mostly shows where it already
- * rains.
- */
-function toMapUnits(field, variable, base, climatology) {
-  // Change from the baseline period: the forced response here, less its mean
-  // over the period. Both are relative to the same unforced state, so it
-  // cancels.
-  if (variable === 'tas') return Float64Array.from(field, (v, i) => v - base.mean[i]);
-  return Float64Array.from(field, (v, i) => {
-    // The denominator is the baseline period's own precipitation. The
-    // climatology is the model's 2015 field; the forced response carries it
-    // back or forward to the period.
-    const level = climatology[i] + base.mean[i] - base.at2015[i];
-    // Where there is essentially no rain, a percentage is meaningless rather
-    // than large, so leave it blank instead of rendering a spurious extreme.
-    if (!Number.isFinite(level) || level <= 1e-9) return NaN;
-    return ((v - base.mean[i]) / level) * 100;
-  });
-}
-
 /** Every map canvas, in grid order. */
 function mapCanvases() {
   return [elements.map, elements.mapB, elements.mapDiff];
@@ -1215,6 +1328,10 @@ let mapRequest = 0;
  * so B is interpolated onto A's before the difference is taken.
  */
 async function renderMap() {
+  if (mode === 'simple') {
+    await renderSimpleMap();
+    return;
+  }
   if (elements.mapPanel.dataset.map !== 'ready') return;
   const request = ++mapRequest;
 
@@ -1598,7 +1715,7 @@ function mapValueText(value, variable, difference = false) {
  */
 function showReadout(point) {
   if (!lastMap) return;
-  const prompt = compare ? 'Point at any map to read all three.' : '';
+  const prompt = lastMap.fields.length === 2 ? 'Point at any map to read all three.' : '';
   if (!point) {
     elements.mapReadout.textContent = prompt;
     return;
@@ -1778,6 +1895,7 @@ function redrawMap() {
 
 /** Redraw everything from the last run, without regenerating it. */
 function redraw() {
+  drawGlobal();
   redrawMap();
   renderContext();
   drawChart();
@@ -1801,6 +1919,7 @@ async function selectionChanged() {
   }
   run();
   renderContext();
+  renderGlobal();
   renderMap();
 }
 
@@ -1839,7 +1958,7 @@ function attachControls() {
     });
   }
 
-  elements.controls.addEventListener('change', async (event) => {
+  const onChange = async (event) => {
     if (event.target === elements.compareBy) {
       // Switching what is compared keeps the first of each: the first model,
       // and the first scenario, carry over as the single choice.
@@ -1865,7 +1984,11 @@ function attachControls() {
     }
     run();
     renderMap();
-  });
+  };
+  // The variable and place live in the regional panel in the simple view.
+  elements.controls.addEventListener('change', onChange);
+  elements.regionalControls.addEventListener('change', onChange);
+  elements.simpleMapScenario.addEventListener('change', renderSimpleMap);
 
   // Redraw whenever a canvas changes size, which covers window resizes and,
   // more importantly, the first paint: a canvas measured before its
@@ -1882,6 +2005,8 @@ function attachControls() {
   observer.observe(elements.seasonal);
   for (const canvas of mapCanvases()) observer.observe(canvas);
   observer.observe(elements.context);
+  observer.observe(elements.globalEmissions);
+  observer.observe(elements.globalTemperature);
 }
 
 /** Which models, trained how, from which version of METEOR. */
@@ -1954,6 +2079,10 @@ async function start() {
 
   run();
   renderContext();
+  // The simple view opens with its world panel and map; the expert map waits
+  // for its button, since it is 2 MB.
+  renderGlobal();
+  if (mode === 'simple') renderMap();
 }
 
 start();

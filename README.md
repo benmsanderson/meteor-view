@@ -107,13 +107,21 @@ The exporter depends on `series_transformed` and `locations=`, both added by
 
 ## Two views
 
-The page opens in a **simple view** for a general audience: a variable, a
-place and some scenarios, one chart and one sentence. It shows the spread
-across every model the site carries, each model's forced change from its own
-1850–1900 level (precipitation as a percentage of that level), as the median
-model, the middle half and the middle 90%. The spread is computed at build
-time by `scripts/build-summary.mjs` into one small file per place
-(`data/summary_v1/`), so the browser never loads thirty models' bundles.
+The page opens in a **simple view** for a general audience, in three parts,
+all showing the spread across every model the site carries:
+
+- **The world**: CO₂ emissions of the chosen scenarios beside global warming
+  under them, with a sentence reading the result.
+- **A region**, West & Central Europe to begin with: temperature,
+  precipitation or degree days, with its own chart and sentence.
+- **A map** of the middle model's change by 2081–2100 under one of the
+  scenarios. Clicking a region on it shows that region above.
+
+Each model contributes its forced change from its own 1850–1900 level
+(precipitation as a percentage of that level). The spread and the maps are
+computed at build time by `scripts/build-summary.mjs` into
+`data/summary_v1/` (one small file per place and per scenario), so the
+browser never loads thirty models' data.
 
 Both views offer **heating and cooling degree days** (base 18 °C) for cities
 and land regions, bias-corrected against observations: each model's warming

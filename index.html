@@ -118,7 +118,25 @@
         </div>
       </form>
 
+      <section class="panel" data-simple>
+        <div class="panel__header">
+          <h2>The world</h2>
+        </div>
+        <p class="summary" id="global-summary" aria-live="polite"></p>
+        <div class="pair">
+          <figure class="pair__cell">
+            <figcaption>CO₂ emissions</figcaption>
+            <canvas id="global-emissions"></canvas>
+          </figure>
+          <figure class="pair__cell">
+            <figcaption>Global warming, across climate models</figcaption>
+            <canvas id="global-temperature"></canvas>
+          </figure>
+        </div>
+      </section>
+
       <section class="panel">
+        <div class="controls controls--inline" id="regional-controls" data-simple></div>
         <div class="panel__header">
           <h2 id="chart-title">Annual means</h2>
           <p class="legend" id="chart-legend">
@@ -160,16 +178,25 @@
         <canvas id="context"></canvas>
       </section>
 
-      <section class="panel" data-expert>
+      <section class="panel">
         <div class="panel__header">
           <h2 id="map-title">Map of the forced response</h2>
-          <p class="legend">
+          <p class="legend" data-simple>
+            <label for="simple-map-scenario">Scenario</label>
+            <select id="simple-map-scenario"></select>
+          </p>
+          <p class="legend" data-expert>
             <label for="map-year">Year</label>
             <input type="range" id="map-year" min="2015" max="2100" value="2100" step="1" />
             <output id="map-year-value">2100</output>
           </p>
         </div>
-        <p class="hint" id="map-hint">
+        <p class="hint" data-simple>
+          The middle of the climate models' answers at every point, for the
+          last twenty years of the century. Click a region to see it above;
+          drag to pan, and scroll, double-click or pinch to zoom.
+        </p>
+        <p class="hint" id="map-hint" data-expert>
           Drag to pan; scroll, double-click or pinch to zoom; click or tap a
           region to select it. On a phone, a vertical swipe scrolls the page
           until you zoom in, and then drags the map. To draw your own region, switch to
@@ -181,7 +208,7 @@
           With two or more scenarios selected, pick any two to compare: both
           maps and their difference share one year and one view.
         </p>
-        <p class="map-compare" id="map-compare" hidden>
+        <p class="map-compare" id="map-compare" data-expert hidden>
           <label for="compare-a">Compare</label>
           <select id="compare-a"></select>
           <label for="compare-b">with</label>
@@ -206,8 +233,8 @@
           <div class="map-cell map-readout" id="map-readout" aria-live="polite"></div>
         </div>
         <div class="actions">
-          <button type="button" id="load-map">Load map (2 MB)</button>
-          <div class="modes" id="map-modes" hidden role="group" aria-label="Map mode">
+          <button type="button" id="load-map" data-expert>Load map (2 MB)</button>
+          <div class="modes" id="map-modes" data-expert hidden role="group" aria-label="Map mode">
             <button type="button" id="mode-pan" data-mode="pan" aria-pressed="true">
               Pan
             </button>
@@ -216,8 +243,8 @@
             </button>
           </div>
           <button type="button" id="reset-view" hidden>Reset view</button>
-          <button type="button" id="clear-box" hidden>Clear custom region</button>
-          <label class="box-land" id="box-land-label" hidden>
+          <button type="button" id="clear-box" data-expert hidden>Clear custom region</button>
+          <label class="box-land" id="box-land-label" data-expert hidden>
             <input type="checkbox" id="box-land" checked />
             Land only
           </label>

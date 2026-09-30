@@ -143,3 +143,37 @@ describe('the sentence', () => {
     ).toContain('one climate model only');
   });
 });
+
+describe('the map across models', async () => {
+  const { PatternArtifact } = await import('../src/lib/pattern.js');
+  const { Artifact } = await import('../src/lib/bundle.js');
+  const { regrid } = await import('../src/app/map.js');
+  const { SUMMARY_GRID, mapFromFile, modelMapChange, summarizeMap } = await import('../src/app/summary.js');
+  const read = (name) => readFileSync(new URL(`meteor_NorESM2-MM_${name}_v1.nc`, DATA));
+  explorer.patternArtifacts.set('tas', new PatternArtifact(read('tas_pattern')));
+  explorer.patternArtifacts.set('pr', new PatternArtifact(read('pr_pattern')));
+  explorer.prClimatology = new Artifact(read('pr_climatology')).array('pr_climatology');
+
+  it('is the model itself when there is only one, on the common grid', async () => {
+    const file = await summarizeMap(new Map([['NorESM2-MM', explorer]]), 'cmip7-high');
+    const own = await modelMapChange(explorer, { variable: 'tas', scenario: 'cmip7-high' });
+    const onGrid = regrid(own, SUMMARY_GRID.lat, SUMMARY_GRID.lon);
+    const { field } = mapFromFile(file, 'tas');
+    field.forEach((v, k) => expect(v).toBeCloseTo(onGrid[k], 1));
+  });
+
+  it('averages over the globe to the global warming of the same period', async () => {
+    const own = await modelMapChange(explorer, { variable: 'tas', scenario: 'cmip7-high' });
+    let sum = 0;
+    let weight = 0;
+    own.lat.forEach((la, i) => {
+      const w = Math.cos((la * Math.PI) / 180);
+      for (let j = 0; j < own.lon.length; j += 1) {
+        sum += w * own.field[i * own.lon.length + j];
+        weight += w;
+      }
+    });
+    const global = modelChange(explorer, { variable: 'tas', location: 'global', scenario: 'cmip7-high' });
+    expect(sum / weight).toBeCloseTo(mean(global, 2081, 2100), 1);
+  });
+});

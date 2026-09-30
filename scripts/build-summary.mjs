@@ -11,9 +11,10 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { Bundle } from '../src/lib/bundle.js';
+import { Artifact, Bundle } from '../src/lib/bundle.js';
+import { PatternArtifact } from '../src/lib/pattern.js';
 import { Explorer, artifactName } from '../src/app/explorer.js';
-import { summarizeLocation, summaryFile } from '../src/app/summary.js';
+import { summarizeLocation, summarizeMap, summaryFile, summaryMapFile } from '../src/app/summary.js';
 import { degreeDayFile } from '../src/lib/degree-days.js';
 
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -24,7 +25,12 @@ const manifest = join(DATA, 'models_v1.json');
 const models = existsSync(manifest)
   ? JSON.parse(readFileSync(manifest, 'utf8')).models
   : ['NorESM2-MM'];
-const bundles = models.flatMap((m) => ['tas', 'pr'].map((v) => join(DATA, artifactName(m, v, 'bundle'))));
+const bundles = models.flatMap((m) =>
+  ['tas', 'pr'].flatMap((v) => [
+    join(DATA, artifactName(m, v, 'bundle')),
+    join(DATA, artifactName(m, v, 'pattern')),
+  ])
+);
 // The observed degree-day curves are inputs too.
 const curveFiles = existsSync(join(DATA, 'degree_days_v1'))
   ? readdirSync(join(DATA, 'degree_days_v1')).map((f) => join(DATA, 'degree_days_v1', f))
@@ -45,7 +51,15 @@ const started = Date.now();
 const explorers = new Map();
 for (const model of models) {
   const load = (v) => new Bundle(readFileSync(join(DATA, artifactName(model, v, 'bundle'))));
-  explorers.set(model, new Explorer({ tas: load('tas'), pr: load('pr') }));
+  const explorer = new Explorer({ tas: load('tas'), pr: load('pr') });
+  // What the page fetches for a map, read from disk instead.
+  for (const v of ['tas', 'pr']) {
+    const file = join(DATA, artifactName(model, v, 'pattern'));
+    explorer.patternArtifacts.set(v, new PatternArtifact(readFileSync(file)));
+  }
+  const climatology = new Artifact(readFileSync(join(DATA, artifactName(model, 'pr', 'climatology'))));
+  explorer.prClimatology = climatology.array('pr_climatology');
+  explorers.set(model, explorer);
 }
 const { locations } = explorers.get(models[0]);
 
@@ -59,7 +73,12 @@ for (const location of locations) {
     JSON.stringify(summarizeLocation(explorers, location, curves))
   );
 }
-writeFileSync(STAMP, JSON.stringify({ models, locations: locations.length }));
+// The map across models, one file per scenario.
+const { scenarios } = explorers.get(models[0]);
+for (const scenario of scenarios) {
+  writeFileSync(join(DATA, summaryMapFile(scenario)), JSON.stringify(await summarizeMap(explorers, scenario)));
+}
+writeFileSync(STAMP, JSON.stringify({ models, locations: locations.length, scenarios: scenarios.length }));
 
 const size = readdirSync(OUT).reduce((s, f) => s + statSync(join(OUT, f)).size, 0);
 console.log(

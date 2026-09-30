@@ -265,3 +265,104 @@ function degreeDaySentence({ summary, variable, scenarios, label, place }) {
     `${listOf(parts)}.${range}`
   );
 }
+
+/** The simple view's map: a common 2-degree grid every model is put onto. */
+export const SUMMARY_GRID = {
+  lat: Float64Array.from({ length: 90 }, (_, i) => -89 + 2 * i),
+  lon: Float64Array.from({ length: 180 }, (_, j) => 1 + 2 * j),
+};
+
+/** Where one scenario's map across models is served. */
+export function summaryMapFile(scenario) {
+  return `summary_v1/map_${scenario.replace(/[^A-Za-z0-9.-]/g, '_')}.json`;
+}
+
+/**
+ * One model's mean change over a period, as a map in the page's map units:
+ * °C for temperature, percent of the 1850-1900 level for precipitation.
+ *
+ * The forced map is linear in the step-response PCs, so the period mean is the
+ * map of the PCs' period mean, exactly.
+ *
+ * @param {import('./explorer.js').Explorer} explorer with its pattern artifacts,
+ *   and for precipitation its climatology, already loaded
+ * @param {{variable: 'tas'|'pr', scenario: string, period?: {from: number, to: number}}} options
+ * @returns {Promise<{field: Float64Array, lat: Float64Array, lon: Float64Array}>}
+ */
+export async function modelMapChange(explorer, { variable, scenario, period = SUMMARY_PERIODS.end }) {
+  const { patternKernel, stepResponsePcs } = await import('../lib/pattern.js');
+  const { toMapUnits } = await import('./map.js');
+  const artifact = await explorer.patterns(variable);
+  const bundle = explorer.bundles[variable];
+  const { pcs } = stepResponsePcs(patternKernel(artifact), bundle.forcing(scenario));
+  const stride = artifact.dims.exp * artifact.nModes;
+  const mean = new Float64Array(stride);
+  for (let year = period.from; year <= period.to; year += 1) {
+    const offset = (year - bundle.forcingYearStart) * stride;
+    for (let i = 0; i < stride; i += 1) mean[i] += pcs[offset + i] / (period.to - period.from + 1);
+  }
+  const base = await explorer.baselineMap({ variable, baseline: 'pi' });
+  const climatology = variable === 'pr' ? await explorer.climatology() : null;
+  return {
+    field: toMapUnits(artifact.map(mean), variable, base, climatology),
+    lat: artifact.lat,
+    lon: artifact.lon,
+  };
+}
+
+/**
+ * The middle model's change at every point of the common grid, for one
+ * scenario and both variables: what one map file holds. A point where fewer
+ * than half the models have a value (precipitation in the driest deserts,
+ * where a percentage means nothing) is left blank.
+ *
+ * @param {Map<string, import('./explorer.js').Explorer>} explorers by model
+ * @param {string} scenario
+ */
+export async function summarizeMap(explorers, scenario) {
+  const { regrid } = await import('./map.js');
+  const { lat, lon } = SUMMARY_GRID;
+  const out = {
+    format: 'meteor-view-summary-map',
+    schema_version: 1,
+    scenario,
+    models: [...explorers.keys()],
+    period: SUMMARY_PERIODS.end,
+    baseline: BASELINES.pi,
+    lat: [lat[0], lat[1] - lat[0], lat.length],
+    lon: [lon[0], lon[1] - lon[0], lon.length],
+  };
+  for (const variable of ['tas', 'pr']) {
+    const fields = [];
+    for (const explorer of explorers.values()) {
+      const map = await modelMapChange(explorer, { variable, scenario });
+      fields.push(regrid(map, lat, lon));
+    }
+    const median = new Array(lat.length * lon.length);
+    const column = [];
+    for (let k = 0; k < median.length; k += 1) {
+      column.length = 0;
+      for (const field of fields) if (Number.isFinite(field[k])) column.push(field[k]);
+      if (column.length * 2 < fields.length) {
+        median[k] = null;
+        continue;
+      }
+      column.sort((a, b) => a - b);
+      const mid = (column.length - 1) / 2;
+      const value = (column[Math.floor(mid)] + column[Math.ceil(mid)]) / 2;
+      median[k] = Number(value.toFixed(variable === 'tas' ? 2 : 1));
+    }
+    out[variable] = median;
+  }
+  return out;
+}
+
+/** A map file's grid and field, as the map drawing code takes them. */
+export function mapFromFile(file, variable) {
+  const axis = ([first, step, n]) => Float64Array.from({ length: n }, (_, i) => first + step * i);
+  return {
+    field: Float64Array.from(file[variable], (v) => (v === null ? NaN : v)),
+    lat: axis(file.lat),
+    lon: axis(file.lon),
+  };
+}
