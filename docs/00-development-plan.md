@@ -319,8 +319,9 @@ machine.
 - [x] The storage pipeline built and proven end to end (2026-09-29), with a
       GitHub release in place of Zenodo for now: one zip per model, pinned by
       SHA-256 in `data/artifacts_v1.json`, fetched and cached at build by
-      `scripts/fetch-artifacts.mjs`. The provisional release carries 30
-      models from `b02011b`; see `data/README.md`.
+      `scripts/fetch-artifacts.mjs`. The release carries 29 models from
+      METEOR `base` (2026-10-09), replacing a provisional one from the
+      unmerged integration branch; see `data/README.md`.
 - [x] Region averaging settled (2026-09-26): AR6 land regions over land
       (land fraction > 0.5), ocean and mixed regions (MED, CAR, SEA) over all
       points, cities at the nearest land gridbox, drawn regions over land with
