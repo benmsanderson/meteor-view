@@ -303,12 +303,7 @@ def register_model(out, model):
     print(f"registered {model} in {path}")
 
 
-#: Trace precipitation, kg m-2 s-1 (about 0.03 mm a year): the least a month
-#: is taken to have when fitting the gamma distribution (see below).
-TRACE_PRECIPITATION = 1e-9
-
-
-def floor_transform_reference():
+def clip_transform_reference():
     """
     Let the precipitation transform fit every city.
 
@@ -316,10 +311,13 @@ def floor_transform_reference():
     and refuses any negative value. CMIP6 output has a few: round-off of order
     -1e-25 kg m-2 s-1 at a hundred or so dry gridboxes per model, which the
     cities N'Djamena, Muscat, Tripoli, Abu Dhabi, Ashgabat and Baghdad land on
-    in one model or another. Such a value is raised to a trace amount instead,
-    for the fit only: patterns and noise, which are anomalies, are untouched,
-    and no value above the trace changes, so any location that fitted before
-    fits the same.
+    in one model or another. Those are set to zero, for the fit only.
+
+    Zero, not a trace amount: exact zeros are common in dry months (Cairo,
+    Riyadh) and the fit accepts them, so leaving them alone keeps every
+    location that fitted before exactly as it was. Lifting them to a trace
+    changed the fit at a third of all places (METEOR#107). Patterns and noise,
+    which are anomalies, are untouched.
     """
     from meteor import timeseries_bundle as tb
 
@@ -327,7 +325,7 @@ def floor_transform_reference():
 
     def fit(reference, parsed, project):
         return original(
-            reference, parsed, lambda field, location: np.maximum(project(field, location), TRACE_PRECIPITATION)
+            reference, parsed, lambda field, location: np.maximum(project(field, location), 0.0)
         )
 
     tb._fit_transform_parameters = fit
@@ -364,7 +362,7 @@ def main():
     # Land-aware location weights, as the AR6 Atlas: see landmask.py. Installed
     # after training, since they change only how fields reduce to locations.
     masks = landmask.install(MODEL, CACHE)
-    floor_transform_reference()
+    clip_transform_reference()
 
     for var in ("tas", "pr"):
         noise = emu.noise_models[var]
