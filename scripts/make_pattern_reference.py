@@ -8,7 +8,7 @@ be held to the same numbers.
 
 Usage::
 
-    PYTHONPATH=<meteor>/src python scripts/make_pattern_reference.py
+    METEOR_CACHE=<cache> PYTHONPATH=<meteor>/src python scripts/make_pattern_reference.py
 """
 
 import json
@@ -22,7 +22,7 @@ from meteor.meteor_interface import MeteorInterface
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "test", "fixtures", "pattern_reference.json")
 
-CACHE = "/Users/bensan/GitHub/METEOR/cache"
+CACHE = os.environ.get("METEOR_CACHE", "/Users/bensan/GitHub/METEOR/cache")
 MODEL = "NorESM2-MM"
 SCENARIO = "ssp245"
 VARIABLE = "tas"

@@ -24,11 +24,12 @@ Settled 2026-09-29 (`docs/00-development-plan.md` §6), replacing the split of
   from a separate store.
 
 The current release,
-[`artifacts-2026-09-30`](https://github.com/benmsanderson/meteor-view/releases/tag/artifacts-2026-09-30),
-is **provisional**: 29 models exported from METEOR `b02011b` with 311
-locations (IPSL-CM6A-LR is left out: its fits are unstable between trainings), before
-METEOR#101, #102 and #104 merge. Once they do, everything is re-exported from
-`base` into a new release, and `artifacts_v1.json` is updated to point at it.
+[`artifacts-2026-10-09`](https://github.com/benmsanderson/meteor-view/releases/tag/artifacts-2026-10-09),
+holds 29 models exported from METEOR `base` (`ce9ecb0`, with #101, #102,
+#104 and #71 merged), each refitted from scratch, with 311 locations.
+IPSL-CM6A-LR is left out: its fits are unstable between trainings. It
+replaces the provisional `artifacts-2026-09-30`, exported from the unmerged
+integration branch: warming everywhere agrees with it to within 0.001 °C.
 A citable Zenodo record can later archive the same zips; the pipeline only
 needs `base_url` changed.
 

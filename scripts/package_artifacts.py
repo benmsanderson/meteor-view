@@ -6,11 +6,14 @@ stay out: they exist for the test suite. Writes the zips to an output
 directory and rewrites data/artifacts_v1.json to pin them by SHA-256 under
 the given release tag; publishing the release is then
 
-    gh release create <tag> --prerelease --title ... <out>/*.zip data/artifacts_v1.json
+    gh release create <tag> --title ... <out>/*.zip data/artifacts_v1.json
+
+(with --prerelease for a provisional one).
 
 Usage::
 
-    python scripts/package_artifacts.py <tag> <out dir> [--exclude MODEL ...] [--note TEXT]
+    python scripts/package_artifacts.py <tag> <out dir> [--exclude MODEL ...] [--provenance JSON]
+        [--provisional]
 
 Models are those in data/models_v1.json, NorESM2-MM first, less any excluded.
 """
@@ -34,6 +37,10 @@ def main():
     parser.add_argument("out")
     parser.add_argument("--exclude", nargs="*", default=[])
     parser.add_argument("--provenance", default="")
+    parser.add_argument(
+        "--provisional", action="store_true",
+        help="mark the release as a stopgap, exported from unmerged METEOR code",
+    )
     args = parser.parse_args()
 
     with open(os.path.join(DATA, "models_v1.json")) as handle:
@@ -70,7 +77,7 @@ def main():
         "schema_version": 1,
         "release": args.tag,
         "base_url": f"https://github.com/benmsanderson/meteor-view/releases/download/{args.tag}/",
-        "provisional": True,
+        "provisional": args.provisional,
         "provenance": json.loads(args.provenance) if args.provenance else {},
         "models": entries,
     }

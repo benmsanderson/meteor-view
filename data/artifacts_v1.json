@@ -1,22 +1,23 @@
 {
   "format": "meteor-view-artifacts",
   "schema_version": 1,
-  "release": "artifacts-2026-09-30",
-  "base_url": "https://github.com/benmsanderson/meteor-view/releases/download/artifacts-2026-09-30/",
-  "provisional": true,
+  "release": "artifacts-2026-10-09",
+  "base_url": "https://github.com/benmsanderson/meteor-view/releases/download/artifacts-2026-10-09/",
+  "provisional": false,
   "provenance": {
-    "meteor": "benmsanderson/METEOR integration/meteor-view b02011b (base + #104, #102, #101, unmerged)",
+    "meteor": "benmsanderson/METEOR base ce9ecb0 (1.6.1+57), with #101, #102, #104 and #71 merged; every model refitted from scratch",
     "locations": "global, 58 AR6 regions, 252 cities (data/cities_v1.json)",
     "region_averaging": "AR6 Atlas-style land masking, scripts/landmask.py",
+    "precipitation_transform": "negative round-off in CMIP6 pr set to zero for the gamma fit only (scripts/export_bundles.py, METEOR#107)",
     "excluded": "IPSL-CM6A-LR: its pattern fits are unstable between trainings (implausible warming or precipitation)",
-    "notes": "Provisional: to be re-exported from METEOR base once #101, #102 and #104 merge."
+    "replaces": "artifacts-2026-09-30 (provisional, unmerged integration branch b02011b)"
   },
   "models": [
     {
       "model": "NorESM2-MM",
       "file": "meteor_NorESM2-MM_v1.zip",
-      "size": 4214732,
-      "sha256": "6a54b50d638e74fe3d4800302cb0b27d4543831b0a51a92ccd58e6e311ef16b6",
+      "size": 4215005,
+      "sha256": "ab5dcf92c53d44d4c21d0908a662c0a0ef1082489184ff0e98e04413ab6c58bc",
       "members": [
         "meteor_NorESM2-MM_tas_bundle_v1.nc",
         "meteor_NorESM2-MM_tas_pattern_v1.nc",
@@ -29,8 +30,8 @@
     {
       "model": "ACCESS-CM2",
       "file": "meteor_ACCESS-CM2_v1.zip",
-      "size": 2285825,
-      "sha256": "dd88bf7dec1da0cf41ac5f9ba924a2ad119a3e54cbc052a05e95bec366f28a97",
+      "size": 2285861,
+      "sha256": "eafb7e2077953f42752f7ee6af3bebdfa31e7a2f8d16aff8988a6c8c42a63142",
       "members": [
         "meteor_ACCESS-CM2_tas_bundle_v1.nc",
         "meteor_ACCESS-CM2_tas_pattern_v1.nc",
@@ -43,8 +44,8 @@
     {
       "model": "ACCESS-ESM1-5",
       "file": "meteor_ACCESS-ESM1-5_v1.zip",
-      "size": 2272861,
-      "sha256": "98bebb4fcf11c646f067242a2517c85501d1d5fe84b277868d1acde9ce427ed6",
+      "size": 2272918,
+      "sha256": "25e0cb03868d0c890fdb30a768c9cfcdff1ec51e5ced7d026a7f49ecc371b96f",
       "members": [
         "meteor_ACCESS-ESM1-5_tas_bundle_v1.nc",
         "meteor_ACCESS-ESM1-5_tas_pattern_v1.nc",
@@ -57,8 +58,8 @@
     {
       "model": "BCC-CSM2-MR",
       "file": "meteor_BCC-CSM2-MR_v1.zip",
-      "size": 3903865,
-      "sha256": "c21f50a951eff75f844a9b7776a9e8dca3c433b8d0253336bffad1717c957f88",
+      "size": 3903889,
+      "sha256": "2b6f6f51ed7050d5fca93650e0a3ec006b3b89707cdaff3f21bc0308bf814fbc",
       "members": [
         "meteor_BCC-CSM2-MR_tas_bundle_v1.nc",
         "meteor_BCC-CSM2-MR_tas_pattern_v1.nc",
@@ -71,8 +72,8 @@
     {
       "model": "CanESM5",
       "file": "meteor_CanESM5_v1.zip",
-      "size": 920278,
-      "sha256": "71bf441b38c35c1bda67b07ba8bc3bd3b25741ffc44651a171e844aec5e4bdd3",
+      "size": 920270,
+      "sha256": "78a85f67c794fce7bf7fe6332915bdadb30033477235b81241f51aa15aefe75a",
       "members": [
         "meteor_CanESM5_tas_bundle_v1.nc",
         "meteor_CanESM5_tas_pattern_v1.nc",
@@ -85,8 +86,8 @@
     {
       "model": "CAS-ESM2-0",
       "file": "meteor_CAS-ESM2-0_v1.zip",
-      "size": 2634659,
-      "sha256": "a757b458720986bbd1299a4448b4eac0dc3a461fe19ece3b3f69dd98dd6becaa",
+      "size": 2634622,
+      "sha256": "0fe06059d7db8b0908298cbf0ad86d7840c437226573bedb1e1c02da491c4423",
       "members": [
         "meteor_CAS-ESM2-0_tas_bundle_v1.nc",
         "meteor_CAS-ESM2-0_tas_pattern_v1.nc",
@@ -99,8 +100,8 @@
     {
       "model": "CESM2",
       "file": "meteor_CESM2_v1.zip",
-      "size": 4185554,
-      "sha256": "99d56b7dd09dcf291a1926d1eb1fc98c156de130c8ad120f427230fbf2cf7f23",
+      "size": 4185562,
+      "sha256": "387c0a7f9e8f8f137c078ab845f701d56b8925ff0cc4c218996268588f679354",
       "members": [
         "meteor_CESM2_tas_bundle_v1.nc",
         "meteor_CESM2_tas_pattern_v1.nc",
@@ -113,8 +114,8 @@
     {
       "model": "CESM2-WACCM",
       "file": "meteor_CESM2-WACCM_v1.zip",
-      "size": 4200442,
-      "sha256": "6f4719e1bcc95d84a1871d6beb45601e07f9fb88e014b5ff4fcee75e2d218878",
+      "size": 4200411,
+      "sha256": "19923442855cba8e7dfdf8f756944fbe9e07ddaf2c48d4d0c2de18a6f4fdaa51",
       "members": [
         "meteor_CESM2-WACCM_tas_bundle_v1.nc",
         "meteor_CESM2-WACCM_tas_pattern_v1.nc",
@@ -127,8 +128,8 @@
     {
       "model": "CMCC-CM2-SR5",
       "file": "meteor_CMCC-CM2-SR5_v1.zip",
-      "size": 4180938,
-      "sha256": "2d2e93a35c29bb35b40562a080141965bfa52460e807ac3b79d6003a067a8705",
+      "size": 4180915,
+      "sha256": "73e3d672a9fd41e4a6c203b65245115391059c0fe3438bf702bc7b2909c22287",
       "members": [
         "meteor_CMCC-CM2-SR5_tas_bundle_v1.nc",
         "meteor_CMCC-CM2-SR5_tas_pattern_v1.nc",
@@ -141,8 +142,8 @@
     {
       "model": "CMCC-ESM2",
       "file": "meteor_CMCC-ESM2_v1.zip",
-      "size": 4172872,
-      "sha256": "3a4585c66cf35fea7685024404fca4d63eb29a2327c6f491642de27ee9b997ca",
+      "size": 4172915,
+      "sha256": "b4cd2d8bb7782626c1bf99ada3f10e873d937dc3098df2e27ee63a83f6008a16",
       "members": [
         "meteor_CMCC-ESM2_tas_bundle_v1.nc",
         "meteor_CMCC-ESM2_tas_pattern_v1.nc",
@@ -155,8 +156,8 @@
     {
       "model": "CNRM-CM6-1",
       "file": "meteor_CNRM-CM6-1_v1.zip",
-      "size": 2455093,
-      "sha256": "261c2e15f5f672fe51f32368fa7285da3369750c3ab3129007ec5ea4070f14ce",
+      "size": 2455045,
+      "sha256": "7d1996c4f6f94fd758474ae780d3a04823567ff2807559f719e1b872d409d553",
       "members": [
         "meteor_CNRM-CM6-1_tas_bundle_v1.nc",
         "meteor_CNRM-CM6-1_tas_pattern_v1.nc",
@@ -169,8 +170,8 @@
     {
       "model": "CNRM-CM6-1-HR",
       "file": "meteor_CNRM-CM6-1-HR_v1.zip",
-      "size": 15965708,
-      "sha256": "2808cadb13e7229dd35498fe205ebf1985d3fca4441d95a8316ce5b9861d7dd1",
+      "size": 15965699,
+      "sha256": "a4f64fb9b1b2a2f883c3f8588a38b19aab004ebe25decf0a11af908dfb0eea67",
       "members": [
         "meteor_CNRM-CM6-1-HR_tas_bundle_v1.nc",
         "meteor_CNRM-CM6-1-HR_tas_pattern_v1.nc",
@@ -183,8 +184,8 @@
     {
       "model": "CNRM-ESM2-1",
       "file": "meteor_CNRM-ESM2-1_v1.zip",
-      "size": 2454415,
-      "sha256": "35479f084df198f7f39d196a7842e738f2b5feab759066e293297ffd2591a902",
+      "size": 2454431,
+      "sha256": "e64845e7065f37e750bb9076bf7d8ccff967f9388e1bad72b6b6f3e4fa53b6d7",
       "members": [
         "meteor_CNRM-ESM2-1_tas_bundle_v1.nc",
         "meteor_CNRM-ESM2-1_tas_pattern_v1.nc",
@@ -197,8 +198,8 @@
     {
       "model": "FGOALS-f3-L",
       "file": "meteor_FGOALS-f3-L_v1.zip",
-      "size": 3931398,
-      "sha256": "45608087fb3d722753b29d71f15434b10bbc8abacd4628436f4a290f8c3e6a83",
+      "size": 3931510,
+      "sha256": "f3a464dca78d5f821eacf497845967501478a00de0c510918f0badc21cb3c5a5",
       "members": [
         "meteor_FGOALS-f3-L_tas_bundle_v1.nc",
         "meteor_FGOALS-f3-L_tas_pattern_v1.nc",
@@ -211,8 +212,8 @@
     {
       "model": "GFDL-CM4",
       "file": "meteor_GFDL-CM4_v1.zip",
-      "size": 3944913,
-      "sha256": "8deed64092d271a15783ff37c64996b5c9025f41cc3a1b8472a676a38fb6d7f6",
+      "size": 3945127,
+      "sha256": "4659cf3019692b334f43c23700d37de9977c431c30517e5f2d7c9102ef008535",
       "members": [
         "meteor_GFDL-CM4_tas_bundle_v1.nc",
         "meteor_GFDL-CM4_tas_pattern_v1.nc",
@@ -225,8 +226,8 @@
     {
       "model": "GFDL-ESM4",
       "file": "meteor_GFDL-ESM4_v1.zip",
-      "size": 3941168,
-      "sha256": "c6cbf65d719d4056c2442a686d9ef5f5812355d41f7666a49a2fe81d04b1146e",
+      "size": 3941191,
+      "sha256": "92b151b9566c6106047fecb236e88f0ea2872eb010810311b65e7054ab32afc3",
       "members": [
         "meteor_GFDL-ESM4_tas_bundle_v1.nc",
         "meteor_GFDL-ESM4_tas_pattern_v1.nc",
@@ -239,8 +240,8 @@
     {
       "model": "GISS-E2-1-G",
       "file": "meteor_GISS-E2-1-G_v1.zip",
-      "size": 1237998,
-      "sha256": "3d4a1569bd36b3162ec6deb822fa1e9954a3a4b4f70a7804074d044c04d2fcb0",
+      "size": 1238115,
+      "sha256": "a8c0eb9b95dc64c19181646636048ed26b26a204946d98890df5483b84fbd0da",
       "members": [
         "meteor_GISS-E2-1-G_tas_bundle_v1.nc",
         "meteor_GISS-E2-1-G_tas_pattern_v1.nc",
@@ -253,8 +254,8 @@
     {
       "model": "HadGEM3-GC31-LL",
       "file": "meteor_HadGEM3-GC31-LL_v1.zip",
-      "size": 2283820,
-      "sha256": "f9cc40587110915db7ae43ef278c9b6f168787aedffee1d2fff4ca5389785109",
+      "size": 2284438,
+      "sha256": "b7b88de113216154a921f226f8541e960155faca08eea590221669ff4d4e58f6",
       "members": [
         "meteor_HadGEM3-GC31-LL_tas_bundle_v1.nc",
         "meteor_HadGEM3-GC31-LL_tas_pattern_v1.nc",
@@ -267,8 +268,8 @@
     {
       "model": "INM-CM4-8",
       "file": "meteor_INM-CM4-8_v1.zip",
-      "size": 1867268,
-      "sha256": "9e23df9bafef8ac15aef7cfef5a621e2b994a24a42b0a384aac9052e7fc43595",
+      "size": 1867290,
+      "sha256": "99aab44c127246ae6f5976ad3ed976fe2ce1afe339bb125b78335f357b66f103",
       "members": [
         "meteor_INM-CM4-8_tas_bundle_v1.nc",
         "meteor_INM-CM4-8_tas_pattern_v1.nc",
@@ -281,8 +282,8 @@
     {
       "model": "INM-CM5-0",
       "file": "meteor_INM-CM5-0_v1.zip",
-      "size": 1862560,
-      "sha256": "37d6fa7be182288099ac2c7e5f65b401dcb32fe84b2c474ae04170920f26696c",
+      "size": 1862590,
+      "sha256": "4073b12defc1179a707b8ce3be834ba096a41c01efcf8fc4de1f93cfbec88715",
       "members": [
         "meteor_INM-CM5-0_tas_bundle_v1.nc",
         "meteor_INM-CM5-0_tas_pattern_v1.nc",
@@ -295,8 +296,8 @@
     {
       "model": "KACE-1-0-G",
       "file": "meteor_KACE-1-0-G_v1.zip",
-      "size": 2283386,
-      "sha256": "c87a1fc5c7c8cbbc3dc0555759bb0ac5d30aaac5d9d67f0f1e233a4df096179f",
+      "size": 2283365,
+      "sha256": "269c483c66c988f02f45630f1d1bad5064fe56ae747b07367733bb2d95da3819",
       "members": [
         "meteor_KACE-1-0-G_tas_bundle_v1.nc",
         "meteor_KACE-1-0-G_tas_pattern_v1.nc",
@@ -309,8 +310,8 @@
     {
       "model": "MCM-UA-1-0",
       "file": "meteor_MCM-UA-1-0_v1.zip",
-      "size": 884554,
-      "sha256": "34d1730689cd9633b8b359fe403f02af064f9db1cecac31ba54d7b609ee3dd17",
+      "size": 884533,
+      "sha256": "5f184a2c612e52e2325bb7cdf25e119545a54c8e3f2faa2b7086ca7266d5c869",
       "members": [
         "meteor_MCM-UA-1-0_tas_bundle_v1.nc",
         "meteor_MCM-UA-1-0_tas_pattern_v1.nc",
@@ -323,8 +324,8 @@
     {
       "model": "MIROC-ES2L",
       "file": "meteor_MIROC-ES2L_v1.zip",
-      "size": 922264,
-      "sha256": "9c2a9f0f653634c166d84f04fa1f14ef6cde52e9b55da096635c30f3f542e777",
+      "size": 922348,
+      "sha256": "9c3a37a68c49667a069bce333826618869abe3a96186e9c0d497adf1882ac793",
       "members": [
         "meteor_MIROC-ES2L_tas_bundle_v1.nc",
         "meteor_MIROC-ES2L_tas_pattern_v1.nc",
@@ -337,8 +338,8 @@
     {
       "model": "MIROC6",
       "file": "meteor_MIROC6_v1.zip",
-      "size": 2655203,
-      "sha256": "68cfde7db09cc1d3accbf343a5e2382e5c980c19bae5a021b9c26c6e78c777e2",
+      "size": 2655230,
+      "sha256": "06bc308226644328ebff791a5973896b3813be27238f3e3ebf2853ed9b132f11",
       "members": [
         "meteor_MIROC6_tas_bundle_v1.nc",
         "meteor_MIROC6_tas_pattern_v1.nc",
@@ -351,8 +352,8 @@
     {
       "model": "MPI-ESM1-2-HR",
       "file": "meteor_MPI-ESM1-2-HR_v1.zip",
-      "size": 5488714,
-      "sha256": "b3fae3a002ab5ad9e73f40479e3435ce9ef5d435ccc88f917326b311a3ceea01",
+      "size": 5488747,
+      "sha256": "882f42e2981e61d08b41a2db3a6c5f44d5d4c2aab13d79c3765f9ddb9a0b6e91",
       "members": [
         "meteor_MPI-ESM1-2-HR_tas_bundle_v1.nc",
         "meteor_MPI-ESM1-2-HR_tas_pattern_v1.nc",
@@ -365,8 +366,8 @@
     {
       "model": "MPI-ESM1-2-LR",
       "file": "meteor_MPI-ESM1-2-LR_v1.zip",
-      "size": 1640597,
-      "sha256": "d4add1e15a3fbef36091d4d11d843746609a9b91136935d0796ac4bad9ea5ec4",
+      "size": 1640667,
+      "sha256": "674270f1c71a08932602515d0e46ca32533a1fabc84a933ec01e3b1695b517a7",
       "members": [
         "meteor_MPI-ESM1-2-LR_tas_bundle_v1.nc",
         "meteor_MPI-ESM1-2-LR_tas_pattern_v1.nc",
@@ -379,8 +380,8 @@
     {
       "model": "MRI-ESM2-0",
       "file": "meteor_MRI-ESM2-0_v1.zip",
-      "size": 3921643,
-      "sha256": "32efe9efa197f690a0a2422a08f3b0c7f3e5810fea9b0d06378e60508cd84d98",
+      "size": 3921686,
+      "sha256": "6460d7f831e2339cfb772c0c1fd5b7d557c96161774885f3d425155523a2145c",
       "members": [
         "meteor_MRI-ESM2-0_tas_bundle_v1.nc",
         "meteor_MRI-ESM2-0_tas_pattern_v1.nc",
@@ -393,8 +394,8 @@
     {
       "model": "NESM3",
       "file": "meteor_NESM3_v1.zip",
-      "size": 1639077,
-      "sha256": "93cb10529e8022f595af0973bf82c02738c2a8550d12497d11e973d2be662e5b",
+      "size": 1639103,
+      "sha256": "5f2bc238ee492ab2c579802ade830105bb2fff1f67765c80e43a22bca9a9774f",
       "members": [
         "meteor_NESM3_tas_bundle_v1.nc",
         "meteor_NESM3_tas_pattern_v1.nc",
@@ -407,8 +408,8 @@
     {
       "model": "UKESM1-0-LL",
       "file": "meteor_UKESM1-0-LL_v1.zip",
-      "size": 2279760,
-      "sha256": "a5302f1f22ff40d7d353977a1018abb1bebc61abf09320d74b330cc3f84387c1",
+      "size": 2279751,
+      "sha256": "a109f30386bd61176d4088ef303a2485aa0e4590a410bf459a46fff3d1ee916e",
       "members": [
         "meteor_UKESM1-0-LL_tas_bundle_v1.nc",
         "meteor_UKESM1-0-LL_tas_pattern_v1.nc",

@@ -291,8 +291,8 @@ interface until then — is the most important thing left.
 
 The default model's artifacts are committed here; every other model's come
 from a GitHub release pinned by checksum in `data/artifacts_v1.json`, fetched
-at build and served from the site. The current release is provisional: it is
-re-exported once the METEOR PRs it depends on merge. A citable Zenodo record
+at build and served from the site. The current release is exported from
+METEOR's `base` branch as merged. A citable Zenodo record
 can archive the same files later. A DOI is a promise you cannot retract.
 
 Schema v1 is documented in
