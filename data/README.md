@@ -64,6 +64,39 @@ once by `scripts/make_degree_day_curves.py` from W5E5 v2.0 daily temperature
 doi:10.5194/essd-12-2097-2020), CC BY 4.0; the 5.9 GB of daily data it reads
 is not kept. See `src/lib/degree-days.js` for how the site uses them.
 
+`crops_v1/`, committed, 10 MB: the GGCMI Phase 2 crop yield emulators
+(Franke et al. 2020, doi:10.5194/gmd-13-3995-2020; coefficients from Zenodo
+record 3592453, CC BY 4.0), the A0 (no adaptation) rainfed set, reduced to
+the site's 2-degree map grid. One float32 file per crop model and crop, 35
+values per cell growing the crop (the polynomial's 34 coefficients, averaged
+over the cell's 0.5-degree cells by harvested area, and that area), and
+`index.json`, listing the cells and how each AR6 region shares them. Built
+once by `scripts/make_crop_coefficients.py` from the 3.7 GB of coefficients,
+which are not kept.
+- **Weights:** rainfed harvested area around 2000, from MIRCA2000 v1.1
+  (Portmann et al. 2010, doi:10.1029/2008GB003435; Zenodo record 7422506,
+  CC BY 4.0).
+- **Wheat:** one crop. Each 0.5-degree cell takes the winter-wheat
+  emulator where its coldest month averages between −10 and 5 °C, as GGCMI
+  splits it (Müller et al. 2019, doi:10.1038/s41597-019-0023-8), on W5E5
+  v2.0 for 2001–2010, and the spring-wheat emulator elsewhere.
+- **Missing cells:** a cell a crop model did not simulate has no emulator
+  (every coefficient zero), and drops out of that model's weights. Each
+  model still covers 79–100% of each crop's area.
+- **Reduced emulators:** CARAIB, JULES and PROMET ran one nitrogen level,
+  so their emulators have 20 terms (no nitrogen). They are stored in the
+  34-term layout, with zeros where nitrogen appears.
+- **Exactness:** the reduction is exact for the site's inputs (see
+  `src/lib/crops.js`). `test/crops.test.js` holds the site to METEOR's own
+  evaluator, through `scripts/make_crop_reference.py`.
+
+`scenario_co2_v1.json`, committed: atmospheric CO2 (ppm) per scenario,
+1750–2100, for the crop emulators. It comes from CICERO-SCM run on each
+scenario's emissions with the bundles' own settings
+(`scripts/make_scenario_co2.py`), so it is the CO2 behind the warming the
+site shows. The CMIP7 markers' METEOR input files inherit SSP
+concentrations, which would not be.
+
 ## Emulator artifacts
 
 `meteor_*_bundle_v1.nc`, `meteor_*_pattern_v1.nc`, `meteor_*_golden_*.nc`
