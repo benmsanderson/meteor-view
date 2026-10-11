@@ -165,7 +165,7 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   if (baseline === 'pi' || baseline === 'recent') state.baseline = baseline;
 
   const variable = params.get('v');
-  if (['tas', 'pr', 'hdd', 'cdd'].includes(variable)) state.variable = variable;
+  if (['tas', 'pr', 'hdd', 'cdd', 'wheat', 'maize', 'rice', 'soy'].includes(variable)) state.variable = variable;
 
   if (state.mode === 'expert') state.location = EXPERT_LOCATION;
   const location = params.get('loc');
