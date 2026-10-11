@@ -1,0 +1,61 @@
+{
+ "generated_by": "scripts/make_crop_reference.py",
+ "source": "meteor.impacts.ggcm.coefficients.get_yields, area-weighted over each 2-degree cell",
+ "nitrogen": 100.0,
+ "cases": [
+  {
+   "model": "LPJmL",
+   "crop": "maize",
+   "cell": 11833,
+   "co2": 360.0,
+   "warming": 0.0,
+   "ratio": 1.0,
+   "yield": 7.021953173853958
+  },
+  {
+   "model": "LPJmL",
+   "crop": "maize",
+   "cell": 11833,
+   "co2": 550.0,
+   "warming": 2.5,
+   "ratio": 0.9,
+   "yield": 6.473580120504299
+  },
+  {
+   "model": "pDSSAT",
+   "crop": "wheat",
+   "cell": 12605,
+   "co2": 450.0,
+   "warming": 1.5,
+   "ratio": 1.1,
+   "yield": 5.611271685358782
+  },
+  {
+   "model": "pDSSAT",
+   "crop": "wheat",
+   "cell": 12815,
+   "co2": 600.0,
+   "warming": 4.0,
+   "ratio": 0.8,
+   "yield": 1.1404624302544155
+  },
+  {
+   "model": "EPIC-TAMU",
+   "crop": "rice",
+   "cell": 10125,
+   "co2": 700.0,
+   "warming": 3.0,
+   "ratio": 1.2,
+   "yield": 2.4248867410539665
+  },
+  {
+   "model": "GEPIC",
+   "crop": "soy",
+   "cell": 7172,
+   "co2": 500.0,
+   "warming": 7.0,
+   "ratio": 0.4,
+   "yield": 1.7739804535900174
+  }
+ ]
+}
