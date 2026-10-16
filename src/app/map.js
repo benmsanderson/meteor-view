@@ -41,6 +41,12 @@ export const CLASSES = {
     '#543005', '#8f5c1b', '#c48a3d', '#d9b688', '#e9d7c0', '#f8f8f8',
     '#c2dddb', '#8cc3be', '#449f97', '#1d6e64', '#003c30',
   ],
+  // Crop yields: purple where they fall, green where they rise, so a yield
+  // map is never mistaken for a precipitation map beside it. ColorBrewer PiYG.
+  yield: [
+    '#8e0152', '#c51b7d', '#de77ae', '#f1b6da', '#fde0ef', '#f7f7f7',
+    '#e6f5d0', '#b8e186', '#7fbc41', '#4d9221', '#276419',
+  ],
   // A difference between two scenarios is signed and centred on zero, so here
   // the AR7 diverging maps are sampled evenly and symmetrically: blue where
   // scenario B is cooler than A, red where warmer.
@@ -71,6 +77,8 @@ export const BIN_EDGES = {
   temperature: [-1, 0, 1, 2, 3, 4, 5, 6, 8, 10],
   // Percent change in precipitation, symmetric about zero.
   precipitation: [-40, -30, -20, -10, -5, 5, 10, 20, 30, 40],
+  // Percent change in crop yield from 1980-2010.
+  yield: [-50, -30, -20, -10, -5, 5, 10, 20, 30, 50],
   // Differences between scenarios are smaller than changes from the
   // baseline, so these are finer. SSP5-8.5 against SSP1-2.6 reaches about
   // 4 °C in the global mean and more over land and the Arctic, which is why
@@ -84,7 +92,7 @@ export const BIN_EDGES = {
 /**
  * A classed colour scale.
  *
- * @param {'temperature'|'precipitation'|'temperature-difference'|'precipitation-difference'} variable
+ * @param {'temperature'|'precipitation'|'yield'|'temperature-difference'|'precipitation-difference'} variable
  * @returns {{edges: number[], colours: string[], colour: (v: number) => string}}
  */
 export function classedScale(variable) {

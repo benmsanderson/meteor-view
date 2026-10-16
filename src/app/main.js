@@ -48,6 +48,8 @@ import { MULTI_MODEL_MEAN, assignModelColours, modelColour } from './models.js';
 import { placeLabel, registerCities } from './places.js';
 import { attachPlaceSearch } from './place-search.js';
 import { dataUrl } from '../lib/data-url.js';
+import { CROPS } from '../lib/crops.js';
+import { cropMapFile, cropSentence } from './crop-summary.js';
 import {
   groupScenarios,
   scenarioColour,
@@ -150,7 +152,18 @@ const SIMPLE_VARIABLES = {
     yLabel: `Cooling degree days per year (base ${DEGREE_DAY_BASE} °C)`,
     format: (v) => v.toFixed(0),
   },
+  // Crop yields, from the GGCMI emulators (src/lib/crops.js), across every
+  // pairing of climate model and crop model.
+  ...Object.fromEntries(
+    Object.entries(CROPS).map(([crop, { label }]) => [
+      crop,
+      { label: `${label} yield`, crop: true, yLabel: 'Yield change from 1980–2010 (%)', format: (v) => `${v.toFixed(0)}%` },
+    ])
+  ),
 };
+
+/** Whether a variable is a crop yield, which only the simple view offers yet. */
+const isCrop = (variable) => Boolean(SIMPLE_VARIABLES[variable]?.crop);
 
 const elements = {
   controls: document.getElementById('controls'),
@@ -166,6 +179,7 @@ const elements = {
   modelList: document.getElementById('model-list'),
   modelSummary: document.getElementById('model-summary'),
   variable: document.getElementById('variable'),
+  cropVariables: document.getElementById('crop-variables'),
   location: document.getElementById('location'),
   scenarioPicker: document.getElementById('scenario-picker'),
   scenarioList: document.getElementById('scenario-list'),
@@ -781,6 +795,11 @@ const DEGREE_DAYS_WHERE =
   'Degree days are computed for cities and land regions, where observations ' +
   'correct them; pick one of those, or another variable.';
 
+/** Crop yields are for the globe and land regions that grow enough of the crop. */
+const CROPS_WHERE =
+  'Crop yields are computed for the globe and for land regions that grow the crop, ' +
+  'not for cities or the sea; pick one of those, or another variable.';
+
 /** One place's observed degree-day curves, fetched once; null for none. */
 const degreeDayCurves = new Map();
 function curvesFor(location) {
@@ -832,36 +851,39 @@ async function runSimple(request) {
   }
   const spec = SIMPLE_VARIABLES[variable];
   const place = placeLabel(location);
-  if (!summary[variable]) {
-    // Degree days at sea or for the whole globe: say why rather than draw.
+  const crops = spec.crop ? summary.crops?.[variable] && summary.crops : null;
+  if (spec.crop ? !crops : !summary[variable]) {
+    // Degree days at sea or for the whole globe, or a crop where little of it
+    // grows: say why rather than draw.
     lastSimple = null;
     syncUrl();
     elements.chartTitle.textContent = `${spec.label} at ${place}`;
-    elements.summary.textContent = DEGREE_DAYS_WHERE;
+    elements.summary.textContent = spec.crop ? CROPS_WHERE : DEGREE_DAYS_WHERE;
     elements.chartLegend.textContent = '';
     elements.chart.getContext('2d').clearRect(0, 0, elements.chart.width, elements.chart.height);
     setStatus('');
     return;
   }
-  const scenarios = selection.filter((name) => summary[variable][name]);
-  lastSimple = { variable, location, summary, scenarios };
+  const series = crops ? crops[variable].scenarios : summary[variable];
+  const scenarios = selection.filter((name) => series[name]);
+  lastSimple = { variable, location, summary, scenarios, crops };
   syncUrl();
 
   elements.chartTitle.textContent = spec.title
     ? `${spec.title} at ${place}`
     : `${spec.label} change at ${place}`;
-  elements.summary.textContent = summarySentence({
-    summary,
-    variable,
-    scenarios,
-    label: scenarioLabel,
-    place: location === 'global' ? 'global' : place,
-  });
+  const where = location === 'global' ? 'global' : place;
+  elements.summary.textContent = crops
+    ? cropSentence({ crops, crop: variable, scenarios, label: scenarioLabel, place: where })
+    : summarySentence({ summary, variable, scenarios, label: scenarioLabel, place: where });
   drawChart();
   showProvenance();
-  const [start, end] = summary.years;
+  const [start, end] = crops ? crops.years : summary.years;
+  const across = crops
+    ? `${crops[variable].pairings} pairings of climate and crop models`
+    : `${summary.models.length} climate models`;
   setStatus(
-    `${elements.chartTitle.textContent} across ${summary.models.length} climate models, ` +
+    `${elements.chartTitle.textContent} across ${across}, ` +
       `${start}–${end}, under ${listOf(scenarios.map(scenarioLabel))}.`
   );
 }
@@ -869,21 +891,23 @@ async function runSimple(request) {
 /** The simple view's chart and legend, from the last summary drawn. */
 function drawSimpleChart() {
   if (!lastSimple) return;
-  const { variable, summary, scenarios } = lastSimple;
+  const { variable, summary, scenarios, crops } = lastSimple;
   const spec = SIMPLE_VARIABLES[variable];
-  const [start, end] = summary.years;
+  const [start, end] = crops ? crops.years : summary.years;
+  const series = crops ? crops[variable].scenarios : summary[variable];
   drawFanChart(elements.chart, {
     x: Array.from({ length: end - start + 1 }, (_, i) => start + i),
     groups: scenarios.map((scenario) => ({
       label: scenarioLabel(scenario),
       colour: selectedColour(scenario),
-      bands: summary[variable][scenario].bands,
+      bands: series[scenario].bands,
     })),
     yLabel: spec.yLabel,
     format: spec.format,
   });
 
-  const n = summary.models.length;
+  const n = crops ? crops[variable].pairings : summary.models.length;
+  const what = crops ? 'pairings of climate and crop model' : 'models';
   const colour = selectedColour(scenarios[0]);
   const swatch = (kind, text) => {
     const span = document.createElement('span');
@@ -893,12 +917,12 @@ function drawSimpleChart() {
   };
   if (scenarios.length === 1) {
     elements.chartLegend.replaceChildren(
-      ...swatch('median', 'middle model'),
+      ...swatch('median', crops ? 'middle pairing' : 'middle model'),
       ...swatch('band', 'middle half'),
-      ...swatch('wide', `middle 90% of ${n} models`)
+      ...swatch('wide', `middle 90% of ${n} ${what}`)
     );
   } else {
-    elements.chartLegend.textContent = `Middle model (line) and middle 90% of ${n} models (band)`;
+    elements.chartLegend.textContent = `${crops ? 'Middle pairing' : 'Middle model'} (line) and middle 90% of ${n} ${what} (band)`;
   }
 }
 
@@ -921,6 +945,10 @@ function setMode(next) {
 /** Show the controls and panels of the current view, and say which it is. */
 function showMode() {
   document.documentElement.dataset.mode = mode;
+  // Crop yields are the simple view's alone, for now.
+  elements.cropVariables.hidden = mode !== 'simple';
+  elements.cropVariables.disabled = mode !== 'simple';
+  if (mode !== 'simple' && isCrop(elements.variable.value)) elements.variable.value = 'tas';
   // The simple view asks for the region's variable and place in the regional
   // panel, under the world view; the expert view keeps every control together.
   const moving = [elements.variable, elements.location].map((el) => el.closest('.control'));
@@ -1020,34 +1048,51 @@ async function renderSimpleMap() {
   );
   menu.value = keep;
   const scenario = keep;
-  const variable = elements.variable.value === 'pr' ? 'pr' : 'tas';
+  const chosen = elements.variable.value;
+  const variable = isCrop(chosen) ? chosen : chosen === 'pr' ? 'pr' : 'tas';
+  const name = isCrop(variable) ? cropMapFile(scenario) : summaryMapFile(scenario);
   const request = ++mapRequest;
   let file;
   try {
     if (!outlines.length) [outlines, coastlines] = await Promise.all([explorer.regions(), explorer.coastlines()]);
-    if (!summaryMaps.has(scenario)) {
-      const response = await fetch(dataUrl(dataBase, summaryMapFile(scenario)));
+    if (!summaryMaps.has(name)) {
+      const response = await fetch(dataUrl(dataBase, name));
       if (!response.ok) throw new Error(`no map across models for ${scenarioLabel(scenario)}`);
-      summaryMaps.set(scenario, await response.json());
+      summaryMaps.set(name, await response.json());
     }
-    file = summaryMaps.get(scenario);
+    file = summaryMaps.get(name);
   } catch (error) {
     setStatus(`Could not draw the map: ${error.message}`, 'error');
     return;
   }
   if (request !== mapRequest || mode !== 'simple') return;
   elements.mapPanel.dataset.map = 'ready';
+  const period = `${file.period.from}–${file.period.to}`;
+  if (isCrop(variable)) {
+    const { label } = SIMPLE_VARIABLES[variable];
+    lastMap = {
+      fields: [mapFromFile(file, variable)],
+      difference: null,
+      specs: [{ scenario, label: scenarioLabel(scenario) }],
+      variable,
+      year: period,
+      label: `${label} change in ${period} from ${file.baseline.from}–${file.baseline.to} (%)`,
+    };
+    elements.mapTitle.textContent = `${label} change by ${period}, middle pairing of climate and crop models, where it is grown`;
+    redrawMap();
+    return;
+  }
   lastMap = {
     fields: [mapFromFile(file, variable)],
     difference: null,
     specs: [{ scenario, label: scenarioLabel(scenario) }],
     variable,
-    year: `${file.period.from}–${file.period.to}`,
+    year: period,
     baseline: 'pi',
   };
   elements.mapTitle.textContent =
     `${variable === 'tas' ? 'Temperature' : 'Precipitation'} change by ` +
-    `${file.period.from}–${file.period.to}, middle of ${file.models.length} models`;
+    `${period}, middle of ${file.models.length} models`;
   redrawMap();
 }
 
@@ -1350,6 +1395,7 @@ function applyState(state) {
   renderPickers();
   elements.baseline.value = state.baseline;
   elements.variable.value = state.variable;
+  if (mode !== 'simple' && isCrop(state.variable)) elements.variable.value = 'tas';
   populatePlaces();
   if (placesOnOffer().includes(state.location)) elements.location.value = state.location;
   selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
@@ -1423,12 +1469,15 @@ function attachActions() {
   elements.downloadPng.addEventListener('click', async () => {
     if (mode === 'simple') {
       if (!lastSimple) return;
-      const { variable, location, summary, scenarios } = lastSimple;
+      const { variable, location, summary, scenarios, crops } = lastSimple;
       const blob = await chartToPng(elements.chart, {
         title: elements.chartTitle.textContent,
-        subtitle:
-          `${summary.models.length} climate models · ${scenarios.map(scenarioLabel).join(', ')} · ` +
-          `change from 1850–1900 · METEOR explorer`,
+        subtitle: crops
+          ? `${crops.models[variable].climate_models} climate models × ${crops.models[variable].crop_models.length} ` +
+            `crop models (GGCMI) · ${scenarios.map(scenarioLabel).join(', ')} · ` +
+            `change from ${crops.baseline.from}–${crops.baseline.to} · METEOR explorer`
+          : `${summary.models.length} climate models · ${scenarios.map(scenarioLabel).join(', ')} · ` +
+            `change from 1850–1900 · METEOR explorer`,
       });
       download(
         `${filenameStem({ cmip6Model: 'multimodel', variable, location, scenario: scenarios })}.png`,
@@ -2112,7 +2161,7 @@ function caption(element, text, colour = null) {
 /** Redraw the maps from the last fields, without recomputing them. */
 function redrawMap() {
   if (!lastMap || elements.mapPanel.dataset.map !== 'ready') return;
-  const kind = lastMap.variable === 'tas' ? 'temperature' : 'precipitation';
+  const kind = isCrop(lastMap.variable) ? 'yield' : lastMap.variable === 'tas' ? 'temperature' : 'precipitation';
   const shared = {
     regions: outlines,
     coastlines,
@@ -2131,7 +2180,7 @@ function redrawMap() {
     drawColourBar(canvas, {
       edges: scale.edges,
       colours: scale.colours,
-      label: `${noun} change in ${lastMap.year} from ${BASELINES[lastMap.baseline].label} (${units})`,
+      label: lastMap.label ?? `${noun} change in ${lastMap.year} from ${BASELINES[lastMap.baseline].label} (${units})`,
     });
 
   const comparing = lastMap.fields.length === 2;
@@ -2291,10 +2340,16 @@ function showProvenance() {
   const bundle = explorer.bundles.tas;
   if (mode === 'simple') {
     const list = lastSimple?.summary.models ?? [];
-    elements.provenance.textContent = list.length
-      ? `Models: ${list.join(', ')}. Forced responses from METEOR ${bundle.attrs.meteor_version}, ` +
-        `schema v${bundle.schemaVersion}, each measured from its own 1850–1900 level.`
-      : '';
+    const crops = lastSimple?.crops;
+    elements.provenance.textContent = !list.length
+      ? ''
+      : crops
+        ? `Climate models: ${list.join(', ')}, forced responses from METEOR ${bundle.attrs.meteor_version}. ` +
+          `Crop models: ${crops.models[lastSimple.variable].crop_models.join(', ')}, through the GGCMI Phase 2 ` +
+          `emulators (Franke et al. 2020), driven by each climate model's change since ` +
+          `${crops.baseline.from}–${crops.baseline.to} and weighted by MIRCA2000 rainfed harvested area.`
+        : `Models: ${list.join(', ')}. Forced responses from METEOR ${bundle.attrs.meteor_version}, ` +
+          `schema v${bundle.schemaVersion}, each measured from its own 1850–1900 level.`;
     return;
   }
   const which = compareBy === 'models' ? models.join(', ') : bundle.attrs.cmip6_model;

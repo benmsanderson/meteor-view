@@ -114,7 +114,7 @@ all showing the spread across every model the site carries:
   under them, with a sentence reading the result.
 - **A place**, West & Central Europe to begin with, or any of 252 cities
   (`data/cities_v1.json`): temperature,
-  precipitation or degree days, with its own chart and sentence.
+  precipitation, degree days or crop yields, with its own chart and sentence.
 - **A map** of the middle model's change by 2081–2100 under one of the
   scenarios. Clicking a region on it shows that region above.
 
@@ -131,6 +131,19 @@ for each month is applied to the observed daily temperatures of 1995–2014
 `scripts/make_degree_day_curves.py` into `data/degree_days_v1/`. The simple
 view shows the spread across models; the expert view runs each realization
 through the same curves. Details in `src/lib/degree-days.js`.
+
+The simple view also offers **crop yields** for wheat, maize, rice and
+soybean, for the globe and land regions, with a map:
+- **Emulators:** the GGCMI Phase 2 emulators that METEOR carries (Franke et
+  al. 2020), driven by each climate model's change since 1980–2010 (the
+  delta method, as GGCMI's own experiments) and by the scenario's CO2.
+- **Spread:** across every pairing of climate model and crop model.
+- **Conditions:** rainfed, no adaptation, and 100 kg of nitrogen per hectare
+  everywhere for now.
+
+`scripts/make_crop_coefficients.py` reduces the emulators to the map grid
+(`data/crops_v1/`). Details are in `src/lib/crops.js`. The expert view's crop
+models come next.
 
 The expert view's model menu also offers the **multi-model mean**: the
 mean of every model's forced response as the line and their spread as the

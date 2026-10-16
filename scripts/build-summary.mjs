@@ -29,6 +29,8 @@ import {
   summaryMapFile,
 } from '../src/app/summary.js';
 import { degreeDayFile } from '../src/lib/degree-days.js';
+import { cropMapFile, summarizeCrops } from '../src/app/crop-summary.js';
+import { cropFile, parseCoefficients } from '../src/lib/crops.js';
 
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
 const OUT = join(DATA, 'summary_v1');
@@ -52,18 +54,30 @@ const curveFiles = existsSync(join(DATA, 'degree_days_v1'))
   ? readdirSync(join(DATA, 'degree_days_v1')).map((f) => join(DATA, 'degree_days_v1', f))
   : [];
 
+// Crop yields, where the reduced emulators have been built
+// (scripts/make_crop_coefficients.py), driven by each scenario's CO2.
+const cropIndexFile = join(DATA, 'crops_v1', 'index.json');
+const co2File = join(DATA, 'scenario_co2_v1.json');
+const cropIndex = existsSync(cropIndexFile) && existsSync(co2File)
+  ? JSON.parse(readFileSync(cropIndexFile, 'utf8'))
+  : null;
+const cropFiles = cropIndex
+  ? [cropIndexFile, co2File, ...Object.entries(cropIndex.crops).flatMap(([crop, entry]) =>
+      entry.models.map((m) => join(DATA, cropFile(m, crop, cropIndex.variant))))]
+  : [];
+
 // Skipped when nothing it reads has changed: a hash of every input's
 // contents, not file times, which a fresh checkout or an unzip resets. The
 // same key tells CI when a cached copy of the summaries is still good.
 const code = ['src/app/summary.js', 'src/app/explorer.js', 'src/app/map.js', 'src/app/chart.js',
   'src/lib/kernel.js', 'src/lib/pattern.js', 'src/lib/bundle.js', 'src/lib/degree-days.js',
-  'scripts/build-summary.mjs'].map((f) => fileURLToPath(new URL(`../${f}`, import.meta.url)));
+  'src/lib/crops.js', 'src/app/crop-summary.js', 'scripts/build-summary.mjs'].map((f) => fileURLToPath(new URL(`../${f}`, import.meta.url)));
 const extras = models.flatMap((m) => [
   join(DATA, artifactName(m, 'pr', 'climatology')),
   join(DATA, `meteor_${m}_landfrac_v1.nc`),
 ]);
 const hash = createHash('sha256');
-for (const file of [manifest, citiesFile, ...bundles, ...extras, ...curveFiles.sort(), ...code]) {
+for (const file of [manifest, citiesFile, ...bundles, ...extras, ...curveFiles.sort(), ...cropFiles, ...code]) {
   hash.update(file.slice(file.lastIndexOf('/') + 1));
   if (existsSync(file)) hash.update(readFileSync(file));
 }
@@ -91,15 +105,30 @@ for (const model of models) {
 }
 const { locations } = explorers.get(models[0]);
 
+// Crop yields first: they join the place files below.
+let crops = null;
+if (cropIndex) {
+  const cropStarted = Date.now();
+  const loaded = new Map();
+  const coefficientsFor = (model, crop) => {
+    const key = `${model}|${crop}`;
+    if (!loaded.has(key)) {
+      loaded.set(key, parseCoefficients(readFileSync(join(DATA, cropFile(model, crop, cropIndex.variant)))));
+    }
+    return loaded.get(key);
+  };
+  crops = await summarizeCrops(explorers, cropIndex, coefficientsFor, JSON.parse(readFileSync(co2File, 'utf8')));
+  console.log(`crop yields: ${crops.places.size} places, in ${((Date.now() - cropStarted) / 1000).toFixed(1)} s`);
+}
+
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(join(OUT, 'expert'), { recursive: true });
 for (const location of locations) {
   const curveFile = join(DATA, degreeDayFile(location));
   const curves = existsSync(curveFile) ? JSON.parse(readFileSync(curveFile, 'utf8')) : null;
-  writeFileSync(
-    join(DATA, summaryFile(location)),
-    JSON.stringify(summarizeLocation(explorers, location, curves))
-  );
+  const summary = summarizeLocation(explorers, location, curves);
+  if (crops?.places.has(location)) summary.crops = crops.places.get(location);
+  writeFileSync(join(DATA, summaryFile(location)), JSON.stringify(summary));
   // And the expert view's multi-model mean.
   writeFileSync(join(DATA, expertFile(location)), JSON.stringify(summarizeExpert(explorers, location, curves)));
 }
@@ -120,6 +149,7 @@ for (const scenario of scenarios) {
   writeFileSync(join(DATA, expertMapFile(scenario)), JSON.stringify(await summarizeExpertMap(explorers, scenario)));
 }
 writeFileSync(join(DATA, EXPERT_BASELINE_MAP), JSON.stringify(await summarizeExpertBaselineMap(explorers)));
+for (const [scenario, file] of crops?.maps ?? []) writeFileSync(join(DATA, cropMapFile(scenario)), JSON.stringify(file));
 writeFileSync(STAMP, JSON.stringify({ key, models, locations: locations.length, scenarios: scenarios.length }));
 
 const sizeOf = (dir) =>
