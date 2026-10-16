@@ -191,3 +191,27 @@ export function toAnnualCsv({ years, series, header }) {
   }
   return `${lines.join('\n')}\n`;
 }
+
+/**
+ * Crop yields as CSV: one row per climate model, crop model, scenario and
+ * year. A single pairing has its value; the multi-model mean, precomputed,
+ * has its spread instead, across what `spread_across` says.
+ *
+ * @param {object} options
+ * @param {number[]} options.years
+ * @param {Array<{climateModel: string, cropModel: string, scenario: string,
+ *   value?: ArrayLike<number>, bands?: ArrayLike<number>[], spread?: string}>} options.series
+ * @param {string[]} options.header comment lines
+ * @returns {string}
+ */
+export function toCropCsv({ years, series, header }) {
+  const lines = header.map((line) => `# ${line}`);
+  lines.push('climate_model,crop_model,scenario,year,yield_change_pct,p05,p25,p50,p75,p95,spread_across');
+  for (const { climateModel, cropModel, scenario, value, bands, spread = '' } of series) {
+    years.forEach((year, i) => {
+      const quantiles = bands ? bands.map((b) => formatValue(b[i])) : ['', '', '', '', ''];
+      lines.push([climateModel, cropModel, scenario, year, value ? formatValue(value[i]) : '', ...quantiles, spread].join(','));
+    });
+  }
+  return `${lines.join('\n')}\n`;
+}

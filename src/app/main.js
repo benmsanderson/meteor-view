@@ -8,7 +8,7 @@
  */
 
 import { annualMeans, drawFanChart, drawScenarioContext, drawSeasonal, quantiles } from './chart.js';
-import { chartToPng, download, downloadText, filenameStem, toAnnualCsv, toCsv } from './export.js';
+import { chartToPng, download, downloadText, filenameStem, toAnnualCsv, toCropCsv, toCsv } from './export.js';
 import {
   boxFromDrag,
   citiesAtZoom,
@@ -48,8 +48,9 @@ import { MULTI_MODEL_MEAN, assignModelColours, modelColour } from './models.js';
 import { placeLabel, registerCities } from './places.js';
 import { attachPlaceSearch } from './place-search.js';
 import { dataUrl } from '../lib/data-url.js';
-import { CROPS } from '../lib/crops.js';
+import { CROPS, CROP_BASELINE, NITROGEN } from '../lib/crops.js';
 import { cropMapFile, cropSentence } from './crop-summary.js';
+import { ALL_CROP_MODELS, CROP_SERIES_YEARS, createCropService } from './crop-expert.js';
 import {
   groupScenarios,
   scenarioColour,
@@ -118,6 +119,24 @@ const VARIABLES = {
     format: (v) => v.toFixed(0),
     seasonalNote: ' · degree days per month',
   },
+  // Crop yields: the GGCMI emulators under one climate model's forced change,
+  // through one crop model or all of them (src/app/crop-expert.js). Annual,
+  // and without realizations: the emulators give a climate's yield, not a
+  // harvest's.
+  ...Object.fromEntries(
+    Object.entries(CROPS).map(([crop, { label }]) => [
+      crop,
+      {
+        label: `${label} yield`,
+        crop: true,
+        yLabel: `Yield change from ${CROP_BASELINE.from}–${CROP_BASELINE.to} (%)`,
+        baselined: false,
+        annual: (series) => series,
+        convert: (v) => v,
+        format: (v) => `${v.toFixed(0)}%`,
+      },
+    ])
+  ),
 };
 
 /** The emulated variable behind what is shown: temperature, for degree days. */
@@ -162,7 +181,7 @@ const SIMPLE_VARIABLES = {
   ),
 };
 
-/** Whether a variable is a crop yield, which only the simple view offers yet. */
+/** Whether a variable is a crop yield. */
 const isCrop = (variable) => Boolean(SIMPLE_VARIABLES[variable]?.crop);
 
 const elements = {
@@ -180,6 +199,12 @@ const elements = {
   modelSummary: document.getElementById('model-summary'),
   variable: document.getElementById('variable'),
   cropVariables: document.getElementById('crop-variables'),
+  cropModel: document.getElementById('crop-model'),
+  cropModelControl: document.getElementById('crop-model-control'),
+  nitrogen: document.getElementById('nitrogen'),
+  nitrogenControl: document.getElementById('nitrogen-control'),
+  baselineControl: document.getElementById('baseline-control'),
+  realizationsControl: document.getElementById('realizations-control'),
   location: document.getElementById('location'),
   scenarioPicker: document.getElementById('scenario-picker'),
   scenarioList: document.getElementById('scenario-list'),
@@ -307,6 +332,11 @@ let models = ['NorESM2-MM'];
 let dataBase;
 /** Generates ensembles off the main thread. */
 let runner;
+/** Runs the crop emulators for the expert view, caching what they load. */
+let cropService;
+/** The expert view's crop model, or ALL_CROP_MODELS; and nitrogen, kg/ha. */
+let cropModel = ALL_CROP_MODELS;
+let nitrogen = NITROGEN;
 /** Guards against an older, slower run landing after a newer one. */
 let runRequest = 0;
 let lastRun = null;
@@ -669,6 +699,10 @@ async function run() {
     runSimple(request);
     return;
   }
+  if (isCrop(elements.variable.value)) {
+    runCrops(request);
+    return;
+  }
   if (customBox) {
     runCustomRegion(request);
     return;
@@ -776,6 +810,7 @@ async function run() {
   elements.chartTitle.textContent = chartTitle(spec, placeLabel(location), 'at');
   drawChart();
   drawSeasonalPanel();
+  showProvenance();
 
   const allMean = runs.every((r) => r.mean);
   const scenarioNames = listOf([...new Set(runs.map((r) => scenarioLabel(r.scenario)))]);
@@ -799,6 +834,172 @@ const DEGREE_DAYS_WHERE =
 const CROPS_WHERE =
   'Crop yields are computed for the globe and for land regions that grow the crop, ' +
   'not for cities or the sea; pick one of those, or another variable.';
+
+/** Why the multi-model mean has no crop yields for the current choices, or null. */
+function cropMeanUnavailable() {
+  if (nitrogen !== NITROGEN) {
+    return (
+      `The multi-model mean is precomputed at ${NITROGEN} kg of nitrogen per hectare: ` +
+      'pick that, or a single climate model.'
+    );
+  }
+  return null;
+}
+
+/**
+ * The crop model menu for a crop: every crop model at once, then each one
+ * with an emulator for it. Keeps the current choice where the crop has it.
+ */
+async function showCropModels(crop) {
+  const available = await cropService.cropModels(crop);
+  const options = [[ALL_CROP_MODELS, `All crop models (${available.length})`], ...available.map((m) => [m, m])];
+  if (elements.cropModel.dataset.crop !== crop) {
+    elements.cropModel.replaceChildren(
+      ...options.map(([value, text]) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = text;
+        return option;
+      })
+    );
+    elements.cropModel.dataset.crop = crop;
+  }
+  if (!available.includes(cropModel)) cropModel = ALL_CROP_MODELS;
+  elements.cropModel.value = cropModel;
+  return available;
+}
+
+/** Crop controls for a crop, the ensemble's for everything else. */
+function showCropControls() {
+  const crop = isCrop(elements.variable.value);
+  elements.cropModelControl.hidden = !crop;
+  elements.nitrogenControl.hidden = !crop;
+  // A crop yield is measured from 1980-2010 and has no realizations.
+  elements.baselineControl.hidden = crop;
+  elements.realizationsControl.hidden = crop;
+  elements.resample.hidden = crop;
+  elements.nitrogen.value = String(nitrogen);
+}
+
+/** Say why there is no chart, and clear it. */
+function noChart(title, message) {
+  lastRun = null;
+  syncUrl();
+  elements.chartTitle.textContent = title;
+  elements.chartLegend.textContent = '';
+  elements.chart.getContext('2d').clearRect(0, 0, elements.chart.width, elements.chart.height);
+  elements.seasonal.closest('.panel').hidden = true;
+  setStatus(message, 'error');
+}
+
+/**
+ * The multi-model mean of a crop's yield as a run: the spread across every
+ * pairing of climate and crop model, or one crop model's spread across
+ * climate models, both precomputed at the default nitrogen.
+ */
+async function cropMeanRun(spec, crop, location) {
+  const unavailable = cropMeanUnavailable();
+  if (unavailable) throw new Error(unavailable);
+  if (cropModel === ALL_CROP_MODELS) {
+    const summary = await summaryFor(location);
+    const entry = summary?.crops?.[crop];
+    const bands = entry?.scenarios[spec.scenario]?.bands;
+    if (!bands) return null;
+    return { ...spec, series: null, bands, median: bands[2], mean: true, spread: `${entry.pairings} pairings` };
+  }
+  const file = await cropService.expertFile(location);
+  const entry = file?.crops[crop]?.[cropModel];
+  const bands = entry?.scenarios[spec.scenario];
+  if (!bands) return null;
+  return {
+    ...spec,
+    series: null,
+    bands,
+    median: bands[2],
+    mean: true,
+    spread: `${entry.climate_models} climate models`,
+  };
+}
+
+/**
+ * Crop yields in the expert view: each selected climate model's forced
+ * change through the chosen crop model, or every crop model, whose spread
+ * then takes the place of an ensemble's.
+ */
+async function runCrops(request) {
+  const crop = elements.variable.value;
+  const spec = VARIABLES[crop];
+  const location = elements.location.value;
+  const place = customBox ? describeBox(customBox) : placeLabel(location);
+  const title = chartTitle(spec, place, 'in');
+  let available;
+  try {
+    available = await showCropModels(crop);
+  } catch (error) {
+    if (request === runRequest) noChart(title, error.message);
+    return;
+  }
+  if (request !== runRequest) return;
+  if (customBox || !(location === 'global' || location.startsWith('regional:'))) {
+    noChart(title, CROPS_WHERE);
+    return;
+  }
+  const specs = seriesSpecs();
+  let runs;
+  const started = performance.now();
+  try {
+    const cropModels = cropModel === ALL_CROP_MODELS ? available : [cropModel];
+    if (specs.some((s) => s.model !== MULTI_MODEL_MEAN)) setStatus(`Running the ${CROPS[crop].label.toLowerCase()} emulators…`);
+    runs = await Promise.all(
+      specs.map(async (s) => {
+        if (s.model === MULTI_MODEL_MEAN) return cropMeanRun(s, crop, location);
+        const members = await cropService.placeSeries({
+          climateModel: s.model,
+          crop,
+          cropModels,
+          scenario: s.scenario,
+          location,
+          nitrogen,
+        });
+        if (!members.length) return null;
+        return { ...s, series: members.map((m) => m.change), cropModels: members.map((m) => m.model), toAbsolute: 0 };
+      })
+    );
+  } catch (error) {
+    if (request === runRequest) noChart(title, error.message);
+    return;
+  }
+  if (request !== runRequest) return;
+  if (runs.some((r) => r === null)) {
+    noChart(title, `Too little ${CROPS[crop].label.toLowerCase()} is grown in ${place} to give it a yield. ${CROPS_WHERE}`);
+    return;
+  }
+  lastRun = {
+    years: CROP_SERIES_YEARS,
+    runs,
+    variable: crop,
+    location,
+    compareBy,
+    crop: { cropModel, nitrogen, available },
+    baseline:
+      `yield change from ${CROP_BASELINE.from}–${CROP_BASELINE.to}, rainfed, with CO₂ fertilization, ` +
+      `no adaptation, ${nitrogen} kg N/ha everywhere`,
+  };
+  syncUrl();
+  elements.chartTitle.textContent = title;
+  drawChart();
+  drawSeasonalPanel();
+  showProvenance();
+
+  const which = cropModel === ALL_CROP_MODELS ? `${available.length} crop models` : cropModel;
+  const elapsed = performance.now() - started;
+  setStatus(
+    `${spec.label} in ${place} through ${which}, ${describeRuns(runs)}, ` +
+      `${CROP_SERIES_YEARS[0]}–${CROP_SERIES_YEARS.at(-1)}: the climate models' forced change since ` +
+      `${CROP_BASELINE.from}–${CROP_BASELINE.to}, no realizations` +
+      (runs.every((r) => r.mean) ? '.' : `, in ${elapsed.toFixed(0)} ms.`)
+  );
+}
 
 /** One place's observed degree-day curves, fetched once; null for none. */
 const degreeDayCurves = new Map();
@@ -945,10 +1146,7 @@ function setMode(next) {
 /** Show the controls and panels of the current view, and say which it is. */
 function showMode() {
   document.documentElement.dataset.mode = mode;
-  // Crop yields are the simple view's alone, for now.
-  elements.cropVariables.hidden = mode !== 'simple';
-  elements.cropVariables.disabled = mode !== 'simple';
-  if (mode !== 'simple' && isCrop(elements.variable.value)) elements.variable.value = 'tas';
+  showCropControls();
   // The simple view asks for the region's variable and place in the regional
   // panel, under the world view; the expert view keeps every control together.
   const moving = [elements.variable, elements.location].map((el) => el.closest('.control'));
@@ -1253,6 +1451,30 @@ function drawChart() {
     span.style.background = colour;
     return [span, ` ${text} `];
   };
+  if (lastRun.crop) {
+    // A crop chart's spread is across crop models, or for the multi-model
+    // mean across climate models too; there are no realizations.
+    const [run] = lastRun.runs;
+    const across = run.mean ? run.spread : `${run.series.length} crop models`;
+    if (lastRun.runs.length === 1 && (run.mean || run.series.length > 1)) {
+      elements.chartLegend.replaceChildren(
+        ...swatch('median', 'middle'),
+        ...swatch('band', 'middle half'),
+        ...swatch('wide', `middle 90% of ${across}`)
+      );
+    } else if (lastRun.runs.every((r) => !r.mean && r.series.length === 1)) {
+      elements.chartLegend.textContent = `Forced response through ${lastRun.crop.cropModel}, no ensemble`;
+    } else {
+      const withMean = lastRun.runs.some((r) => r.mean);
+      elements.chartLegend.textContent =
+        lastRun.crop.cropModel === ALL_CROP_MODELS
+          ? 'Middle (line) and middle 90% (band) of the crop models' +
+            (withMean ? '; for the multi-model mean, of every pairing' : '')
+          : `Middle (line) and middle 90% (band) through ${lastRun.crop.cropModel}` +
+            (withMean ? '; for the multi-model mean, across climate models' : '');
+    }
+    return;
+  }
   if (lastRun.forcedOnly) {
     elements.chartLegend.textContent = 'Forced response, no ensemble';
   } else if (lastRun.runs.every((r) => r.mean)) {
@@ -1291,7 +1513,7 @@ function drawSeasonalPanel() {
   if (!lastRun) return;
   // A forced-response run is annual, so there is no seasonal cycle in it; the
   // multi-model mean carries one precomputed, except for precipitation.
-  if (lastRun.forcedOnly || lastRun.runs.some((r) => r.mean && !r.seasonal)) {
+  if (lastRun.forcedOnly || lastRun.crop || lastRun.runs.some((r) => r.mean && !r.seasonal)) {
     elements.seasonal.closest('.panel').hidden = true;
     return;
   }
@@ -1369,6 +1591,8 @@ function currentState() {
     nRealizations: Number(elements.realizations.value),
     baseline: elements.baseline.value,
     seed,
+    cropModel,
+    nitrogen,
   };
 }
 
@@ -1395,7 +1619,9 @@ function applyState(state) {
   renderPickers();
   elements.baseline.value = state.baseline;
   elements.variable.value = state.variable;
-  if (mode !== 'simple' && isCrop(state.variable)) elements.variable.value = 'tas';
+  cropModel = state.cropModel;
+  nitrogen = state.nitrogen;
+  showCropControls();
   populatePlaces();
   if (placesOnOffer().includes(state.location)) elements.location.value = state.location;
   selection = sortScenarios(state.scenarios.filter((name) => explorer.scenarios.includes(name)));
@@ -1444,6 +1670,11 @@ function attachActions() {
 
   elements.downloadCsv.addEventListener('click', () => {
     if (!lastRun) return;
+    if (lastRun.crop) {
+      downloadText(`${stem()}.csv`, cropCsv());
+      flash(elements.downloadCsv, 'CSV saved');
+      return;
+    }
     if (lastRun.runs.some((r) => r.mean)) {
       downloadText(`${stem()}.csv`, annualCsv());
       flash(elements.downloadCsv, 'CSV saved');
@@ -1489,8 +1720,13 @@ function attachActions() {
     if (!lastRun) return;
     const spec = VARIABLES[lastRun.variable];
     const blob = await chartToPng(elements.chart, {
-      title: `${spec.label} at ${placeLabel(lastRun.location)}`,
-      subtitle:
+      title: `${spec.label} ${lastRun.crop ? 'in' : 'at'} ${placeLabel(lastRun.location)}`,
+      subtitle: lastRun.crop
+        ? `${[...new Set(lastRun.runs.map((r) => modelLabel(r.model)))].join(', ')} · ` +
+          `${lastRun.crop.cropModel === ALL_CROP_MODELS ? 'all crop models' : lastRun.crop.cropModel} (GGCMI) · ` +
+          `${[...new Set(lastRun.runs.map((r) => scenarioLabel(r.scenario)))].join(', ')} · ` +
+          `${lastRun.crop.nitrogen} kg N/ha · change from ${CROP_BASELINE.from}–${CROP_BASELINE.to}`
+        :
         `${[...new Set(lastRun.runs.map((r) => r.model))].join(', ')} · ` +
         `${[...new Set(lastRun.runs.map((r) => scenarioLabel(r.scenario)))].join(', ')} · ` +
         `${lastRun.runs[0].series ? `${lastRun.runs[0].series.length} realizations` : `${availableModelList.length} models`} · ${WINDOW.start}–${WINDOW.end}` +
@@ -1549,6 +1785,40 @@ function annualCsv() {
   });
 }
 
+/** The CSV for a crop chart: every pairing shown, or the precomputed spread. */
+function cropCsv() {
+  const { cropModel: chosen, nitrogen: n } = lastRun.crop;
+  const series = lastRun.runs.flatMap((run) =>
+    run.mean
+      ? [{
+          climateModel: 'multi-model mean',
+          cropModel: chosen === ALL_CROP_MODELS ? 'all' : chosen,
+          scenario: run.scenario,
+          bands: run.bands,
+          spread: run.spread,
+        }]
+      : run.series.map((value, i) => ({
+          climateModel: run.model,
+          cropModel: run.cropModels[i],
+          scenario: run.scenario,
+          value,
+        }))
+  );
+  return toCropCsv({
+    years: lastRun.years,
+    series,
+    header: [
+      'GGCMI Phase 2 crop yield emulators (Franke et al. 2020) driven by METEOR, from meteor-view',
+      `variable: ${lastRun.variable} yield (${VARIABLES[lastRun.variable].yLabel})`,
+      `conditions: ${lastRun.baseline}`,
+      `nitrogen: ${n} kg N/ha`,
+      `location: ${lastRun.location}`,
+      `weights: MIRCA2000 rainfed harvested area`,
+      `regenerate: ${toUrl(currentState())}`,
+    ],
+  });
+}
+
 function stem() {
   return filenameStem({
     cmip6Model: [...new Set(lastRun.runs.map((r) => r.model))].join('+'),
@@ -1572,7 +1842,8 @@ async function loadMap() {
       explorer.regions(),
       explorer.coastlines(),
     ]);
-    await explorer.patterns(dataVariable());
+    // A crop map starts from the temperature pattern, as the others do.
+    await explorer.patterns(isCrop(elements.variable.value) ? 'tas' : dataVariable());
     elements.mapPanel.dataset.map = 'ready';
     elements.loadMap.hidden = true;
     elements.mapModes.hidden = false;
@@ -1608,6 +1879,10 @@ async function renderMap() {
     return;
   }
   if (elements.mapPanel.dataset.map !== 'ready') return;
+  if (isCrop(elements.variable.value)) {
+    await renderCropMap();
+    return;
+  }
   const request = ++mapRequest;
 
   // Degree days map as the temperature they come from.
@@ -1654,6 +1929,60 @@ async function renderMap() {
   elements.mapTitle.textContent = compare
     ? `Forced response, ${year}: ${what} and their difference`
     : `Forced response, ${year}`;
+}
+
+/**
+ * The expert view's crop map: each cell's yield change in the chosen year
+ * under one climate model, through the chosen crop model or the middle of
+ * all of them, where the crop is grown. The multi-model mean's crop map is
+ * the simple view's, for 2081-2100 only, so it is not offered here.
+ */
+async function renderCropMap() {
+  const request = ++mapRequest;
+  const crop = elements.variable.value;
+  const { label } = VARIABLES[crop];
+  const year = Number(elements.mapYear.value);
+  const specs = seriesSpecs();
+  const shown = compare ? compare.map((key) => specs.find((s) => s.key === key)) : [specs[0]];
+  let fields;
+  try {
+    if (shown.some((s) => s.model === MULTI_MODEL_MEAN)) {
+      throw new Error(
+        'the multi-model mean of crop yields is mapped in the simple view, for 2081–2100; ' +
+          'pick a single climate model to map a year here'
+      );
+    }
+    const available = await showCropModels(crop);
+    const cropModels = cropModel === ALL_CROP_MODELS ? available : [cropModel];
+    fields = await Promise.all(
+      shown.map((s) =>
+        cropService.cellField({ climateModel: s.model, crop, cropModels, scenario: s.scenario, year, nitrogen })
+      )
+    );
+  } catch (error) {
+    if (request === mapRequest) setStatus(`Could not draw the map: ${error.message}`, 'error');
+    return;
+  }
+  if (request !== mapRequest) return;
+  // Every crop map is on the site's own grid, so a difference needs no regridding.
+  const difference =
+    fields.length === 2
+      ? { field: Float64Array.from(fields[1].field, (v, i) => v - fields[0].field[i]), lat: fields[0].lat, lon: fields[0].lon, regridded: false }
+      : null;
+  const which = cropModel === ALL_CROP_MODELS ? 'middle of the crop models' : cropModel;
+  lastMap = {
+    fields,
+    difference,
+    specs: shown,
+    variable: crop,
+    year,
+    label: `${label} change in ${year} from ${CROP_BASELINE.from}–${CROP_BASELINE.to} (%)`,
+  };
+  redrawMap();
+  const what = compareBy === 'models' ? 'two climate models' : 'two scenarios';
+  elements.mapTitle.textContent =
+    `${label} change, ${year}, ${which}, ${nitrogen} kg N/ha, where it is grown` +
+    (compare ? `: ${what} and their difference` : '');
 }
 
 /** The multi-model mean's map files, fetched once each. */
@@ -2303,6 +2632,9 @@ function attachControls() {
       await selectionChanged();
       return;
     }
+    if (event.target === elements.cropModel) cropModel = elements.cropModel.value;
+    if (event.target === elements.nitrogen) nitrogen = Number(elements.nitrogen.value);
+    if (event.target === elements.variable) showCropControls();
     // Choosing a listed place supersedes a region drawn on the map.
     if (event.target === elements.location && customBox) {
       customBox = null;
@@ -2356,7 +2688,12 @@ function showProvenance() {
   elements.provenance.textContent =
     `Bundles: ${which}, trained on ${bundle.attrs.training_scenario}, ` +
     `METEOR ${bundle.attrs.meteor_version}, schema v${bundle.schemaVersion}. ` +
-    `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.`;
+    `${bundle.locations.length} locations, ${bundle.scenarios.length} scenarios.` +
+    (lastRun?.crop
+      ? ` Crop yields through the GGCMI Phase 2 emulators (Franke et al. 2020), driven by each ` +
+        `climate model's change since ${CROP_BASELINE.from}–${CROP_BASELINE.to} and weighted by MIRCA2000 ` +
+        `rainfed harvested area.`
+      : '');
 }
 
 async function start() {
@@ -2365,6 +2702,7 @@ async function start() {
   // relative URL resolves differently in each case.
   dataBase = `${import.meta.env.BASE_URL}data/`;
   availableModelList = await availableModels(dataBase);
+  cropService = createCropService({ base: dataBase, explorerFor });
   runner = new EnsembleRunner({
     loadExplorer: (model) => Explorer.load(dataBase, model),
     createWorker: () => {

@@ -29,7 +29,7 @@ import {
   summaryMapFile,
 } from '../src/app/summary.js';
 import { degreeDayFile } from '../src/lib/degree-days.js';
-import { cropMapFile, summarizeCrops } from '../src/app/crop-summary.js';
+import { cropExpertFile, cropMapFile, summarizeCrops } from '../src/app/crop-summary.js';
 import { cropFile, parseCoefficients } from '../src/lib/crops.js';
 
 const DATA = fileURLToPath(new URL('../data/', import.meta.url));
@@ -150,6 +150,7 @@ for (const scenario of scenarios) {
 }
 writeFileSync(join(DATA, EXPERT_BASELINE_MAP), JSON.stringify(await summarizeExpertBaselineMap(explorers)));
 for (const [scenario, file] of crops?.maps ?? []) writeFileSync(join(DATA, cropMapFile(scenario)), JSON.stringify(file));
+for (const [location, file] of crops?.expert ?? []) writeFileSync(join(DATA, cropExpertFile(location)), JSON.stringify(file));
 writeFileSync(STAMP, JSON.stringify({ key, models, locations: locations.length, scenarios: scenarios.length }));
 
 const sizeOf = (dir) =>
