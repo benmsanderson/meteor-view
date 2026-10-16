@@ -132,18 +132,23 @@ for each month is applied to the observed daily temperatures of 1995–2014
 view shows the spread across models; the expert view runs each realization
 through the same curves. Details in `src/lib/degree-days.js`.
 
-The simple view also offers **crop yields** for wheat, maize, rice and
-soybean, for the globe and land regions, with a map:
+Both views also offer **crop yields** for wheat, maize, rice and soybean,
+for the globe and land regions, with a map:
 - **Emulators:** the GGCMI Phase 2 emulators that METEOR carries (Franke et
   al. 2020), driven by each climate model's change since 1980–2010 (the
   delta method, as GGCMI's own experiments) and by the scenario's CO2.
-- **Spread:** across every pairing of climate model and crop model.
-- **Conditions:** rainfed, no adaptation, and 100 kg of nitrogen per hectare
-  everywhere for now.
+- **Spread:** in the simple view, across every pairing of climate model and
+  crop model. The expert view picks the climate models and one crop model or
+  all of them, whose spread then stands in for an ensemble's; it runs the
+  emulators in the browser (`src/app/crop-expert.js`), in well under a second.
+- **Conditions:** rainfed, no adaptation, and the same nitrogen everywhere:
+  100 kg per hectare, or in the expert view 10, 60 or 200, GGCMI's levels.
+- **Multi-model mean:** precomputed at 100 kg per hectare, across every
+  pairing or one crop model's spread across climate models. Its map is the
+  simple view's, for 2081–2100.
 
 `scripts/make_crop_coefficients.py` reduces the emulators to the map grid
-(`data/crops_v1/`). Details are in `src/lib/crops.js`. The expert view's crop
-models come next.
+(`data/crops_v1/`). Details are in `src/lib/crops.js`.
 
 The expert view's model menu also offers the **multi-model mean**: the
 mean of every model's forced response as the line and their spread as the

@@ -15,33 +15,30 @@ import {
   CROP_BASELINE,
   CROP_YEARS,
   NITROGEN,
+  cellChanges as cellChangesOf,
   co2Series,
   cropBases,
   cropInputs,
+  placeMembers,
   yieldChange,
   yieldsFromBases,
 } from '../lib/crops.js';
 import { SUMMARY_GRID, SUMMARY_PERIODS, SUMMARY_QUANTILES } from './summary.js';
-
-/** A region needs this much of a crop, in hectares, to be given a yield for it. */
-export const MIN_REGION_AREA = 100_000;
-
-/** A map cell needs this much of a crop, in hectares, to be coloured. */
-export const MIN_CELL_AREA = 5_000;
 
 /** Where one scenario's crop maps are served. */
 export function cropMapFile(scenario) {
   return `summary_v1/crops_${scenario.replace(/[^A-Za-z0-9.-]/g, '_')}.json`;
 }
 
-const round1 = (v) => Number(v.toFixed(1));
-
-/** One cell's mean yield over a period, from year-major yields. */
-function periodMean(yields, nCells, k, { from, to }) {
-  let sum = 0;
-  for (let year = from; year <= to; year += 1) sum += yields[(year - CROP_YEARS.start) * nCells + k];
-  return sum / (to - from + 1);
+/**
+ * Where one place's crop yields per crop model are served, for the expert
+ * view's multi-model mean: each crop model's spread across climate models.
+ */
+export function cropExpertFile(location) {
+  return `summary_v1/expert/crops_${location.replace(/[^A-Za-z0-9.-]/g, '_')}.json`;
 }
+
+const round1 = (v) => Number(v.toFixed(1));
 
 /**
  * Every place's crop yield spread, and every scenario's crop maps.
@@ -51,8 +48,10 @@ function periodMean(yields, nCells, k, { from, to }) {
  * @param {object} index data/crops_v1/index.json
  * @param {(model: string, crop: string) => Float32Array} coefficientsFor
  * @param {object} co2 data/scenario_co2_v1.json
- * @returns {Promise<{places: Map<string, object>, maps: Map<string, object>}>}
- *   places by location specifier, the `crops` entry of its summary file
+ * @returns {Promise<{places: Map<string, object>, maps: Map<string, object>,
+ *   expert: Map<string, object>}>} places by location specifier, the `crops`
+ *   entry of its summary file; maps by scenario; and per place, each crop
+ *   model's spread across climate models, for the expert view
  */
 export async function summarizeCrops(explorers, index, coefficientsFor, co2) {
   const stride = index.coefficients;
@@ -68,25 +67,22 @@ export async function summarizeCrops(explorers, index, coefficientsFor, co2) {
   for (const crop of crops) {
     const entry = index.crops[crop];
     const positions = entry.cells.map((cell) => at.get(cell));
-    // Each place's cells, weighted by area and the place's share of the cell,
-    // per crop model (each covers a slightly different area).
-    const places = { global: entry.cells.map((_, k) => [k, 1]) };
-    for (const [code, members] of Object.entries(entry.regions)) places[`regional:${code}`] = members;
-    layout[crop] = { entry, positions, places };
+    const locations = ['global', ...Object.keys(entry.regions).map((code) => `regional:${code}`)];
+    layout[crop] = { entry, positions, locations };
   }
 
-  // Weighted member lists per crop model, and which places have enough area.
+  // Each place's cells, weighted by area and the place's share of the cell,
+  // per crop model (each covers a slightly different area), where there is
+  // enough of the crop.
   const weighted = new Map();
   const placesFor = (crop, model) => {
     const key = `${crop}|${model}`;
     if (!weighted.has(key)) {
       const coefficients = coefficientsFor(model, crop);
-      const area = (k) => coefficients[k * stride + slot];
       const out = {};
-      for (const [location, members] of Object.entries(layout[crop].places)) {
-        const list = members.map(([k, share]) => [k, area(k) * share]).filter(([, w]) => w > 0);
-        const total = list.reduce((s, [, w]) => s + w, 0);
-        if (total >= MIN_REGION_AREA) out[location] = list;
+      for (const location of layout[crop].locations) {
+        const list = placeMembers(layout[crop].entry, coefficients, stride, slot, location);
+        if (list) out[location] = list;
       }
       weighted.set(key, out);
     }
@@ -101,15 +97,18 @@ export async function summarizeCrops(explorers, index, coefficientsFor, co2) {
   const scenarios = explorers.values().next().value.scenarios;
   const places = new Map();
   const maps = new Map();
+  const expert = new Map();
   const pairings = {};
   for (const scenario of scenarios) {
     const co2Values = co2Series(co2, scenario);
     if (!co2Values) continue;
     // Per crop: per place, each pairing's series; per cell, each pairing's end-of-century change.
     const series = {};
+    const byCropModel = {};
     const cellChanges = {};
     for (const crop of crops) {
       series[crop] = new Map();
+      byCropModel[crop] = new Map();
       cellChanges[crop] = layout[crop].entry.cells.map(() => []);
     }
     for (const [climateModel, inputsFor] of inputsByModel) {
@@ -123,18 +122,19 @@ export async function summarizeCrops(explorers, index, coefficientsFor, co2) {
           for (const [location, members] of Object.entries(placesFor(crop, cropModel))) {
             const change = yieldChange(yields, positions.length, members);
             if (!change) continue;
+            const values = Float32Array.from(change);
             if (!series[crop].has(location)) series[crop].set(location, []);
-            series[crop].get(location).push(Float32Array.from(change));
+            series[crop].get(location).push(values);
+            const key = `${location}|${cropModel}`;
+            if (!byCropModel[crop].has(key)) byCropModel[crop].set(key, []);
+            byCropModel[crop].get(key).push(values);
           }
           // Each cell's change by the end of the century, where it grows
           // enough: the two period means, without the series between.
-          const nCells = positions.length;
-          for (let k = 0; k < nCells; k += 1) {
-            if (coefficients[k * stride + slot] < MIN_CELL_AREA) continue;
-            const base = periodMean(yields, nCells, k, CROP_BASELINE);
-            if (!(base > 0)) continue;
-            cellChanges[crop][k].push((100 * (periodMean(yields, nCells, k, end) - base)) / base);
-          }
+          const changes = cellChangesOf(yields, coefficients, stride, slot, positions.length, end);
+          changes.forEach((v, k) => {
+            if (Number.isFinite(v)) cellChanges[crop][k].push(v);
+          });
           pairings[crop] ??= new Set();
           pairings[crop].add(`${climateModel}|${cropModel}`);
         }
@@ -156,6 +156,15 @@ export async function summarizeCrops(explorers, index, coefficientsFor, co2) {
           bands: quantiles(list, SUMMARY_QUANTILES).map((q) => Array.from(q, round1)),
           end: quantiles(ends, SUMMARY_QUANTILES).map((q) => round1(q[0])),
         };
+      }
+      // Each crop model's spread across climate models, for the expert view.
+      for (const [key, list] of byCropModel[crop]) {
+        const [location, cropModel] = key.split('|');
+        if (!expert.has(location)) expert.set(location, {});
+        const entry = expert.get(location);
+        entry[crop] ??= {};
+        entry[crop][cropModel] ??= { climate_models: list.length, scenarios: {} };
+        entry[crop][cropModel].scenarios[scenario] = quantiles(list, SUMMARY_QUANTILES).map((q) => Array.from(q, round1));
       }
     }
 
@@ -198,7 +207,17 @@ export async function summarizeCrops(explorers, index, coefficientsFor, co2) {
   };
   for (const [location, entry] of places) places.set(location, { ...shared, ...entry });
   for (const file of maps.values()) file.models = shared.models;
-  return { places, maps };
+  for (const [location, entry] of expert) {
+    expert.set(location, {
+      format: 'meteor-view-crop-expert',
+      schema_version: 1,
+      location,
+      ...shared,
+      quantiles: SUMMARY_QUANTILES,
+      crops: entry,
+    });
+  }
+  return { places, maps, expert };
 }
 
 /** "+3", "−2", "0": a signed whole number with a proper minus sign. */
