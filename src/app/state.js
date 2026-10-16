@@ -34,6 +34,8 @@
  * link that would otherwise be empty carries `view=expert`.
  */
 
+import { CROPS, NITROGEN, NITROGEN_LEVELS } from '../lib/crops.js';
+
 /**
  * Most scenarios a view can hold.
  *
@@ -58,6 +60,9 @@ export const EXPERT_LOCATION = 'global';
 /** Fixed default seed, so a link without one is still reproducible. */
 export const DEFAULT_SEED = 20260921;
 
+/** The crop yields, which share the variable menu. */
+const CROP_VARIABLES = Object.keys(CROPS);
+
 export const DEFAULTS = {
   mode: 'simple',
   compareBy: 'scenarios',
@@ -72,7 +77,11 @@ export const DEFAULTS = {
   nRealizations: 20,
   seed: DEFAULT_SEED,
   baseline: 'pi',
+  // Crop yields in the expert view: every crop model, at the site's nitrogen.
+  cropModel: 'all',
+  nitrogen: NITROGEN,
 };
+
 
 /**
  * Serialise state to a query string, omitting anything left at its default.
@@ -117,6 +126,11 @@ function expertQuery(state) {
   }
   if (state.seed !== DEFAULTS.seed) params.set('seed', String(state.seed));
   if (state.baseline !== DEFAULTS.baseline) params.set('ref', state.baseline);
+  // Crop settings only matter, so only appear, when a crop is shown.
+  if (CROP_VARIABLES.includes(state.variable)) {
+    if (state.cropModel !== DEFAULTS.cropModel) params.set('cm', state.cropModel);
+    if (state.nitrogen !== DEFAULTS.nitrogen) params.set('nit', String(state.nitrogen));
+  }
   // Any other parameter and the scenarios go in too, since fromQuery reads
   // their absence as LEGACY_SCENARIOS.
   if (params.toString() && !params.has('scn')) params.set('scn', state.scenarios.join(','));
@@ -165,7 +179,14 @@ export function fromQuery(search, { locations = [], scenarios = [], models = [] 
   if (baseline === 'pi' || baseline === 'recent') state.baseline = baseline;
 
   const variable = params.get('v');
-  if (['tas', 'pr', 'hdd', 'cdd', 'wheat', 'maize', 'rice', 'soy'].includes(variable)) state.variable = variable;
+  if (['tas', 'pr', 'hdd', 'cdd', ...CROP_VARIABLES].includes(variable)) state.variable = variable;
+
+  // Any crop model name is accepted here; the menu falls back to every crop
+  // model when the crop has no emulator from it.
+  const cropModel = params.get('cm');
+  if (cropModel && /^[A-Za-z0-9-]{1,40}$/.test(cropModel)) state.cropModel = cropModel;
+  const nitrogen = Number(params.get('nit'));
+  if (NITROGEN_LEVELS.includes(nitrogen)) state.nitrogen = nitrogen;
 
   if (state.mode === 'expert') state.location = EXPERT_LOCATION;
   const location = params.get('loc');

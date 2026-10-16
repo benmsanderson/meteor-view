@@ -40,7 +40,9 @@ release of that tag.
 
 `summary_v1/`, generated, gitignored: the simple view's spread across models,
 one JSON file per place, written by `scripts/build-summary.mjs` from whatever
-models are present. `npm run build` and `npm run dev` run it first; it is
+models are present, and the expert view's multi-model mean under `expert/`.
+For crops, `expert/crops_<place>.json` holds each crop model's spread across
+climate models (about 1.3 MB per place, 31 MB for the 39 places with crops). `npm run build` and `npm run dev` run it first; it is
 skipped when nothing has changed.
 
 `cities_v1.json`, committed: the simple view's 252 cities, every national

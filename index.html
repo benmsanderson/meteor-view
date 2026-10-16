@@ -78,8 +78,7 @@
             <option value="pr">Precipitation</option>
             <option value="hdd">Heating degree days</option>
             <option value="cdd">Cooling degree days</option>
-            <!-- Simple view only, for now: the expert view's crop models are still to come. -->
-            <optgroup label="Crop yield" id="crop-variables" data-simple>
+            <optgroup label="Crop yield" id="crop-variables">
               <option value="wheat">Wheat yield</option>
               <option value="maize">Maize yield</option>
               <option value="rice">Rice yield</option>
@@ -118,7 +117,29 @@
           </details>
         </div>
 
-        <div class="control" data-expert>
+        <!-- Crop yields only: which crop model, and how much nitrogen. -->
+        <div class="control" data-expert id="crop-model-control" hidden>
+          <label for="crop-model">Crop model</label>
+          <select
+            id="crop-model"
+            title="The GGCMI Phase 2 crop models, each through its emulator, or the spread across all of them."
+          ></select>
+        </div>
+
+        <div class="control" data-expert id="nitrogen-control" hidden>
+          <label for="nitrogen">Nitrogen</label>
+          <select
+            id="nitrogen"
+            title="Applied everywhere, every year. CARAIB, JULES and PROMET ran one nitrogen level, so this does not change them."
+          >
+            <option value="10">10 kg/ha</option>
+            <option value="60">60 kg/ha</option>
+            <option value="100" selected>100 kg/ha</option>
+            <option value="200">200 kg/ha</option>
+          </select>
+        </div>
+
+        <div class="control" data-expert id="baseline-control">
           <label for="baseline">Change from</label>
           <select
             id="baseline"
@@ -129,7 +150,7 @@
           </select>
         </div>
 
-        <div class="control" data-expert>
+        <div class="control" data-expert id="realizations-control">
           <label for="realizations">Realizations</label>
           <select id="realizations">
             <option value="10">10</option>
@@ -229,7 +250,9 @@
           timeseries does not. Precipitation is shown as percent change, the
           convention for maps, while the timeseries above stays in mm/day.
           With two or more scenarios selected, pick any two to compare: both
-          maps and their difference share one year and one view.
+          maps and their difference share one year and one view. A crop yield
+          is mapped where the crop is grown, as each cell's change in that
+          year from 1980–2010.
         </p>
         <p class="map-compare" id="map-compare" data-expert hidden>
           <label for="compare-a">Compare</label>
@@ -347,6 +370,30 @@
           average its land gridboxes' degree days; for a city they use the
           nearest land gridbox of the observations, half a degree across. They
           are not offered for the sea or the global mean.
+        </p>
+        <p>
+          <strong>Crop yields.</strong> Wheat, maize, rice and soybean, through
+          the GGCMI Phase 2 emulators (Franke et al. 2020): for each of up to
+          nine crop models, a polynomial giving its long-term rainfed yield at
+          every half-degree cell from CO₂, the change in temperature and in
+          precipitation since 1980–2010, and nitrogen. Each climate model's
+          change since 1980–2010 drives them, not its absolute climate, and
+          CO₂ comes from the same simple climate model as the warming. A
+          region's yield is weighted by where the crop is grown (MIRCA2000
+          rainfed harvested area), and only the globe and regions that grow
+          enough of it get one. The yields include CO₂ fertilization, no
+          adaptation of crop varieties, and the same nitrogen everywhere; the
+          emulators were trained on warming of up to 6 °C and CO₂ of up to
+          810 ppm, and inputs beyond that are held at the limit. They give a
+          climate's yield, not a harvest's, so there are no realizations.
+        </p>
+        <p data-expert>
+          <strong>Crop models.</strong> Pick one crop model, or all of them,
+          whose spread then takes the place of an ensemble's. Nitrogen can be
+          set to GGCMI's three levels (10, 60 and 200 kg/ha) or the default
+          100; CARAIB, JULES and PROMET ran one level, so it does not change
+          them. The multi-model mean of crop yields is precomputed, at the
+          default nitrogen, and its map is the simple view's.
         </p>
         <p data-expert>
           <strong>What it is not.</strong> The band around any one model is that

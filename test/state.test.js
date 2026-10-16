@@ -7,7 +7,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { DEFAULTS, MAX_MODELS, MAX_SCENARIOS, fromQuery, toQuery } from '../src/app/state.js';
+import { DEFAULTS, MAX_MODELS, MAX_SCENARIOS, defaultCompare, fromQuery, toQuery } from '../src/app/state.js';
 
 /** The defaults as the expert view has them: every setting in play. */
 const EXPERT = { ...DEFAULTS, mode: 'expert', location: 'global' };
@@ -46,8 +46,31 @@ describe('URL state', () => {
       nRealizations: 50,
       seed: 12345,
       baseline: 'recent',
+      cropModel: 'all',
+      nitrogen: 100,
     };
     expect(fromQuery(toQuery(state), CONTEXT)).toEqual(state);
+  });
+
+  it('round-trips a crop model and nitrogen, only when a crop is shown', () => {
+    const state = {
+      ...DEFAULTS,
+      mode: 'expert',
+      variable: 'maize',
+      location: 'regional:NEU',
+      compare: defaultCompare(DEFAULTS.scenarios),
+      cropModel: 'LPJmL',
+      nitrogen: 200,
+    };
+    const query = toQuery(state);
+    expect(query).toContain('cm=LPJmL');
+    expect(query).toContain('nit=200');
+    expect(fromQuery(query, CONTEXT)).toEqual(state);
+    expect(toQuery({ ...state, variable: 'tas' })).not.toContain('cm=');
+  });
+
+  it('ignores a nitrogen level the menu does not offer', () => {
+    expect(fromQuery('?v=wheat&nit=150&scn=ssp245', CONTEXT).nitrogen).toBe(DEFAULTS.nitrogen);
   });
 
   it('keeps location specifiers intact through encoding', () => {

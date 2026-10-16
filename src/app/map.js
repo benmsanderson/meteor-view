@@ -58,6 +58,10 @@ export const CLASSES = {
     '#543005', '#8b5919', '#bf812d', '#d2a870', '#e6d1b5', '#f8f8f8',
     '#b8d8d6', '#78b8b3', '#35978f', '#1a695f', '#003c30',
   ],
+  'yield-difference': [
+    '#8e0152', '#c51b7d', '#de77ae', '#f1b6da', '#fde0ef', '#f7f7f7',
+    '#e6f5d0', '#b8e186', '#7fbc41', '#4d9221', '#276419',
+  ],
 };
 
 /**
@@ -87,12 +91,14 @@ export const BIN_EDGES = {
   // Percentage points of change: the difference of two percent changes, both
   // relative to the same climatology.
   'precipitation-difference': [-30, -20, -10, -5, -2, 2, 5, 10, 20, 30],
+  // Percentage points of yield change between two scenarios or models.
+  'yield-difference': [-30, -20, -10, -5, -2, 2, 5, 10, 20, 30],
 };
 
 /**
  * A classed colour scale.
  *
- * @param {'temperature'|'precipitation'|'yield'|'temperature-difference'|'precipitation-difference'} variable
+ * @param {'temperature'|'precipitation'|'yield'|'temperature-difference'|'precipitation-difference'|'yield-difference'} variable
  * @returns {{edges: number[], colours: string[], colour: (v: number) => string}}
  */
 export function classedScale(variable) {

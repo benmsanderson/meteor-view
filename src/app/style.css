@@ -94,6 +94,10 @@ h2 {
   border-radius: 12px;
 }
 
+.control[hidden] {
+  display: none;
+}
+
 .control {
   display: flex;
   flex-direction: column;

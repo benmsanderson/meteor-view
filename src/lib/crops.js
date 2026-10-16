@@ -29,8 +29,20 @@ export const CROP_BASELINE = { from: 1980, to: 2010 };
 /** Years the crop series cover: from the reference period to 2100. */
 export const CROP_YEARS = { start: 1980, end: 2100 };
 
-/** Uniform nitrogen application, kg N per hectare per year. */
+/** Uniform nitrogen application, kg N per hectare per year: the default. */
 export const NITROGEN = 100;
+
+/**
+ * The nitrogen levels the expert view offers: GGCMI Phase 2's three (10, 60
+ * and 200 kg N/ha), and the site's default between them.
+ */
+export const NITROGEN_LEVELS = [10, 60, 100, 200];
+
+/** A region needs this much of a crop, in hectares, to be given a yield for it. */
+export const MIN_REGION_AREA = 100_000;
+
+/** A map cell needs this much of a crop, in hectares, to be coloured. */
+export const MIN_CELL_AREA = 5_000;
 
 /** The emulators' training ranges (Franke et al. 2020, Table 2); inputs are clamped to them. */
 export const CROP_LIMITS = {
@@ -214,12 +226,13 @@ export async function cropInputs(explorer, { grid, cells }) {
  *   {@link cropInputs}, for one scenario
  * @param {number} nInputCells the inputs' cell count
  * @param {ArrayLike<number>} co2 ppm per year over CROP_YEARS
+ * @param {number} [nitrogen] kg N per hectare, everywhere
  * @returns {Float64Array} year-major, then cell, then term
  */
-export function cropBases(positions, inputs, nInputCells, co2) {
+export function cropBases(positions, inputs, nInputCells, co2, nitrogen = NITROGEN) {
   const nYears = CROP_YEARS.end - CROP_YEARS.start + 1;
   const out = new Float64Array(nYears * positions.length * N_TERMS);
-  const n = clamp(NITROGEN, CROP_LIMITS.nitrogen);
+  const n = clamp(nitrogen, CROP_LIMITS.nitrogen);
   for (let y = 0; y < nYears; y += 1) {
     const c = clamp(co2[y], CROP_LIMITS.co2);
     for (let k = 0; k < positions.length; k += 1) {
@@ -255,8 +268,56 @@ export function yieldsFromBases(coefficients, bases, nCells, stride) {
 }
 
 /** Yields at a crop's cells for every year, from the inputs: the two steps above. */
-export function cropYields(coefficients, positions, inputs, nInputCells, co2, stride) {
-  return yieldsFromBases(coefficients, cropBases(positions, inputs, nInputCells, co2), positions.length, stride);
+export function cropYields(coefficients, positions, inputs, nInputCells, co2, stride, nitrogen = NITROGEN) {
+  return yieldsFromBases(coefficients, cropBases(positions, inputs, nInputCells, co2, nitrogen), positions.length, stride);
+}
+
+/**
+ * The cells a place averages over for one crop model, weighted by that crop
+ * model's harvested area there times the place's share of each cell, or null
+ * where it covers too little of the crop to give the place a yield. Each crop
+ * model covers a slightly different area, which is why this is per model.
+ *
+ * @param {object} entry the crop's entry in data/crops_v1/index.json
+ * @param {Float32Array} coefficients the crop model's file for the crop
+ * @param {number} stride values per cell in the file
+ * @param {number} slot where in a cell's values its area is
+ * @param {string} location 'global' or 'regional:<code>'
+ * @returns {Array<[number, number]> | null} [cell position, weight] pairs
+ */
+export function placeMembers(entry, coefficients, stride, slot, location) {
+  const members =
+    location === 'global'
+      ? entry.cells.map((_, k) => [k, 1])
+      : location.startsWith('regional:')
+        ? entry.regions[location.slice('regional:'.length)]
+        : null;
+  if (!members) return null;
+  const list = members.map(([k, share]) => [k, coefficients[k * stride + slot] * share]).filter(([, w]) => w > 0);
+  const total = list.reduce((s, [, w]) => s + w, 0);
+  return total >= MIN_REGION_AREA ? list : null;
+}
+
+/** One cell's mean yield over a period, from year-major yields. */
+export function periodMean(yields, nCells, k, { from, to }) {
+  let sum = 0;
+  for (let year = from; year <= to; year += 1) sum += yields[(year - CROP_YEARS.start) * nCells + k];
+  return sum / (to - from + 1);
+}
+
+/**
+ * Each cell's percentage change in yield over a period from 1980-2010, where
+ * the crop model grows enough of the crop there; NaN elsewhere.
+ */
+export function cellChanges(yields, coefficients, stride, slot, nCells, period) {
+  const out = new Float64Array(nCells).fill(NaN);
+  for (let k = 0; k < nCells; k += 1) {
+    if (coefficients[k * stride + slot] < MIN_CELL_AREA) continue;
+    const base = periodMean(yields, nCells, k, CROP_BASELINE);
+    if (!(base > 0)) continue;
+    out[k] = (100 * (periodMean(yields, nCells, k, period) - base)) / base;
+  }
+  return out;
 }
 
 /**

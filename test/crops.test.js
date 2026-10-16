@@ -132,3 +132,70 @@ describe('the crop sentence', () => {
     );
   });
 });
+
+describe('the expert view\'s crop yields', async () => {
+  // The page's fetches, answered from the data directory.
+  const fetchFile = async (url) => {
+    const path = new URL(String(url).split('?')[0]);
+    try {
+      const bytes = readFileSync(path);
+      return {
+        ok: true,
+        json: async () => JSON.parse(bytes),
+        arrayBuffer: async () => bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+      };
+    } catch {
+      return { ok: false };
+    }
+  };
+  const { createCropService } = await import('../src/app/crop-expert.js');
+  const read = (name) => readFileSync(new URL(`meteor_NorESM2-MM_${name}_v1.nc`, DATA));
+  const explorer = new Explorer({ tas: new Bundle(read('tas_bundle')), pr: new Bundle(read('pr_bundle')) });
+  explorer.patternArtifacts.set('tas', new PatternArtifact(read('tas_pattern')));
+  explorer.patternArtifacts.set('pr', new PatternArtifact(read('pr_pattern')));
+  explorer.prClimatology = new Artifact(read('pr_climatology')).array('pr_climatology');
+  const original = globalThis.fetch;
+  globalThis.fetch = fetchFile;
+  const service = createCropService({ base: DATA.href, explorerFor: async () => explorer });
+  const query = { climateModel: 'NorESM2-MM', crop: 'maize', scenario: 'ssp585', location: 'global' };
+  const run = (cropModels, nitrogen) => service.placeSeries({ ...query, cropModels, nitrogen });
+  const [lpjml] = await run(['LPJmL'], NITROGEN);
+  const [lpjmlRich] = await run(['LPJmL'], 200);
+  const [caraib] = await run(['CARAIB'], NITROGEN);
+  const [caraibRich] = await run(['CARAIB'], 200);
+  const all = await run(index.crops.maize.models, NITROGEN);
+  const map = await service.cellField({ ...query, cropModels: ['LPJmL'], year: 2100, nitrogen: NITROGEN });
+  globalThis.fetch = original;
+
+  it('gives the same series as the simple view computes for that pairing', async () => {
+    const cells = index.crops.maize.cells;
+    const inputs = (await cropInputs(explorer, { grid: SUMMARY_GRID, cells }))('ssp585');
+    const file = coefficients('LPJmL', 'maize');
+    const yields = cropYields(file, cells.map((_, k) => k), inputs, cells.length, co2Series(co2, 'ssp585'), index.coefficients);
+    const members = cells.map((_, k) => [k, file[k * index.coefficients + index.area_slot]]).filter(([, w]) => w > 0);
+    const expected = yieldChange(yields, cells.length, members);
+    expect(lpjml.model).toBe('LPJmL');
+    for (let y = 0; y < expected.length; y += 1) expect(lpjml.change[y]).toBeCloseTo(expected[y], 9);
+  });
+
+  it('runs every crop model at once, one series each', () => {
+    expect(all.map((m) => m.model)).toEqual(index.crops.maize.models);
+  });
+
+  it('responds to nitrogen, except in the crop models that ran one level', () => {
+    expect(lpjmlRich.change.at(-1)).not.toBeCloseTo(lpjml.change.at(-1), 3);
+    for (let y = 0; y < caraib.change.length; y += 1) expect(caraibRich.change[y]).toBeCloseTo(caraib.change[y], 9);
+  });
+
+  it('maps only the cells that grow the crop', () => {
+    const grown = new Set(index.crops.maize.cells);
+    let finite = 0;
+    map.field.forEach((v, cell) => {
+      if (Number.isFinite(v)) {
+        finite += 1;
+        expect(grown.has(cell)).toBe(true);
+      }
+    });
+    expect(finite).toBeGreaterThan(100);
+  });
+});
