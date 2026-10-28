@@ -1,6 +1,7 @@
 # Status and next steps
 
-Written 2026-09-24. Read this first if you are picking the project up cold;
+Written 2026-09-24, and superseded by [`07-handoff.md`](07-handoff.md),
+which is where to start. Kept for its reasoning. Originally:
 [`03-roadmap.md`](03-roadmap.md) is the plan, this is where it has got to.
 
 ## Where things stand
