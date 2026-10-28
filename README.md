@@ -5,9 +5,8 @@ served as a static site from GitHub Pages. Pick a scenario and a region, and
 see an ensemble of monthly climate projections. There is no server: the
 emulator runs on your machine.
 
-**Status and what to do next:** [`docs/04-status.md`](docs/04-status.md).
-The site is live but deliberately unlisted; the next step is training more
-CMIP6 models, which is ready to run.
+**Status and what to do next:** [`docs/07-handoff.md`](docs/07-handoff.md).
+The site is live but deliberately unlisted.
 
 ## How it works
 
