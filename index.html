@@ -3,18 +3,29 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>METEOR explorer</title>
+    <title>METEOR Climate Explorer: future temperature and rainfall by region</title>
     <meta
       name="description"
-      content="Run the METEOR climate emulator in your browser: pick a scenario, pick a region, see the ensemble."
+      content="See how temperature, rainfall and crop yields could change across the world to 2100 under different emissions pathways, and how far climate models agree. Free, and runs in your browser."
     />
     <!--
-      Temporary, alongside public/robots.txt: the site is deployed so it can be
-      looked at and linked to, but it should not turn up in search until the
-      METEOR PRs land and the bundles are re-exported from `base`. Remove both
-      when the tool is ready to be announced.
+      The same page is served on GitHub Pages and, inside CICERO's branding,
+      at pages.cicero.oslo.no. Search engines should list the CICERO one, so
+      both name it as canonical (on the CICERO copy this points at itself).
+      Every view shares one canonical: the query string only restores
+      settings, it is not a different page.
     -->
-    <meta name="robots" content="noindex, nofollow" />
+    <link rel="canonical" href="https://pages.cicero.oslo.no/meteor/" />
+    <!-- What link previews show (Slack, Teams, email, social media). -->
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://pages.cicero.oslo.no/meteor/" />
+    <meta property="og:site_name" content="METEOR Climate Explorer" />
+    <meta property="og:title" content="METEOR Climate Explorer: how could your region's climate change?" />
+    <meta
+      property="og:description"
+      content="Pick a place and an emissions pathway, and see the range of temperature, rainfall and crop yields it could bring by 2100. Free, and runs in your browser."
+    />
+    <meta name="twitter:card" content="summary" />
     <link rel="stylesheet" href="./src/app/style.css" />
     <script>
       // Which view, before anything draws: the rule in src/app/state.js.

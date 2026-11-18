@@ -9,10 +9,10 @@ The explorer is **live and working** at
 <https://benmsanderson.github.io/meteor-view/>, deployed from the default
 branch (`claude/youthful-brahmagupta-la5z3o`) by `.github/workflows/pages.yml`.
 
-It is **deliberately unlisted**: `public/robots.txt` and a `noindex` meta tag
-keep it out of search. Anyone with the link can open it. Removing those two is
-the whole of "announce it" — but do it together with the re-export described
-below, so what is published traces to merged code.
+It is **open to search engines** as of 2026-11-18: `robots.txt` and the
+`noindex` tag are gone. The same page is also served inside CICERO's branding
+at <https://pages.cicero.oslo.no/meteor/>, and `index.html` names that as the
+canonical URL so search results point there rather than at GitHub Pages.
 
 Working today: temperature and precipitation, 67 locations plus any region you
 draw, 15 scenarios across two generations, forced-response maps with pan and

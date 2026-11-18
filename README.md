@@ -6,7 +6,8 @@ see an ensemble of monthly climate projections. There is no server: the
 emulator runs on your machine.
 
 **Status and what to do next:** [`docs/04-status.md`](docs/04-status.md).
-The site is live but deliberately unlisted; the next step is training more
+The site is live and open to search engines, which are pointed at the
+CICERO-branded copy at <https://pages.cicero.oslo.no/meteor/>; the next step is training more
 CMIP6 models, which is ready to run.
 
 ## How it works
