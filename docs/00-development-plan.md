@@ -338,8 +338,8 @@ machine.
 - [x] Drawn regions across the date line. Fixed in #4.
 - [x] Map zoom on phones: pinch and double-tap. Fixed in #4.
 - [ ] Missing `favicon.ico` (a 404 on every visit; harmless).
-- [ ] Announcing the site — removing `robots.txt` and the `noindex` tag — once
-      the above is done.
+- [x] Announcing the site — removing `robots.txt` and the `noindex` tag, with
+      the CICERO copy as canonical. Done 2026-11-18.
 
 ## 7. Resuming
 
